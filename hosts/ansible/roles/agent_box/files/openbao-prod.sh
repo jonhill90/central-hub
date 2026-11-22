@@ -35,8 +35,9 @@
 #           admin, Grafana's admin, Argo CD's initial admin): from a fixed table in this script, nothing else, it reads each
 #           Secret's key with the box's admin kubeconfig and gives the value on stdin to `secrets-store-prod put-new`, which
 #           writes SOPS then OpenBao and writes nothing when OpenBao already holds the key. The live value is adopted as it is,
-#           so no password changes. It ends by running `secrets-store-prod compare` (the SHA-256 of each SOPS value against
-#           OpenBao's) and passes only if that passes. Only names and results are printed; a value is never printed.
+#           so no password changes. Argo CD's initial admin is the exception: nothing reads its copy and Argo makes a new one at every
+#           install, so that row is written again with `put` each run (a Secret that is really gone is skipped; a read that fails any other way fails the run). It ends by running
+#           `secrets-store-prod compare` (the SHA-256 of each SOPS value against OpenBao's) and passes only if that passes. Only names and results are printed; a value is never printed.
 # handover  playbooks/k8s-openbao-handover.yml with prod's admin AppRole IDs (/etc/agent-keys/prod/openbao-admin-*, made
 #           once by the same rule as secrets-store.sh, never printed).
 # refresh   playbooks/k8s-openbao-refresh.yml, after handover: the store's policies and its admin login's address
@@ -579,13 +580,29 @@ print(n if n.replace("-", "").isalnum() and n == n.lower() else "sso", end="")')
       "identity $idname-initial-admin password c1/identity-admin password"
       "monitoring kube-prometheus-stack-grafana admin-user c1/grafana-admin username"
       "monitoring kube-prometheus-stack-grafana admin-password c1/grafana-admin password"
-      "argocd argocd-initial-admin-secret password c1/argocd-admin password"
+      "argocd argocd-initial-admin-secret password c1/argocd-admin password latest"
     )
     failed=0
     for row in "${table[@]}"; do
-      read -r a_ns a_secret a_key a_path a_pkey <<< "$row"
-      # base64 -d turns the Secret's value back; it goes straight to put-new's stdin, never an argument, a variable or the log.
-      if res=$(kc -n "$a_ns" get secret "$a_secret" -o "'jsonpath={.data.$a_key}'" | base64 -d | "$libexec/secrets-store-prod.sh" put-new "$a_path" "$a_pkey" 2>&1); then
+      read -r a_ns a_secret a_key a_path a_pkey a_mode <<< "$row"
+      # Most rows keep the first value (put-new). A row marked `latest` (Argo CD's initial admin: Argo makes a new one at every install,
+      # and nothing in the cluster reads the copy) is written again with `put`, so the copy follows the live Secret; a Secret the owner
+      # has deleted (Argo CD's own advice once the password is changed) is skipped, and the copy stays as it was.
+      cmd=put-new
+      [[ ${a_mode:-} != latest ]] || cmd=put
+      # --ignore-not-found makes a Secret that is really gone answer with nothing and success; any other failed read (the API, the
+      # node, Ansible) fails this row, so a broken read is never taken for a deleted Secret.
+      if [[ ${a_mode:-} == latest ]]; then
+        if ! present=$(kc -n "$a_ns" get secret "$a_secret" --ignore-not-found -o name 2>/dev/null); then
+          echo "openbao-prod: adopt: $a_ns/$a_secret key $a_key: not adopted (the read of the Secret failed)" >&2; failed=1; continue
+        fi
+        if [[ -z $present ]]; then
+          echo "openbao-prod: adopt: $a_ns/$a_secret key $a_key: skipped, not in the cluster; $a_path key $a_pkey stays as it was"
+          continue
+        fi
+      fi
+      # base64 -d turns the Secret's value back; it goes straight to the command's stdin, never an argument, a variable or the log.
+      if res=$(kc -n "$a_ns" get secret "$a_secret" -o "'jsonpath={.data.$a_key}'" 2>/dev/null | base64 -d | "$libexec/secrets-store-prod.sh" "$cmd" "$a_path" "$a_pkey" 2>&1); then
         echo "openbao-prod: adopt: $a_ns/$a_secret key $a_key -> $a_path key $a_pkey: ${res##*: }"
       else
         echo "openbao-prod: adopt: $a_ns/$a_secret key $a_key: not adopted (${res##*: })" >&2; failed=1

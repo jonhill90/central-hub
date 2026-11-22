@@ -7,6 +7,8 @@
 #   2. A second run with the store on applies nothing.
 #   3. Store off with an ExternalSecret of this role's left: the run stops before it makes any Secret.
 #   4. Store off with none left: the role makes the four Secrets as before, and no ExternalSecret.
+#   6. Store openbao on a cluster with no database account: the role makes none (no kubectl create of it); ExternalSecret sso-db reads
+#      username and password from c1/identity-db through store openbao, Owner; store off makes it as before (case 4).
 #   5. No value from the values file shows in the output or in an ExternalSecret.
 #   6. Store openbao: Grafana is restarted once when grafana-sso's version is new to the role (and not while the Secret
 #      isn't there yet), not again on a run with nothing new, and once more when its data changes, not when only its metadata does.
@@ -104,10 +106,10 @@ realm_keys=$(python3 -I -c 'import json, sys; d = json.loads(sys.argv[1])["spec"
 print(d["secretStoreRef"]["name"], d["target"]["creationPolicy"],
       ",".join(sorted(e["secretKey"] + "=" + e["remoteRef"]["key"] + ":" + e["remoteRef"]["property"] for e in d["data"])))' "$realm" 2>/dev/null)
 want_keys="openbao Owner ARGOCD_CLIENT_SECRET=c1/identity:ARGOCD_CLIENT_SECRET,CENTRAL_HUB_APP_CLIENT_SECRET=c1/identity:CENTRAL_HUB_APP_CLIENT_SECRET,GRAFANA_CLIENT_SECRET=c1/identity:GRAFANA_CLIENT_SECRET,JELLYFIN_CLIENT_SECRET=c1/identity:JELLYFIN_CLIENT_SECRET,OPNSENSE_CLIENT_SECRET=c1/identity:OPNSENSE_CLIENT_SECRET,PASSWORD_OWNER=c1/identity:PASSWORD_OWNER,PROXMOX_CLIENT_SECRET=c1/identity:PROXMOX_CLIENT_SECRET,TOTP_OWNER=c1/identity:TOTP_OWNER"
-want_w1="ExternalSecret/argocd/argocd-sso ExternalSecret/central-hub-app/central-hub-app-sso ExternalSecret/identity/realm-lab-secrets ExternalSecret/media/jellyfin-sso ExternalSecret/monitoring/grafana-sso Secret/central-hub-app/central-hub-app-oidc Secret/media/jellyfin-lab-root-ca"
+want_w1="ExternalSecret/argocd/argocd-sso ExternalSecret/central-hub-app/central-hub-app-sso ExternalSecret/identity/realm-lab-secrets ExternalSecret/identity/sso-bootstrap-admin ExternalSecret/identity/sso-db ExternalSecret/media/jellyfin-sso ExternalSecret/monitoring/grafana-sso Secret/central-hub-app/central-hub-app-oidc Secret/media/jellyfin-lab-root-ca"
 if [[ $r1 -eq 0 && $w1 == "$want_w1" && $realm_keys == "$want_keys" &&
       $argo == *'"app.kubernetes.io/part-of": "argocd"'* && $argo == *'"property": "ARGOCD_CLIENT_SECRET"'* && $argo == *'"secretKey": "clientSecret"'* ]]; then
-  ok "1. store openbao: five ExternalSecrets from c1/identity, store openbao, Owner; only the lab root and the app's public names made as Secrets"
+  ok "1. store openbao: seven ExternalSecrets (the database account from c1/identity-db, Keycloak's first admin from c1/identity-admin, the others from c1/identity), store openbao, Owner; only the lab root and the app's public names made as Secrets"
 else bad "1. rc=$r1 [$w1] [$realm_keys] $argo $(tail -n 20 "$t/out")"; fi
 
 # 2
@@ -144,5 +146,20 @@ setrv bmV3 13; run -e k8s_gitops_source_app_secrets_store=openbao; n4=$(rs)
 if [[ $rc -eq 0 && $n0 -eq 0 && $n1 -eq 1 && $n2 -eq 0 && $n3 -eq 0 && $n4 -eq 1 ]]; then
   ok "6. openbao: Grafana restarts once per new grafana-sso data, never without one"
 else bad "6. restarts: no secret $n0, new $n1, same $n2, metadata only $n3, data changed $n4, rc=$rc $(tail -n 15 "$t/out")"; fi
+
+echo '{}' > "$t/state.json"; run -e k8s_gitops_source_app_secrets_store=openbao; r6=$rc
+boot=$(es ExternalSecret/identity/sso-bootstrap-admin 2>/dev/null)
+boot_keys=$(python3 -I -c 'import json, sys; d = json.loads(sys.argv[1])["spec"]
+print(d["secretStoreRef"]["name"], d["target"]["creationPolicy"], d["target"]["name"],
+      ",".join(sorted(e["secretKey"] + "=" + e["remoteRef"]["key"] + ":" + e["remoteRef"]["property"] for e in d["data"])))' "$boot" 2>/dev/null)
+db_made=$(grep -c 'create secret generic sso-db' "$t/log")
+db=$(es ExternalSecret/identity/sso-db 2>/dev/null)
+db_keys=$(python3 -I -c 'import json, sys; d = json.loads(sys.argv[1])["spec"]
+print(d["secretStoreRef"]["name"], d["target"]["creationPolicy"], d["target"]["name"],
+      ",".join(sorted(e["secretKey"] + "=" + e["remoteRef"]["key"] + ":" + e["remoteRef"]["property"] for e in d["data"])))' "$db" 2>/dev/null)
+if [[ $r6 -eq 0 && $db_made -eq 0 && $db_keys == "openbao Owner sso-db password=c1/identity-db:password,username=c1/identity-db:username" &&
+      $boot_keys == "openbao Owner sso-bootstrap-admin password=c1/identity-admin:password,username=c1/identity-admin:username" ]]; then
+  ok "7. store openbao: the database account and Keycloak's first admin are ExternalSecrets reading c1/identity-db and c1/identity-admin, and the role no longer makes the account"
+else bad "7. rc=$r6 made=$db_made [$db_keys] $(tail -n 15 "$t/out")"; fi
 
 exit "$fail"
