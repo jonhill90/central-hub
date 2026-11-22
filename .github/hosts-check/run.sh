@@ -471,6 +471,19 @@ check_manifests() {
     echo "manifests: the root should pass adminSecret.store to jellyfin when appSecretsStore is set" >&2
     return 1
   fi
+  # Grafana's admin account (plan step 8a): with appSecretsStore openbao the root passes grafana.admin.existingSecret, userKey and passwordKey
+  # to kube-prometheus-stack and grafanaAdmin.store to monitoring-extras, whose ExternalSecret grafana-admin then reads c1/grafana-admin;
+  # a root with no store passes none of them and the chart renders no such ExternalSecret.
+  helm template monitoring-extras hosts/kubernetes/home/c1/apps/monitoring-extras --namespace monitoring \
+    --set grafanaAdmin.store=openbao > "$work/rendered/app-c1-monitoring-extras-grafana-admin.yaml"
+  if [ "$(grep -c 'grafana.admin.existingSecret' "$work/rendered/root-c1-jellyfin-store.yaml")" != 1 ] ||
+    ! grep -q 'grafana.admin.passwordKey' "$work/rendered/root-c1-jellyfin-store.yaml" ||
+    ! grep -q 'grafanaAdmin.store' "$work/rendered/root-c1-jellyfin-store.yaml" ||
+    grep -q 'grafana.admin.existingSecret' "$work/rendered/root-c1-openbao.yaml" ||
+    [ "$(grep -c 'remoteRef: {key: c1/grafana-admin' "$work/rendered/app-c1-monitoring-extras-grafana-admin.yaml")" != 2 ]; then
+    echo "manifests: with appSecretsStore openbao the root should pass grafana.admin.* and grafanaAdmin.store, and monitoring-extras should read c1/grafana-admin; without it none of that" >&2
+    return 1
+  fi
   # The keys those charts read, the names dev's secret-source file holds and the runbook's list agree.
   bash "$here/tests/test_app_secrets_contract.sh"
   if helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 \

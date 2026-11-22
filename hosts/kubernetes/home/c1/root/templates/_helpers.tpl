@@ -10,6 +10,8 @@ Helm parameters for one child Application:
   that root value is false, so a cluster that leaves it true renders exactly as before.
 - rootParameters: value path -> the name of a text root value; passed only when that root value is
   not empty, so a cluster that leaves it empty renders exactly as before.
+- openbaoParameters: value path -> text; passed only when the root's appSecretsStore is openbao (plan step 8a), so a cluster that
+  keeps its apps' secrets in store c1 renders exactly as before.
 Both are private (CLAUDE.md rule 4): they live only in the root Application, set by Ansible.
 */ -}}
 {{- define "c1.parameters" -}}
@@ -32,7 +34,13 @@ Both are private (CLAUDE.md rule 4): they live only in the root Application, set
 {{- $_ := set $fromRoot $path (toString .) }}
 {{- end }}
 {{- end }}
-{{- if or $app.needsZone $app.zoneParameters $switches $offs $fromRoot }}
+{{- $fromOpenbao := dict }}
+{{- if eq (toString $.root.Values.appSecretsStore) "openbao" }}
+{{- range $path, $text := $app.openbaoParameters }}
+{{- $_ := set $fromOpenbao $path (toString $text) }}
+{{- end }}
+{{- end }}
+{{- if or $app.needsZone $app.zoneParameters $switches $offs $fromRoot $fromOpenbao }}
 parameters:
 {{- range $path := $switches }}
   - name: {{ $path | quote }}
@@ -43,6 +51,10 @@ parameters:
     value: "false"
 {{- end }}
 {{- range $path, $value := $fromRoot }}
+  - name: {{ $path | quote }}
+    value: {{ $value | quote }}
+{{- end }}
+{{- range $path, $value := $fromOpenbao }}
   - name: {{ $path | quote }}
     value: {{ $value | quote }}
 {{- end }}
