@@ -603,7 +603,14 @@ vals = {"jellyfin-admin": "jf-secret-Aa11", "sso-db": "db-secret-Bb22", "sso-ini
 name = a.split(" secret ")[1].split()[0] if " secret " in a else ""
 miss = open("$t/kube/MISSING").read().split() if __import__("os").path.exists("$t/kube/MISSING") else []
 ok = name in vals and name not in miss
-print(json.dumps({"plays": [{"tasks": [{"hosts": {"cp-a": {"rc": 0 if ok else 1, "stdout": base64.b64encode(vals[name].encode()).decode() if ok else "", "stderr": "" if ok else "not found"}}}]}]}))
+if "--ignore-not-found" in a:
+    if __import__("os").path.exists("$t/kube/READFAIL"):
+        res = {"rc": 1, "stdout": "", "stderr": "connection refused"}
+    else:
+        res = {"rc": 0, "stdout": "secret/" + name if ok else "", "stderr": ""}
+else:
+    res = {"rc": 0 if ok else 1, "stdout": base64.b64encode(vals[name].encode()).decode() if ok else "", "stderr": "" if ok else "not found"}
+print(json.dumps({"plays": [{"tasks": [{"hosts": {"cp-a": res}}]}]}))
 EOS
 chmod +x "$venv/ansible"
 cat > "$t/libexec/secrets-store-prod.sh" <<EOS
@@ -617,7 +624,8 @@ chmod +x "$t/libexec/secrets-store-prod.sh"
 run adopt; a_rc=$rc a_out=$out; a_ss=$(cat "$t/ss_calls"); a_k=$(cat "$t/kcalls")
 echo sso-db > "$t/kube/MISSING"; : > "$t/ss_calls"; run adopt; b_rc=$rc b_out=$out; b_ss=$(cat "$t/ss_calls")
 echo argocd-initial-admin-secret > "$t/kube/MISSING"; : > "$t/ss_calls"; run adopt; g_rc=$rc g_out=$out; g_ss=$(cat "$t/ss_calls")
-rm -f "$t/kube/MISSING"; touch "$t/kube/CMPFAIL"; run adopt; c_rc=$rc c_out=$out
+rm -f "$t/kube/MISSING"; touch "$t/kube/READFAIL"; : > "$t/ss_calls"; run adopt; h_rc=$rc h_out=$out; h_ss=$(cat "$t/ss_calls")
+rm -f "$t/kube/READFAIL"; touch "$t/kube/CMPFAIL"; run adopt; c_rc=$rc c_out=$out
 rm -f "$t/kube/CMPFAIL"; run adopt extra; x_rc=$rc x_calls=$calls
 if [[ $a_rc -eq 0 && $a_out == *"PASS: openbao-prod: adopt: 8 values adopted or already held; compare passed"* &&
       $a_ss == *"put-new c1/jellyfin-admin password value=jf-secret-Aa11"* && $a_ss == *"put-new c1/identity-db username value=db-secret-Bb22"* &&
@@ -627,9 +635,10 @@ if [[ $a_rc -eq 0 && $a_out == *"PASS: openbao-prod: adopt: 8 values adopted or 
       $a_out != *-secret-* && $b_rc -ne 0 && $b_out == *"FAIL: openbao-prod: adopt: at least one value was not adopted"* && $b_out == *"identity/sso-db key username: not adopted"* &&
       $b_ss != *"compare" && $b_out != *-secret-* && $c_rc -ne 0 && $c_out == *"compare of SOPS against OpenBao did not pass"* && $c_out != *"PASS: openbao-prod: adopt"* &&
       $g_rc -eq 0 && $g_out == *"argocd/argocd-initial-admin-secret key password: skipped, not in the cluster; c1/argocd-admin key password stays as it was"* &&
+      $h_rc -ne 0 && $h_out == *"argocd/argocd-initial-admin-secret key password: not adopted (the read of the Secret failed)"* && $h_out != *skipped* && $h_ss != *"c1/argocd-admin"* &&
       $g_out == *"PASS: openbao-prod: adopt"* && $g_ss != *"c1/argocd-admin"* && $g_out != *-secret-* &&
       $x_rc -eq 2 && -z $x_calls ]]; then
-  ok "20. adopt: only its fixed table is read; each value goes on stdin to put-new and is never printed; a value that cannot be adopted or a failed compare fails it; Argo CD's copy is written again with put and skipped when its Secret is gone; an argument runs nothing"
+  ok "20. adopt: only its fixed table is read; each value goes on stdin to put-new and is never printed; a value that cannot be adopted or a failed compare fails it; Argo CD's copy is written again with put and skipped only when its Secret is really gone (a failed read fails); an argument runs nothing"
 else bad "20. rc=$a_rc $a_out | [$a_ss] | missing rc=$b_rc $b_out | cmp rc=$c_rc $c_out | extra rc=$x_rc"; fi
 
 exit "$fail"

@@ -125,6 +125,7 @@ check_ansible() {
   suite bash "$here/tests/test_prod_lab_root.sh"
   suite bash "$here/tests/test_agent_browser.sh"
   suite bash "$here/tests/test_argocd_signin_check.sh"
+  suite bash "$here/tests/test_grafana_signin_check.sh"
   suite bash "$here/tests/test_proxmox_host_workflow.sh"
   suite bash "$here/tests/test_inventory_wrapper.sh"
   suite bash "$here/tests/test_inventory_wiring.sh"
