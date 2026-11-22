@@ -523,6 +523,7 @@ check_backup() {
   suite bash "$here/tests/test_secrets_store_kv_openbao.sh"
   suite bash "$here/tests/test_secrets_store_wrapper.sh"
   suite bash "$here/tests/test_secrets_store_owner.sh"
+  suite bash "$here/tests/test_secrets_store_ssh.sh"
   suite bash "$here/tests/test_openbao_prod.sh"
   suite bash "$here/tests/test_rebuild_prod.sh"
   suite bash "$here/tests/test_wait_apps.sh"

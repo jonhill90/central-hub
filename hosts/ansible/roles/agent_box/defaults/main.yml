@@ -41,11 +41,13 @@ agent_box_wrappers:
   # The lab's secrets store, OpenBao, inside the dev cluster (docs/runbooks/set-up-the-secrets-store.md, D-0058). The `*`
   # on put lets sudo pass the path and key; the value comes on stdin, and the wrapper checks both arguments itself.
   - name: secrets-store
-    args: [recovery, status, snapshot, restore, restore-rebuilt, "restore-rebuilt *", clear-hold, "put *", put-apps, compare, reseed]
+    args: [recovery, status, snapshot, restore, restore-rebuilt, "restore-rebuilt *", clear-hold, "put *", put-apps, compare, reseed,
+           "ssh-ca plan", "ssh-ca apply", "ssh-ca check", "ssh-ca public", "ssh-ca sign-host *"]
   # The same wrapper for the store inside prod's c1 (D-0058): prod's keys folder, settings and inventory only.
   - name: secrets-store-prod
     args: [recovery, status, snapshot, restore, restore-rebuilt, "restore-rebuilt *", clear-hold, "put *", put-apps, compare, reseed,
-           "owner-login owner", "owner-login test", "owner-login check-test", "owner-login remove-test", "owner-login plan"]
+           "owner-login owner", "owner-login test", "owner-login check-test", "owner-login remove-test", "owner-login plan",
+           "ssh-ca plan", "ssh-ca apply", "ssh-ca check", "ssh-ca public", "ssh-ca sign-host *"]
   # Turns that store on in prod's c1 with the box's own prod node key (files/openbao-prod.sh). The `*` on seal,
   # seal-copy, refresh, reset-failed-start, drop-box-path and admin-firewall passes the owner's tap id, which the wrapper
   # checks; key prints only the public half.
