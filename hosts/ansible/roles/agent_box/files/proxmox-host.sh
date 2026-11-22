@@ -18,6 +18,8 @@
 #     what it does: playbooks/tasks/proxmox-ksm.yml. A setting, so a session applies it only through `apply-recorded` with a reviewer pass and a go)
 #   `connector` (playbooks/proxmox-connector.yml: read-only; `check connector` prints which of nine facts about container 900 are true: running, online, advertises and has approved a lab range,
 #     forwards, has a lab route, reaches the management, prod and dev gateways; fixed words from the reviewed playbook, no name or address)
+#   `connector-route` (playbooks/proxmox-connector-route.yml: puts the lab route unit back in container 900, the tailnet connector, and proves the route to the prod and dev gateways
+#     leaves by the management interface. A change inside CT 900, so a session applies it only through `apply-recorded` with a reviewer pass and a go)
 #   `guests` (playbooks/proxmox-guests.yml: read-only; `check guests` prints which of container 259 and VM 258 exist, so a session on the box can tell)
 #   `ct259-destroy` (playbooks/proxmox-ct259-destroy.yml: deletes the rehearsal's container CT 259 after tag, privilege and mount-point guards.
 #     A delete, so a session applies it only through `apply-recorded` with a reviewer pass and a go)
@@ -67,7 +69,7 @@ libexec=/usr/local/libexec/agent-box
 ansible_bin=$libexec/ansible-venv/bin
 collections=$libexec/collections
 repo_url=https://github.com/jonhill90/central-hub.git   # public; the reviewed code this job runs
-declare -A jobs=([proxy]=playbooks/proxmox-proxy.yml [agent-access]=playbooks/proxmox-agent-access.yml [sso]=playbooks/proxmox-sso.yml [opnsense-sso]=playbooks/opnsense-sso.yml [firewall]=playbooks/proxmox-firewall.yml [guests]=playbooks/proxmox-guests.yml [connector]=playbooks/proxmox-connector.yml [ct259-destroy]=playbooks/proxmox-ct259-destroy.yml [restore-reader]=playbooks/proxmox-restic-reader.yml [memory]=playbooks/proxmox-memory.yml [ksm]=playbooks/proxmox-ksm.yml [ksm-off]=playbooks/proxmox-ksm-off.yml [box-writer]=playbooks/proxmox-restic-box.yml)
+declare -A jobs=([proxy]=playbooks/proxmox-proxy.yml [agent-access]=playbooks/proxmox-agent-access.yml [sso]=playbooks/proxmox-sso.yml [opnsense-sso]=playbooks/opnsense-sso.yml [firewall]=playbooks/proxmox-firewall.yml [guests]=playbooks/proxmox-guests.yml [connector]=playbooks/proxmox-connector.yml [connector-route]=playbooks/proxmox-connector-route.yml [ct259-destroy]=playbooks/proxmox-ct259-destroy.yml [restore-reader]=playbooks/proxmox-restic-reader.yml [memory]=playbooks/proxmox-memory.yml [ksm]=playbooks/proxmox-ksm.yml [ksm-off]=playbooks/proxmox-ksm-off.yml [box-writer]=playbooks/proxmox-restic-box.yml)
 inventory=$dir/inventory/hosts.yml
 logs=$work/logs
 summary=$logs/summary.jsonl
@@ -379,6 +381,13 @@ print("; ".join(names) or "none (the run stopped before a task: see the box's lo
 PY
 }
 
+# The firewall VM's way back for the opnsense-sso apply (D-0063 rule 4): the same guard the firewall's wrapper uses, run here because
+# no other wrapper wraps this job. arm snapshots VM 100 and starts the host's 15-minute timer; confirm keeps the change; rollback
+# restores the snapshot now. Output goes to the box's log only.
+guard_run() { # arm|confirm|rollback
+  (cd "$repo/hosts/ansible" && ansible-playbook -i "$inventory" playbooks/opnsense-guard.yml -e "opnsense_guard_action=$1") > "$logs/guard-$1-$stamp.json" 2>> "$logs/run-$stamp.err"
+}
+
 do_check() { # prints the hash line; returns non-zero if the check run failed
   local out=$logs/check-$stamp.json
   if ! play "$out" --check --diff; then
@@ -472,8 +481,17 @@ PY
       printf '%s %s %s\n' "$stamp" "$hash" "$go_ref" >> "${gf%.jsonl}.used"
     fi
     out=$logs/apply-$stamp.json
+    guarded=false
+    if [[ $job == opnsense-sso ]]; then
+      if ! guard_run arm; then
+        record "$hash" "$changed changed" "FAIL: guard arm"
+        echo "proxmox-host: FAIL: the way back (guard arm) could not be set, so nothing was applied; look at 'proxmox-host guard status' (details in the box's log)" >&2; exit 1
+      fi
+      guarded=true
+    fi
     if ! play "$out" --diff; then
       record "$hash" "$changed changed" "FAIL: apply"
+      if $guarded; then guard_run rollback && echo "proxmox-host: the firewall VM was rolled back to its snapshot" >&2 || echo "proxmox-host: the rollback failed too: run 'proxmox-host guard rollback' now" >&2; fi
       echo "proxmox-host: FAIL: apply of check $hash (details in the box's log $out)" >&2; exit 1
     fi
     # Every task the apply changed must be one the check showed as changed or skipped.
@@ -496,7 +514,12 @@ PY
       echo "proxmox-host: FAIL: the apply changed $extra task(s) that check $hash did not show (D-0041 rule 4; details in $out)" >&2
       # The names are the repository's own task titles (never a diff, host name or address), so they may be printed.
       sed 's/^/proxmox-host:   unlisted task: /' "$out.extra" >&2
+      if $guarded; then guard_run rollback && echo "proxmox-host: the firewall VM was rolled back to its snapshot" >&2 || echo "proxmox-host: the rollback failed too: run 'proxmox-host guard rollback' now" >&2; fi
       exit 1
+    fi
+    if $guarded && ! guard_run confirm; then
+      record "$hash" "$changed changed" "FAIL: guard confirm"
+      echo "proxmox-host: FAIL: the change was applied but the guard could not be confirmed, so the timer may roll it back; look at 'proxmox-host guard status'" >&2; exit 1
     fi
     record "$hash" "$changed changed, $skipped skipped, $total tasks" ok
     # restore-reader: say what it put on the host, so the box's rebuild wrapper switches dev to this target only when the key and its address

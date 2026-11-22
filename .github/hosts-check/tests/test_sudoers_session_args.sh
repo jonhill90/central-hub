@@ -95,6 +95,19 @@ ss = [w for w in d if w["name"] == "opnsense-sso-secret"][0]
 sst = render([ss])
 print("14", [l for l in sst.splitlines() if l.startswith("hostops ")] == ["hostops ALL=(keys) NOPASSWD: /x/opnsense-sso-secret.sh read"],
       not [l for l in sst.splitlines() if l.startswith("sess ")])
+rp = [w for w in d if w["name"] == "rebuild-prod"][0]
+rpt = render([rp])
+ssf = ["ssh-ca plan", "ssh-ca apply", "ssh-ca check", "ssh-ca public", "ssh-ca sign-host *"]
+ok16 = True
+for wname in ("secrets-store", "secrets-store-prod"):
+    wl = lines(render([[w for w in d if w["name"] == wname][0]]), "sess")
+    forms16 = ["/x/%s.sh %s" % (wname, f) for f in ssf]
+    ok16 = ok16 and len(wl) == 1 and all(f in wl[0].split(", ") or wl[0].endswith(": " + f) for f in forms16) and "ssh-ca *" not in wl[0] and "ssh-ca sign-host" in wl[0]
+print("16", ok16, not any(" ssh-ca *" in x for x in render([[w for w in d if w["name"] == n][0] for n in ("secrets-store", "secrets-store-prod")]).splitlines()))
+op = [w for w in d if w["name"] == "openbao-prod"][0]
+opl = lines(render([op]), "sess")
+print("17", "secrets-status" in op["args"], len(opl) == 1 and "/x/openbao-prod.sh secrets-status" in opl[0].split(", ") + [opl[0].split(": ")[-1]] and "secrets-status *" not in opl[0])
+print("15", rp["args"] == ["check", "rebuild *", "resume *", "log"], "rebuild-prod.sh resume *" in rpt)
 PY
 )
 check() { # number, text
@@ -115,4 +128,7 @@ check 12 "12. lab-token: the session may status and mint as hostops; only hostop
 check 14 "14. inventory: the session sets, gets, lists, diffs, logs, imports and compares as invops and has no view; keys, hostops and guardops view one exact part each; invops cats the two old copies with two exact commands"
 check 13 "13. secrets-store-prod: the five exact owner-login forms are in the sudoers line, no owner-login *"
 check 14 "14. opnsense-sso-secret: only hostops may run read (as keys); the session has no line for it"
+check 16 "16. secrets-store and secrets-store-prod: the five exact ssh-ca forms (plan, apply, check, public, sign-host <names>) are in the session line, no ssh-ca *"
+check 17 "17. openbao-prod: the session may run secrets-status with no argument, so no tap and no wildcard on it"
+check 15 "15. rebuild-prod: the session may check, rebuild, resume (tap and commit) and read the log"
 exit "$fail"

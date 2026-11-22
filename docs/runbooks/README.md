@@ -25,6 +25,7 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | [Serve the Proxmox web UI on port 443](serve-proxmox-on-443.md) | manual | draft |
 | [Sign in to the Proxmox web UI through Keycloak](sign-in-to-proxmox-through-keycloak.md) | automated | draft |
 | [Sign in to the OPNsense web GUI through Keycloak](sign-in-to-opnsense-through-keycloak.md) | manual | draft |
+| [Sign in to the lab's Linux boxes with SSH certificates from OpenBao](sign-in-to-linux-boxes-with-ssh-certificates.md) | automated | draft |
 | [Run the dev lab redeploy from GitHub Actions on the agent box](set-up-the-lab-redeploy-workflow.md) | manual | draft |
 | [Merge a pull request with the box's sweep](merge-a-pr-through-the-merge-job.md) | manual | draft |
 | [Change the tailnet stack through the pipeline job](run-the-tailnet-stack-as-a-pipeline-job.md) | manual | draft |
