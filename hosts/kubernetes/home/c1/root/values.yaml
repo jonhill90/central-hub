@@ -60,7 +60,7 @@ labCaIssuer: true
 loginProbe: true
 # Whether Jellyfin's setup CronJob (and the admin Secret it signs in with) is made. true, as on c1. Ansible sets it
 # to false only for a cluster that restores prod's volumes before the apps start (k8s_gitops_source_jellyfin_setup):
-# dev. The restored Jellyfin config already holds prod's admin user and password, which the setup Job's own
+# dev, and prod's own rebuild (it restores its backup). The restored Jellyfin config already holds prod's admin user and password, which the setup Job's own
 # Secret, made fresh in that cluster, can't match, so every run signed in with a 401 and failed `checks`.
 jellyfinSetup: true
 # Whether monitoring-extras' panel-check CronJob is suspended. false, as on c1. Ansible sets it to true only for dev

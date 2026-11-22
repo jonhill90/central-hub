@@ -709,13 +709,18 @@ run_stage() {
   if [ "$ENV_NAME" = dev ] && [ -n "${OPENBAO_SEAL_KEY_FILE:-}" ]; then rootvars=(-e k8s_gitops_source_openbao_measure=true); fi
   # Dev, on every render of the root Application too: no ClusterIssuer lab-ca (no `certs` stage; dev-ca comes after
   # `checks`), so jellyfin's Certificate on it would hold `apps`; and no login-probe, whose names are prod's
-  # (k8s_gitops defaults, k8s_gitops_source_lab_ca_issuer and _login_probe); and no Jellyfin setup CronJob, because
-  # `restore` puts prod's Jellyfin config, with prod's admin password, in place before the apps start (k8s_gitops_source_jellyfin_setup); and a suspended panel-check CronJob, whose
+  # (k8s_gitops defaults, k8s_gitops_source_lab_ca_issuer and _login_probe); and a suspended panel-check CronJob, whose
   # Keycloak panel has no data before the `identity-keycloak` stage; the OpenBao panels and Jellyfin's request rate
   # also printed no data in the run that failed, cause not measured (k8s_gitops_source_panel_check_suspended).
   if [ "$ENV_NAME" = dev ]; then
-    rootvars+=(-e k8s_gitops_source_lab_ca_issuer=false -e k8s_gitops_source_login_probe=false -e k8s_gitops_source_jellyfin_setup=false -e k8s_gitops_source_panel_check_suspended=true)
+    rootvars+=(-e k8s_gitops_source_lab_ca_issuer=false -e k8s_gitops_source_login_probe=false -e k8s_gitops_source_panel_check_suspended=true)
   fi
+  # No Jellyfin setup CronJob on any run that restores a Jellyfin config (dev always; prod, whose rebuild restores its own
+  # backup): `restore` puts the config, with its admin password, in place before the apps start, and the setup Job's admin
+  # Secret is made fresh in the new cluster (External Secrets' Password generator, refreshPolicy CreatedOnce), so it can't sign
+  # in to that config: every tick printed "wizard already completed", then a 401, and failed `checks` (prod resume 4,
+  # 2026-11-22; dev run 10). k8s_gitops_source_jellyfin_setup.
+  if [ "$ENV_NAME" = dev ] || [ -n "${RESTORE_HOOK:-}" ]; then rootvars+=(-e k8s_gitops_source_jellyfin_setup=false); fi
   case $1 in
     preflight)
       [ "$ENV_NAME" = dev ] || { echo "the memory preflight runs on dev only"; return 1; }
