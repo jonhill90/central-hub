@@ -29,6 +29,7 @@
 #  14. secrets-status reads only (kubectl get and logs, never a Secret): it prints the store's Ready condition, the ExternalSecrets,
 #      and for each one not Ready its message and the controller's log lines naming it (at most 20); all Ready prints no log;
 #      a failed read stops it with an error; a tap or another argument runs nothing.
+#  15. jobs-status lists the Jobs with failed pods and each one's last 30 log lines, scrubbed; get and logs only; a tap runs nothing.
 # Usage: .github/hosts-check/tests/test_openbao_prod.sh   (needs python3 with PyYAML, ssh-keygen, flock)
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -439,5 +440,34 @@ if [[ $a_rc -eq 0 && $a_out == *"store openbao: Ready=False reason=InvalidProvid
       $x_rc -eq 2 && -z $x_calls ]]; then
   ok "14. secrets-status: the store's condition, the ExternalSecrets, and the last 20 controller lines naming each one not Ready; only get and logs, no Secret read; all Ready reads no log; a failed read stops it; a tap runs nothing"
 else bad "14. rc=$a_rc logs=$log_lines writes=$write_calls nonread=$only_read | allready rc=$g_rc logs=$g_logs | fail rc=$f_rc $f_out | tap rc=$x_rc [$x_calls] | out: $a_out"; fi
+
+# 15: jobs-status lists the Jobs with failed pods and each one's last log lines, scrubbed; get and logs only.
+mkdir -p "$t/work/checkouts/openbao-prod/hosts"; cp hosts/diag-apps.py "$t/work/checkouts/openbao-prod/hosts/diag-apps.py"
+rm -rf "$t/kube2"; mkdir -p "$t/kube2"; : > "$t/kcalls"
+cat > "$venv/ansible" <<EOS
+#!/usr/bin/env python3
+import json, os, sys
+a = sys.argv[sys.argv.index("-a") + 1]
+open("$t/kcalls", "a").write(a + "\\n")
+rc, out = 0, ""
+if " logs " in a: out = "setup: login password=hunter2 refused by jellyfin"
+elif " get jobs " in a:
+    mk = lambda ns, n, f, s, owner=True: {"metadata": {"namespace": ns, "name": n, **({"ownerReferences": [{"kind": "CronJob", "name": "jellyfin-setup"}]} if owner else {})}, "status": {"failed": f, "succeeded": s, "startTime": "2026-11-22T02:40:00Z"}}
+    out = json.dumps({"items": [mk("media", "jellyfin-setup-1", 2, 0), mk("monitoring", "ok-1", 0, 1), mk("media", "manual-1", 1, 0, False)]})
+else: rc = 1
+print(json.dumps({"plays": [{"tasks": [{"hosts": {"cp-a": {"rc": rc, "stdout": out, "stderr": ""}}}]}]}))
+EOS
+chmod +x "$venv/ansible"
+settings '{"seal_node":"wk-a","store_host":"bao.invalid"}'
+inventory "${prod_inv[@]}"
+run jobs-status; a_rc=$rc a_out=$out
+a_calls=$(cat "$t/kcalls")
+writes=$(grep -cE ' (apply|delete|create|patch|annotate|edit|replace|exec|cp) |get secret' <<< "$a_calls" || true)
+run jobs-status "$tap"; x_rc=$rc x_calls=$calls
+if [[ $a_rc -eq 0 && $a_out == *"media jellyfin-setup-1 jellyfin-setup failed=2 succeeded=0"* && $a_out == *"media manual-1 - failed=1"* && $a_out != *"ok-1 "* &&
+      $a_out == *"last 30 log lines of media/jellyfin-setup-1 (scrubbed):"* && $a_out == *"login password=<redacted> refused by jellyfin"* && $a_out != *"hunter2"* &&
+      $a_out == *"PASS: openbao-prod: jobs-status: read, nothing changed"* && $writes -eq 0 && $x_rc -eq 2 && -z $x_calls ]]; then
+  ok "15. jobs-status: the failed Jobs (not the good one) with their owner, and each one's last log lines scrubbed; only get and logs; a tap runs nothing"
+else bad "15. rc=$a_rc writes=$writes | tap rc=$x_rc [$x_calls] | $a_out"; fi
 
 exit "$fail"
