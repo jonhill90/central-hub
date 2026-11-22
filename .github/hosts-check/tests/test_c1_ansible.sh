@@ -13,6 +13,9 @@
 #  15. certs runs the certs playbook with tag issue only, no values file and no extra variables; the inventory's three controller
 #      paths (Cloudflare token, lab CA chain and key) are remapped to <keys>/prod; it stops while one of the three files is missing,
 #      and when the inventory has issuing or the lab CA off (the role would then delete the issuers); apply needs a clearance id.
+#  16. The k8s_certs role's argument spec renders every default, even under tag issue. Run for real (ansible-playbook, tag that matches no
+#      task, connection local) against the inventory `check certs` builds, it passes: on the box it stopped at groups['proxmox'] | first
+#      (k8s_certs_smoke_client), a group the box's inventory copy drops. A failed play also makes the wrapper return non-zero.
 #   5. log prints the run's own lines.
 #   9. users runs the identity playbook with tags secrets,users, the values file, no realm replace and one fixed user; apply is its
 #      own verb; it never runs the keycloak tag.
@@ -238,7 +241,7 @@ rm -f "$t/keys/prod/identity.env"
 run check users
 if [[ $rc -ne 0 && $out == *"identity.env is missing"* && -z $calls ]]; then ok "9b. users stops while the values file is missing"; else bad "9b. $rc $out"; fi
 # 15: certs
-certs_inv=("all:" "  children:" "    k8s_nodes:" "      vars:" "        k8s_certs_issue: true" "        k8s_certs_lab_ca: true"
+certs_inv=("all:" "  children:" "    k8s_nodes:" "      vars:" "        k8s_certs_issue: true" "        k8s_certs_lab_ca: true" "        k8s_certs_zone: example.test" "        k8s_certs_acme_email: ops@example.test" "        k8s_certs_gateway_address: 192.0.2.5"
            "        k8s_certs_cloudflare_token_file: ~/.config/central-hub/cf.txt" "        k8s_certs_lab_ca_cert_file: ~/.config/central-hub/lab-ca/chain.crt"
            "        k8s_certs_lab_ca_key_file: ~/.config/central-hub/lab-ca/key" "      children:" "        k8s_control_plane:" "          hosts:" "            cp-a: {ansible_host: 192.0.2.10}")
 inventory "${certs_inv[@]}"
@@ -257,4 +260,19 @@ if [[ $k1rc -ne 0 && $k1o == *"is missing"* &&
       $k5rc -ne 0 && -z $k5 && $k5o == *"never does"* ]]; then
   ok "15. certs: tag issue only, the three files remapped to the box's copies, stops on a missing file or issuing off, apply needs a clearance id"
 else bad "15. $k1rc [$k1o] $k2rc [$k2] $k3rc [$k3] $k4rc $k5rc [$k5o]"; fi
+
+# 16: the role's argument spec against the inventory the wrapper builds (real ansible-playbook, no stub), and the wrapper's return code on a failed play
+inventory "${certs_inv[@]}"
+run check certs
+cp "$t/seen-inventory.yml" "$t/arg-inv.yml"; mkdir -p "$t/arg-inv"; cp "$t/arg-inv.yml" "$t/arg-inv/hosts.yml"
+printf '%s\n' "- hosts: k8s_control_plane[0]" "  gather_facts: false" "  connection: local" "  roles: [k8s_certs]" > "$t/arg-play.yml"
+argout=$(cd hosts/ansible && ANSIBLE_ROLES_PATH=roles ANSIBLE_HOME="$t/ahome" ansible-playbook -i "$t/arg-inv/" "$t/arg-play.yml" --tags no-such-tag 2>&1); argrc=$?
+cat > "$venv/ansible-playbook" <<S
+#!/bin/bash
+echo "FAILED stub"; exit 2
+S
+run check certs; failrc=$rc
+if [[ $argrc -eq 0 && $argout == *"failed=0"* && $failrc -ne 0 ]]; then
+  ok "16. the k8s_certs argument spec passes against the wrapper's inventory (real ansible); a failed play makes the wrapper return non-zero"
+else bad "16. $argrc [${argout: -600}] failrc=$failrc"; fi
 exit "$fail"
