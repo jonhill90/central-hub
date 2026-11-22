@@ -637,6 +637,6 @@ run check; r19d=$rc o19d=$out
 if [[ $r19c -eq 0 && $o19c == *"every file changed since it"*"is one dev never reads"* && $r19d -eq 1 && $o19d == *"touch files dev reads: hosts/rebuild-k8s.sh"* ]]; then
   ok "19b. a dev pass at an older commit stands when only docs, checks and the box's own files changed since; a file dev reads needs a new dev run"
 else bad "19b. $r19c $o19c | $r19d $o19d"; fi
-BELOW=1; rm -f "$t/difffiles"
+rm -f "$t/difffiles"
 
 exit "$fail"
