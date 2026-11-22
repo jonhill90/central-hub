@@ -460,7 +460,7 @@ check_manifests() {
   if ! grep -q 'remoteRef: {key: c1/jellyfin-admin, property: password}' "$work/rendered/app-c1-jellyfin-admin-openbao.yaml" ||
     grep -q 'refreshPolicy: CreatedOnce' "$work/rendered/app-c1-jellyfin-admin-openbao.yaml" ||
     ! grep -q 'kind: Password' "$work/rendered/app-c1-jellyfin-admin-openbao.yaml" ||
-    grep -q 'c1/jellyfin-admin' "$work/rendered/app-c1-jellyfin-admin-generator.yaml" ||
+    grep -q 'remoteRef: {key: c1/jellyfin-admin' "$work/rendered/app-c1-jellyfin-admin-generator.yaml" ||
     ! grep -q 'refreshPolicy: CreatedOnce' "$work/rendered/app-c1-jellyfin-admin-generator.yaml"; then
     echo "manifests: jellyfin's admin Secret should read c1/jellyfin-admin with store openbao (generator still rendered), and be the generator's otherwise" >&2
     return 1
