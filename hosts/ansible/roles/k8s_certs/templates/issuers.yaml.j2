@@ -37,6 +37,12 @@ spec:
     group: cert-manager.io
     kind: ClusterIssuer
     name: {{ k8s_certs_issuer }}
+  # Server auth is listed on purpose: without it the certificate carries no extended key usage, and Apple's rule for TLS server
+  # certificates (support.apple.com/en-us/103769) asks for id-kp-serverAuth, so an iPhone may refuse it even once it trusts the root.
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
   dnsNames:
     - "{{ k8s_certs_wildcard }}"
 {% if k8s_certs_short_names %}

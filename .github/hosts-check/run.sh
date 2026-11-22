@@ -504,6 +504,7 @@ check_backup() {
   # The c1 backup and restore-test scripts end to end, against a real etcd and restic repository, and
   # the agent box's off-box OPNsense copy against a local restic repository.
   suite bash "$here/tests/test_backup.sh"
+  suite bash "$here/tests/test_ios_trust_profile.sh"
   suite bash "$here/tests/test_restore_pv.sh"
   suite bash "$here/tests/test_restore_hold.sh"
   suite bash "$here/tests/test_restore_skip_env.sh"
