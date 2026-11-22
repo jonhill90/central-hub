@@ -1,0 +1,14 @@
+---
+# Boxes trust the lab's SSH user CA (D-0064 rules 4 to 7). One box or group at a time, by -e ssh_ca_trust_hosts:
+#   ansible-playbook -i <inventory>/ playbooks/ssh-ca-trust.yml -e ssh_ca_trust_hosts=<host or group> \
+#     -e ssh_ca_trust_user_ca_file=<user-ca.pub from `secrets-store ssh-ca public`> --check --diff
+# Each box's ssh_ca_trust_accounts is a private inventory value. Keep a second session open on the box while it runs
+# (D-0064 rule 5); with the local keys untouched it stays reachable. -e ssh_ca_trust_remove=true undoes it.
+- name: Boxes trust the lab's SSH user CA
+  hosts: "{{ ssh_ca_trust_hosts | default('ssh_ca_trust') }}"
+  become: true
+  gather_facts: true
+  serial: 1
+  roles:
+    - role: ssh_ca_trust
+      tags: [ssh-ca-trust]
