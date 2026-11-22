@@ -225,7 +225,7 @@ fi
 post_stages="store-admin store-ca identity-values store-secrets"
 # The order a run goes in: the four steps come after `gateway` and before `identity`, because the identity stage waits on the ExternalSecret
 # that reads the rebuilt store, which needs the admin path, its CA, the realm's keys and the apps' secrets in it first (reviewer, 2026-11-22).
-full_seq="vms cluster storage openbao-seal restore gitops secrets apps certs gateway $post_stages identity identity-db ui backup checks"
+full_seq="vms cluster storage openbao-seal restore gitops secrets apps certs gateway $post_stages identity identity-db ui backup backup-drill checks"
 fails=0
 pass() { echo "PASS: rebuild-prod: $*"; }
 fail() { echo "FAIL: rebuild-prod: $*"; fails=$((fails + 1)); }
@@ -914,7 +914,7 @@ fi
 
 # certs runs before gateway: the Gateway's HTTPS listener waits on the certificate's Secret, and `apps` leaves out the two apps that
 # need what certs makes (APPS_DEFER); `checks` waits for every app (prod run 6, 2026-11-21, stopped at apps on gateway and jellyfin).
-stages="vms cluster storage openbao-seal restore gitops secrets apps certs gateway identity identity-db ui backup checks"
+stages="vms cluster storage openbao-seal restore gitops secrets apps certs gateway identity identity-db ui backup backup-drill checks"
 cat > "$envdir/rebuild.env" <<ENV
 ENV_NAME=prod
 VM_ID_MIN=$vm_min
