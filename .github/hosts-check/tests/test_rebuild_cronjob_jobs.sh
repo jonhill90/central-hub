@@ -30,13 +30,15 @@ job() { # <ns> <name> <cronjob> <failed> <succeeded> <created>
 run() { # <jobs json items> <wait rc>
   printf '{"items":[%s]}' "$1" > "$t/jobs.json"
   printf '{"items":[%s]}' "${CJ:-}" > "$t/cj.json"
-  WAIT_RC=$2 T=$t repo=$PWD bash -c '
+  WAIT_RC=$2 T=$t SETTLE_POLL=0 repo=$PWD bash -c '
     kc() { echo "kc $*" >> "$T/calls"
+      # The real kc is an Ansible ad-hoc command on the node: it has no stdin, so a stub that is given any must fail.
+      if ! [ -t 0 ] && IFS= read -r -t 1 _in; then echo "kc was given stdin" >&2; return 99; fi
       case "$*" in "get jobs -A -o json") cat "$T/jobs.json" ;;
         "get cronjobs -A -o json") cat "$T/cj.json" ;;
-        *"wait "*) return "$WAIT_RC" ;;
+        *"get job/"*) if [ "$WAIT_RC" = 0 ]; then echo "1/"; else echo "/1"; fi ;;
         *" logs "*) echo "starting setup password=hunter2 failed to reach jellyfin" ;; esac; }
-    . "$T/fn.sh"; settle_cronjob_jobs; echo "rc=$?"' > "$t/out" 2>&1
+    . "$T/fn.sh"; settle_cronjob_jobs; echo "rc=$?"' > "$t/out" 2>&1 < /dev/null
   out=$(cat "$t/out"); calls=$(cat "$t/calls" 2>/dev/null); rm -f "$t/calls"; }
 read_only=$'kc get cronjobs -A -o json\nkc get jobs -A -o json'
 
@@ -44,8 +46,21 @@ run "$(job media a-1 jellyfin-setup 0 1 2026-11-22T01:00:00Z),$(job monitoring b
 [[ $out == "rc=0" && $calls == "$read_only" ]] && ok "1. only Complete Jobs: nothing run or deleted" || bad "1. $out | $calls"
 
 run "$(job media jellyfin-setup-1 jellyfin-setup 2 0 2026-11-22T01:00:00Z)" 0
-want=$'kc get cronjobs -A -o json\nkc get jobs -A -o json\nkc -n media delete job jellyfin-setup-rebuild-check --ignore-not-found --cascade=foreground\nkc -n media create job jellyfin-setup-rebuild-check --from=cronjob/jellyfin-setup\nkc -n media wait --for=condition=complete job/jellyfin-setup-rebuild-check --timeout=300s\nkc -n media delete job jellyfin-setup-1 --cascade=foreground\nkc -n media delete job jellyfin-setup-rebuild-check --cascade=foreground'
+want=$'kc get cronjobs -A -o json\nkc get jobs -A -o json\nkc -n media delete job jellyfin-setup-rebuild-check --ignore-not-found --cascade=foreground\nkc -n media create job jellyfin-setup-rebuild-check --from=cronjob/jellyfin-setup\nkc -n media patch job jellyfin-setup-rebuild-check --type=json -p \'[{"op":"remove","path":"/metadata/ownerReferences"}]\'\nkc -n media get job/jellyfin-setup-rebuild-check -o jsonpath={.status.succeeded}/{.status.failed}\nkc -n media delete job jellyfin-setup-1 --cascade=foreground\nkc -n media delete job jellyfin-setup-rebuild-check --cascade=foreground'
 [[ $out == *"rc=0" && $calls == "$want" ]] && ok "2. a failed Job: one Job from its CronJob in its namespace, waited for, then the failed Job and the check Job go (foreground)" || bad "2. $out | $calls"
+# 2b: the check Job's owner comes off with a patch whose argument is one single-quoted word (kc joins its words and the node splits them again),
+# and nothing is piped into kc, which has no stdin. The patch string is run through the real ansible command module to see it arrive whole.
+run "$(job media jellyfin-setup-1 jellyfin-setup 2 0 2026-11-22T01:00:00Z)" 0
+patch=$(grep ' patch job ' <<< "$calls")
+[[ $out == *"rc=0" && $patch == *"-p '[{\"op\":\"remove\",\"path\":\"/metadata/ownerReferences\"}]'" ]] &&
+  ok "2b. the owner is removed by a JSON patch right after create, and the stub (which fails on any stdin) was never piped into" || bad "2b. $out | $calls"
+if command -v ansible > /dev/null; then
+  echo 'localhost ansible_connection=local' > "$t/inv.ini"
+  args=$(ANSIBLE_LOCALHOST_WARNING=False ansible localhost -i "$t/inv.ini" -m ansible.builtin.command \
+    -a "python3 -I -c 'import sys,json;print(json.dumps(sys.argv[1:]))' ${patch#kc }" 2> /dev/null | tail -n +2)
+  [[ $args == '["-n", "media", "patch", "job", "jellyfin-setup-rebuild-check", "--type=json", "-p", "[{\"op\":\"remove\",\"path\":\"/metadata/ownerReferences\"}]"]' ]] &&
+    ok "2c. through the real ansible command module the patch argument arrives as one word" || bad "2c. $args"
+else ok "2c. (ansible not installed here; CI runs it)"; fi
 
 run "$(job media jellyfin-setup-1 jellyfin-setup 2 0 2026-11-22T01:00:00Z)" 1
 [[ $out == *"does not complete with the cluster up; last 30 log lines"* && $out == *"failed to reach jellyfin"* && $out != *"hunter2"* &&
@@ -102,4 +117,20 @@ if [[ $out8 == *"diag: the run failed, so prod's cluster is read"* && $out8 == *
    grep -q 'if \[ "\$ENV_NAME" = prod \]; then prod_capture_diag' hosts/rebuild-k8s.sh; then
   ok "8. prod_capture_diag: get and logs only, diag: lines in the log, secrets scrubbed, never fails; the failed-stage branch calls it on prod"
 else bad "8. $out8 | writes=$writes | $calls8"; fi
+
+# 8b: the diag keeps every line it prints: six pods in Error with 30 log lines each, and 25 events, are about 230 lines, and a cap of 200 cut the
+# last pod's end, where a panel-check Job's failing lines are (prod resume 6, 2026-11-22: the diag showed only the panels with data).
+: > "$t/calls8"
+T=$t repo=$PWD log=$t/log8 raw=$t/raw8 bash -c '
+  kc() { echo "kc $*" >> "$T/calls8"
+    case "$*" in
+      "get pods -A --no-headers") for n in 1 2 3 4 5 6; do echo "monitoring pc-$n 0/1 Error 0 10m"; done ;;
+      "get events -A --sort-by=.lastTimestamp --no-headers") for n in $(seq 1 30); do echo "ns ev-$n Normal x y"; done ;;
+      *" logs "*) for n in $(seq 1 29); do echo "panel line $n: 1"; done; echo "Hours since the last volume backup: no data" ;;
+      "-n argocd get applications.argoproj.io -o json") echo "{\"items\":[]}" ;;
+    esac; }
+  : > "$log"; : > "$raw"
+  . "$T/diag.sh"; prod_capture_diag' > /dev/null 2>&1
+if [ "$(grep -c "volume backup: no data" "$t/log8")" -eq 6 ]; then ok "8b. the diag keeps the last line of all six pods' logs (about 230 lines, no cap at 200)"
+else bad "8b. $(grep -c "volume backup: no data" "$t/log8") of 6 pods' last lines kept, $(wc -l < "$t/log8") lines"; fi
 exit $fail

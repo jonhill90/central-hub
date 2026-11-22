@@ -294,7 +294,7 @@ l2_report() {
 #     not complete with the cluster up fails the run, and the last 30 log lines of its pod, scrubbed, go into the output.
 # Deletes are foreground, so kubectl waits until the Jobs' pods are gone before the pod check lists them.
 settle_cronjob_jobs() {
-  local plan kind ns cj names j chk cjfile
+  local plan kind ns cj names j chk cjfile waited res
   cjfile=$(mktemp)
   kc get cronjobs -A -o json > "$cjfile" || { rm -f "$cjfile"; echo "could not read the CronJobs"; return 1; }
   plan=$(kc get jobs -A -o json | python3 -I -c '
@@ -320,7 +320,7 @@ for (ns, cj), js in sorted(by.items()):
 ' "$cjfile") || { rm -f "$cjfile"; echo "could not read the Jobs"; return 1; }
   rm -f "$cjfile"
   [ -n "$plan" ] || return 0
-  while read -r kind ns cj names; do
+  while read -r -u 3 kind ns cj names; do
     [ -n "$kind" ] || continue
     if [ "$kind" = settle ] || [ "$kind" = suspended ]; then
       if [ "$kind" = suspended ]; then
@@ -334,15 +334,29 @@ for (ns, cj), js in sorted(by.items()):
     chk="${cj:0:45}-rebuild-check"
     echo "failed Job(s) of CronJob $ns/$cj from the bring-up: $names; running one Job from the CronJob now"
     kc -n "$ns" delete job "$chk" --ignore-not-found --cascade=foreground > /dev/null || true
+    # The Job gets no owner: `create job --from` makes the CronJob its owner, and the CronJob controller then counts it in the history
+    # limit (failedJobsHistoryLimit) and deleted this one when the CronJob's own tick failed too (prod resume 6, 2026-11-22: "SawCompletedJob
+    # ... Deleted job panel-check-rebuild-check", so the log read got NotFound). kc is an Ansible ad-hoc command on the node, which has no
+    # stdin, so the owner comes off with a patch whose argument carries its own single quotes: kc joins its words with spaces and the
+    # node splits them again, keeping what is inside the quotes as one word.
     kc -n "$ns" create job "$chk" --from="cronjob/$cj" > /dev/null || { echo "could not start a Job from CronJob $ns/$cj"; return 1; }
-    if ! kc -n "$ns" wait --for=condition=complete "job/$chk" --timeout=300s > /dev/null; then
+    kc -n "$ns" patch job "$chk" --type=json -p "'"'[{"op":"remove","path":"/metadata/ownerReferences"}]'"'" > /dev/null ||
+      { echo "could not take the owner off Job $ns/$chk"; return 1; }
+    # Done when it succeeded or failed (backoffLimit 0 fails in seconds, so a wait for completion alone sat out its whole timeout).
+    waited=0 res=''
+    while [ "$waited" -lt 300 ]; do
+      res=$(kc -n "$ns" get "job/$chk" -o 'jsonpath={.status.succeeded}/{.status.failed}' 2>/dev/null) || res=''
+      case $res in 1/* | [1-9]*/*) res=ok; break ;; */[1-9]*) res=failed; break ;; esac
+      sleep "${SETTLE_POLL:-5}"; waited=$((waited + ${SETTLE_POLL:-5}))
+    done
+    if [ "$res" != ok ]; then
       echo "CronJob $ns/$cj: its Job does not complete with the cluster up; last 30 log lines of its pod:"
       kc -n "$ns" logs "job/$chk" --tail=30 --all-containers=true 2>&1 | python3 -I "$repo/hosts/diag-apps.py" scrub || true
       return 1
     fi
     for j in $names; do kc -n "$ns" delete job "$j" --cascade=foreground > /dev/null; done
     kc -n "$ns" delete job "$chk" --cascade=foreground > /dev/null
-  done <<< "$plan"
+  done 3<<< "$plan"  # fd 3: a kc inside the loop must not read the plan from stdin
 }
 
 # Argo CD's argocd-cm holds oidc.config with the provider name `Lab sign-in` (k8s_gitops_sso_name, tag sso). Read-only: one ConfigMap,
@@ -1051,7 +1065,7 @@ prod_capture_diag() {
     echo "== newest events, all namespaces"
     kc get events -A --sort-by=.lastTimestamp --no-headers | tail -n 25
     diag_why_not_ready
-  } 2>&1 | cut -c1-300 | head -n 200 | sed 's/^/diag: /' | tee -a "$log" >> "$raw" || true
+  } 2>&1 | cut -c1-300 | head -n 500 | sed 's/^/diag: /' | tee -a "$log" >> "$raw" || true
   return 0
 }
 # A failed ephemeral-dev run: read the cluster before it is torn down (what `rebuild diag` shows: the Argo CD
