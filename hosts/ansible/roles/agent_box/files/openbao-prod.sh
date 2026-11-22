@@ -3,7 +3,7 @@
 # with the box's own prod node key, so no Mac runs it (docs/runbooks/set-up-the-secrets-store.md, "On prod").
 # It runs as user `keys` through sudo, so the session never sees the node key, the seal key or the admin IDs.
 # Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/openbao-prod.sh key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|handover|refresh <tap id>|reset-failed-start <tap id>|drop-box-path <tap id>|admin-firewall-check|admin-firewall <tap id>|log
+#   sudo -n -u keys /usr/local/libexec/agent-box/openbao-prod.sh key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|handover|refresh <tap id>|reset-failed-start <tap id>|drop-box-path <tap id>|admin-firewall-check|admin-firewall <tap id>|secrets-status|log
 # key       makes the box's prod node key once (/etc/agent-keys/prod-node-key, ed25519, never replaced) and prints its
 #           public half. Putting it on prod's nodes gives the agents a root login there, a new access right, so that step
 #           waits for the owner's tap (D-0042 rule 6) and is done once, by a run that already reaches the nodes.
@@ -55,6 +55,10 @@
 #           forward path (D-0062; the dev rebuild runs the same play in stage gateway). Without box_cidr or admin_address in
 #           the settings it changes nothing and says SKIP. A node firewall change is the owner's go (D-0036 rule 8): <tap id>
 #           is his go (D-0061 rule 3: the message id of his standing go), logged as for seal.
+# secrets-status  read-only: why the apps' secrets are not Ready. It prints `get clustersecretstores -o wide` and each store's
+#           Ready condition (status, reason, message), `get externalsecrets -A -o wide`, and for each ExternalSecret that is
+#           not Ready its condition message and the last 20 lines of the external-secrets controller's log that name it.
+#           Names, conditions and log lines only: no Secret is read and no object is changed. No tap.
 # log       the newest run's lines: the action, the commit, the tap id, and the PASS, FAIL, SKIP and play-recap lines.
 # Settings (agent_box_openbao_prod, private, in <work>/openbao-prod.json): seal_node (a k8s_nodes host of the prod inventory,
 # its Kubernetes node name), store_host (the store's name as the box reaches it; secrets-store-prod checks its own address
@@ -80,11 +84,11 @@ settings=$work/openbao-prod.json
 export HOME=$work PATH=$libexec/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin
 export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-home
 
-usage() { echo "usage: openbao-prod key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|handover|refresh <tap id>|reset-failed-start <tap id>|drop-box-path <tap id>|admin-firewall-check|admin-firewall <tap id>|log" >&2; exit 2; }
+usage() { echo "usage: openbao-prod key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|handover|refresh <tap id>|reset-failed-start <tap id>|drop-box-path <tap id>|admin-firewall-check|admin-firewall <tap id>|secrets-status|log" >&2; exit 2; }
 action=${1:-}
 tap=''
 case $action in
-  key | check | l2-policy | gitops | ca | handover | admin-firewall-check | log) [[ $# -eq 1 ]] || usage ;;
+  key | check | l2-policy | gitops | ca | handover | admin-firewall-check | secrets-status | log) [[ $# -eq 1 ]] || usage ;;
   seal | seal-copy | refresh | reset-failed-start | drop-box-path | admin-firewall)
     [[ $# -eq 2 ]] || usage
     tap=$2
@@ -352,6 +356,41 @@ PY
     ;;
   admin-firewall)
     ap playbooks/k8s-openbao-admin-firewall.yml
+    ;;
+  secrets-status)
+    # Read-only (kc get and logs only). Conditions come from the JSON of the store and ExternalSecret objects, which hold
+    # references and status, never a Secret's data.
+    echo "openbao-prod: ClusterSecretStores:"
+    kc get clustersecretstores.external-secrets.io -o wide || { echo "openbao-prod: could not read the ClusterSecretStores" >&2; exit 1; }
+    cond_py='import json, sys
+d = json.load(sys.stdin)
+for i in d.get("items", []):
+    m = i.get("metadata", {})
+    c = [x for x in (i.get("status", {}).get("conditions") or []) if x.get("type") == "Ready"]
+    c = c[0] if c else {}
+    f = [m.get("namespace", "-"), m.get("name", "?"), c.get("status", "none"), c.get("reason", ""), c.get("message", "")]
+    print("\t".join(x.replace("\t", " ").replace("\n", " ") for x in f))'
+    stores=$(kc get clustersecretstores.external-secrets.io -o json | python3 -I -c "$cond_py") ||
+      { echo "openbao-prod: could not read the ClusterSecretStores' conditions" >&2; exit 1; }
+    while IFS=$'\t' read -r _ name state reason msg; do
+      [[ -n $name ]] && echo "openbao-prod: store $name: Ready=$state reason=$reason message=$msg" | cut -c1-600
+    done <<< "$stores"
+    echo "openbao-prod: ExternalSecrets:"
+    kc get externalsecrets.external-secrets.io -A -o wide || { echo "openbao-prod: could not read the ExternalSecrets" >&2; exit 1; }
+    ess=$(kc get externalsecrets.external-secrets.io -A -o json | python3 -I -c "$cond_py") ||
+      { echo "openbao-prod: could not read the ExternalSecrets' conditions" >&2; exit 1; }
+    ctl=''
+    while IFS=$'\t' read -r ns name state reason msg; do
+      [[ -n $name && $state != True ]] || continue
+      echo "openbao-prod: not Ready: $ns/$name: Ready=$state reason=$reason message=$msg" | cut -c1-600
+      if [[ -z $ctl ]]; then
+        ctl=$(kc -n external-secrets logs deployment/external-secrets --tail=1000 2>&1 || true)
+        [[ -n $ctl ]] || ctl='(no controller log)'
+      fi
+      echo "openbao-prod: controller log lines naming $name (last 20):"
+      { grep -F -- "$name" <<< "$ctl" || true; } | tail -n 20 | cut -c1-400
+    done <<< "$ess"
+    echo "PASS: openbao-prod: secrets-status: read, nothing changed"
     ;;
   ca)
     mkdir -p "$store_keys"
