@@ -47,6 +47,11 @@ opnsense_lab_short_app_names:
   - openbao
   - vault
 
+# Short aliases that are retired (the app was renamed): each has its Unbound host override removed, so a rename does
+# not leave the old name answering. central-hub-app became hub (2026-11-21).
+opnsense_lab_short_app_names_retired:
+  - central-hub-app
+
 # The DNS server the proof (tag dns_proof) asks. Empty means the mgmt gateway, Unbound itself; on a
 # tailnet device, 100.100.100.100 proves split DNS end to end.
 opnsense_lab_dns_proof_server: ""
