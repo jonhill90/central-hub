@@ -111,6 +111,7 @@ check_ansible() {
   suite bash "$here/tests/test_box_apply_baseline.sh"
   suite python3 -I "$here/check-loop-labels.py" hosts/ansible/roles/agent_box/tasks
   suite bash "$here/tests/test_loop_labels.sh"
+  suite bash "$here/tests/test_node_ports.sh"
   suite bash "$here/tests/test_check_realm_otp.sh"
   suite bash "$here/tests/test_proxmox_sso.sh"
   suite bash "$here/tests/test_proxmox_signin_check.sh"
