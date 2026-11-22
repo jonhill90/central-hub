@@ -24,7 +24,7 @@ run '{"data":{"url":"https://argocd.invalid"}}'
 run '{"data":{"oidc.config":"name: Other\n"}}'
 [[ $out == *"rc=1" ]] && ok "3. another provider name fails" || bad "3. $out"
 # 4: the ui stage line
-line=$(grep -n '^    ui) ap playbooks/k8s-gitops.yml --tags ui,sso' hosts/rebuild-k8s.sh | head -n1)
+line=$(grep -n '^        ap playbooks/k8s-gitops.yml --tags ui,sso &&' hosts/rebuild-k8s.sh | head -n1)
 [[ $line == *'[ "$ENV_NAME" != prod ] || argocd_signin_listed'* && $line == *"--tags ui,sso &&"* ]] && ok "4. the ui stage asks after the playbook, and only on prod" || bad "4. $line"
 grep -q 'if \[ "\$ENV_NAME" = prod \]; then argocd_signin_listed' hosts/rebuild-k8s.sh && ok "5. checks asks again on prod" || bad "5. checks does not ask"
 exit $fail
