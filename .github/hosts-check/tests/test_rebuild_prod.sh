@@ -47,6 +47,9 @@ case "\$*" in
             'exit \${ONE_RC:-0}' > "\$d/hosts/rebuild-k8s.sh" ;;
   *"rev-parse --quiet --verify "*) a="\${*: -1}"; a="\${a%^\{commit\}}"; [[ $sha == "\$a"* ]] && echo $sha || exit 1 ;;
   *rev-parse*) echo $sha ;;
+  *"cat-file -e"*) exit 0 ;;
+  *"diff --no-renames --name-only"*) cat $t/difffiles 2>/dev/null; exit 0 ;;   # a diff read without --no-renames returns nothing here, so the 19b tests fail
+  *"diff "*) exit 0 ;;
   *"merge-base --is-ancestor "*" origin/main") exit \${NOT_ON_MAIN:-0} ;;
   *"merge-base --is-ancestor "*) echo "floor \$5 \$6" >> $t/floorcalls; exit \${BELOW_FLOOR:-0} ;;
   *" checkout "*) echo "git \${*: -1}" >> $t/gitcalls ;;
@@ -153,7 +156,8 @@ sed -e "s|^keys=.*|keys=$t/keys|" -e "s|^libexec=.*|libexec=$t/libexec|" -e "s|^
 grep -q "^keys=$t/keys" "$t/run/rebuild-prod.sh" && grep -q "^work=$t/work" "$t/run/rebuild-prod.sh" &&
   grep -q ":$t/bin:" "$t/run/rebuild-prod.sh" || { echo "FAIL the test could not point the wrapper at its folders"; exit 1; }
 
-run() { : > "$t/calls"; bash "$t/run/rebuild-prod.sh" "$@" > "$t/out" 2>&1; rc=$?; out=$(cat "$t/out"); calls=$(cat "$t/calls"); }
+# rebuild needs --full-teardown (item 4); the tests that expect a teardown pass it here, and block 18 runs the bare form with RAW=1.
+run() { : > "$t/calls"; if [[ ${1:-} == rebuild && -z ${RAW:-} ]]; then set -- rebuild --full-teardown "${@:2}"; fi; bash "$t/run/rebuild-prod.sh" "$@" > "$t/out" 2>&1; rc=$?; out=$(cat "$t/out"); calls=$(cat "$t/calls"); }
 full_stages() { for st in vms cluster storage restore gitops secrets apps gateway checks; do printf '%s\n' "2026-11-18T03:00:00Z $st start" "2026-11-18T03:00:01Z $st end rc=0 1s"; done; }
 ld=$t/work/rebuild-dev/logs
 # dev_log: the dev folder holds this one run (03:00). dev_log_teardown: a teardown-only run, alone or after another run
@@ -246,7 +250,8 @@ if [[ $(id -u) -eq 0 ]]; then chown 65534 "$t/keys/prod/identity.env"; else chmo
 run check; [[ $rc -eq 1 && $out == *"k8s_identity_values_file is $t/keys/prod/identity.env, which the box's user can't write and chmod"* ]] && r5+="m"
 if [[ $(id -u) -eq 0 ]]; then chown 0 "$t/keys/prod/identity.env"; else chmod 644 "$t/keys/prod/identity.env"; fi
 dev_log 1111111111111111111111111111111111111111 "rebuild: all stages passed"
-run check; [[ $rc -eq 1 && $out == *"ran another commit"* ]] && r5+="d"
+printf '%s\n' hosts/rebuild-k8s.sh > "$t/difffiles"   # a file dev reads changed since that run (block 19b covers the prod-only case)
+run check; [[ $rc -eq 1 && $out == *"ran another commit"* ]] && r5+="d"; rm -f "$t/difffiles"
 dev_log "$sha" "rebuild: stage apps failed"; run check; [[ $rc -eq 1 && $out == *"did not pass every stage"* ]] && r5+="e"
 rm -f "$ld"/*; dev_log_teardown "$sha"; run check; [[ $rc -eq 1 && $out == *"no dev run other than a teardown is logged"* ]] && r5+="i"
 dev_log "$sha" "rebuild: all stages passed"; dev_log_teardown "$sha" 4; run check
@@ -264,7 +269,10 @@ else bad "5. [$r5] $out"; fi
 
 # 6
 tap=cmsg_01ABCDEFGHIJKLMNOPQRSTUVWXYZ
+mkdir -p "$t/work/openbao-prod"; echo old > "$t/work/openbao-prod/known_hosts"; echo old > "$t/work/openbao-prod/known_hosts.old"
 run rebuild "$tap" "${sha:0:12}"
+[[ ! -e $t/work/openbao-prod/known_hosts && ! -e $t/work/openbao-prod/known_hosts.old ]] &&
+  ok "6b. a rebuild clears openbao-prod's known hosts (the rebuilt nodes have new host keys)" || bad "6b. openbao-prod's known_hosts is still there after a rebuild"
 order=$(grep -oE '^(playbook [^ ]+ [^ ]+ [^ ]+|ssh [^ ]+ .*(backup.pem|seal-1.key)$|job [a-z-]+|one-command .*|seal-in-memory [0-9]+)' "$t/calls" |
   sed -E 's/^playbook -i [^ ]+ /playbook /; s/^ssh [^ ]+ (sudo -n )?cat .*\/(backup.pem|seal-1.key)$/ssh \2/' | uniq | tr '\n' '|')
 want="playbook playbooks/k8s-backup.yml|ssh backup.pem|ssh seal-1.key|job opnsense-backup|job opnsense-offbox|job secrets-bundle|job secrets-bundle-offbox|one-command $t/work/rebuild-prod --teardown|seal-in-memory 32|"
@@ -594,6 +602,7 @@ run resume "$tap" "$sha"; r18a=$rc o18a=$out c18a=$calls
 resume_logs gateway
 run resume cmsg_01ZZZZZZZZZZZZZZZZZZZZZZZZZZ "$sha"; r18b=$rc o18b=$out c18b=$calls
 NODE_WK_STATE=NotReady run resume "$tap" "$sha"; r18c=$rc o18c=$out c18c=$calls
+mkdir -p "$t/work/openbao-prod"; echo old > "$t/work/openbao-prod/known_hosts"; echo old > "$t/work/openbao-prod/known_hosts.old"
 run resume "$tap" "$sha"; r18d=$rc o18d=$out c18d=$calls
 if [[ $r18a -eq 1 && $o18a == *"resume needs a rebuild that stopped after its teardown"* && $c18a != *one-command* &&
       $r18b -eq 1 && $o18b == *"not the go the stopped run"* && $c18b != *one-command* &&
@@ -601,8 +610,9 @@ if [[ $r18a -eq 1 && $o18a == *"resume needs a rebuild that stopped after its te
       $r18d -eq 0 && $o18d == *"every stage before gateway has a good end line"*"resuming from gateway: gateway,identity,identity-db,ui,backup,checks"* &&
       $c18d == *"one-command "*"--only gateway,identity,identity-db,ui,backup,checks"* && $c18d != *"--teardown"* && $c18d != *"--tags drill"* &&
       $c18d != *"job "* && $c18d != *"tofu destroy"* && $(cat "$t/seen-rebuild.env") == *"k8s_backup_restore_snapshot=$pinid"* &&
-      $o18d == *"PASS: rebuild-prod: prod torn down and built again"* && ! -e $t/work/state/prod-restore-pin ]]; then
-  ok "18. resume refuses with no stopped run, another go's tap or a node not Ready; otherwise runs only the stages from the first with no good end line, with no teardown, backup or bundle, and clears the pin"
+      $o18d == *"PASS: rebuild-prod: prod torn down and built again"* && ! -e $t/work/state/prod-restore-pin &&
+      ! -e $t/work/openbao-prod/known_hosts && ! -e $t/work/openbao-prod/known_hosts.old ]]; then
+  ok "18. resume refuses with no stopped run, another go's tap or a node not Ready; otherwise runs only the stages from the first with no good end line, with no teardown, backup or bundle, clears the pin and openbao-prod's known hosts"
 else bad "18. $r18a $o18a | $r18b $o18b | $r18c $o18c | $r18d $o18d [$c18d]"; fi
 # 18b. After a resumed run that ended well the stop no longer counts; a resume with every stage already good has nothing to run.
 resume_logs gateway
@@ -616,5 +626,25 @@ if [[ $r18e -eq 1 && $o18e == *"only for a run after one that stopped after its 
   ok "18b. a resumed run that ended well ends the stop; a resume with every stage already good has nothing to run"
 else bad "18b. $r18e $o18e | $r18f $o18f"; fi
 rm -f "$logd"/*
+
+# 19. Jon's order of 2026-11-22. Item 4: rebuild without --full-teardown refuses at once, before any check or call; resume takes no such flag.
+RAW=1 run rebuild "$tap" "$sha"; r19a=$rc o19a=$out c19a=$calls
+run resume --full-teardown "$tap" "$sha"; r19b=$rc o19b=$out
+if [[ $r19a -eq 2 && $o19a == *"To ship a fix, use resume"* && $c19a == "" && $r19b -eq 2 && $o19b == *"goes with rebuild, not resume"* ]]; then
+  ok "19. rebuild without --full-teardown refuses and runs nothing; resume refuses the flag"
+else bad "19. $r19a $o19a | $r19b $o19b"; fi
+# 19b. Item 1: an older dev pass counts when it is an ancestor and only prod-only files changed since; any other file needs a new dev run.
+oldsha=2222222222222222222222222222222222222222
+dev_log "$oldsha" "rebuild: all stages passed"
+printf '%s\n' hosts/ansible/roles/agent_box/files/rebuild-prod.sh docs/runbooks/x.md .github/hosts-check/tests/test_rebuild_prod.sh > "$t/difffiles"
+run check; r19c=$rc o19c=$out
+printf '%s\n' hosts/ansible/roles/agent_box/files/rebuild-prod.sh hosts/rebuild-k8s.sh > "$t/difffiles"
+run check; r19d=$rc o19d=$out
+if [[ $r19c -eq 0 && $o19c == *"every file changed since it"*"is one dev never reads"* && $r19d -eq 1 && $o19d == *"touch files dev reads: hosts/rebuild-k8s.sh"* ]]; then
+  ok "19b. a dev pass at an older commit stands when only docs, checks and the box's own files changed since; a file dev reads needs a new dev run"
+else bad "19b. $r19c $o19c | $r19d $o19d"; fi
+# 19c. The diff is read with --no-renames: a file moved from a path dev reads into docs/ shows both paths, so the old one stops the gate.
+[[ $(grep -c -- 'diff --no-renames --name-only' "$t/run/rebuild-prod.sh") -eq 1 && $r19d -eq 1 ]] && ok "19c. the scoped dev gate reads the diff with --no-renames, so a move out of a file dev reads still names the old path" || bad "19c. the diff is read without --no-renames"
+rm -f "$t/difffiles"
 
 exit "$fail"

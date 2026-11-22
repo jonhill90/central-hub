@@ -4,6 +4,8 @@
 #   pass-record add ROLE OWNER/REPO PR HEAD RELAY_REF RELAY_TIME RECORDER   append one pass for this exact head
 #                                                                            (RECORDER: orchestrator, builder or reviewer; the reviewer records the role reviewer only)
 #   pass-record show OWNER/REPO HEAD                                         print that head's ledger
+#   pass-record digest-pass FROM TO DIGEST RELAY_REF RELAY_TIME reviewer     the reviewer's pass of one agent-box limit change
+#                                                                            (box-apply reads it in place of an approval PR; the owner's order of 2026-11-22)
 #   pass-record halt RELAY_REF RECORDER | resume RELAY_REF RECORDER        set or clear the stop flag the sweep reads first
 #                                                                            (resume: recorder orchestrator only)
 # The ledger is a file per repository and head, so a new head starts empty and no pass carries over. One identity
@@ -67,6 +69,27 @@ print(json.dumps({"role": role, "repo": full, "pr": int(pr), "head": head, "rela
     f=$passes/${2#*/}/$3.jsonl
     [[ -f $f ]] && cat "$f" || echo "pass-record: no ledger for ${3:0:7}"
     ;;
+  digest-pass)
+    [[ $# == 7 ]] || die "usage: pass-record digest-pass FROM TO DIGEST RELAY_REF RELAY_TIME orchestrator|reviewer"
+    from=$2 to=$3 digest=$4 ref=$5 rtime=$6 recorder=$7
+    [[ $from =~ ^[0-9a-f]{40}$ && $to =~ ^[0-9a-f]{40}$ ]] || die "FROM and TO must be full 40-character commits"
+    [[ $from != "$to" ]] || die "FROM and TO are the same commit"
+    [[ $digest =~ ^[0-9a-f]{64}$ ]] || die "DIGEST must be the 64-character digest box-apply plan prints"
+    ref_ok "$ref" || die "RELAY_REF must be a cmsg_ message id"
+    [[ $rtime =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] || die "RELAY_TIME must be an ISO time like 2026-11-14T13:00:00Z"
+    # The reviewer lane never touches the box; like `add`, the orchestrator records its pass (relay_ref is the reviewer's own digest-pass
+    # post), or the reviewer itself. box-apply counts both and no other recorder. Any session can name itself either: a name, not proof.
+    [[ $recorder == orchestrator || $recorder == reviewer ]] || die "a digest pass is recorded by the orchestrator or the reviewer only"
+    install -d -m 0700 "$passes"
+    python3 -I -c '
+import json, sys
+frm, to, digest, ref, rtime, rec, box = sys.argv[1:8]
+print(json.dumps({"from": frm, "to": to, "digest": digest, "relay_ref": ref, "relay_time": rtime,
+                  "recorder": rec, "box_time": box}, sort_keys=True))
+' "$from" "$to" "$digest" "$ref" "$rtime" "$recorder" "$(now)" >> "$passes/limits.jsonl"
+    journal "digest-pass from=${from:0:7} to=${to:0:7} digest=${digest:0:12} ref=$ref recorder=$recorder"
+    echo "pass-record: digest pass recorded for ${from:0:8} to ${to:0:8}"
+    ;;
   halt | resume)
     [[ $# == 3 ]] || die "usage: pass-record $1 RELAY_REF RECORDER"
     ref_ok "$2" || die "RELAY_REF must be a cmsg_ message id"
@@ -81,5 +104,5 @@ print(json.dumps({"role": role, "repo": full, "pr": int(pr), "head": head, "rela
     journal "$1 ref=$2 recorder=$3"
     echo "pass-record: sweep $1 recorded"
     ;;
-  *) die "usage: pass-record add|show|halt|resume ..." ;;
+  *) die "usage: pass-record add|show|digest-pass|halt|resume ..." ;;
 esac
