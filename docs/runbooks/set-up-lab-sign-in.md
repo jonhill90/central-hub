@@ -56,7 +56,7 @@ Issuer for every app: `https://sso.<zone>/realms/lab` (short names on, `k8s_iden
 2. Apply: `ansible-playbook -i inventories/home/ playbooks/k8s-identity.yml --tags secrets,keycloak`
    why: the Secrets are made from the values file, then the realm import. When the import differs from the one on c1, the role deletes realm `lab` in Keycloak (`files/delete-realm.sh`, inside the Keycloak pod) and imports it again, because a KeycloakRealmImport never updates a realm that exists. Open sessions end; nothing else is lost, since every part of the realm is code.
    ※ `hosts/AGENT-PICKS.md` picks 153 and 157.
-   expect: `kubectl -n identity get keycloakrealmimport realm-lab` shows condition `Done` True; Grafana's pod restarts if its secret changed.
+   expect: `kubectl -n identity get keycloakrealmimport realm-lab` shows condition `Done` True; Grafana's pod restarts if its secret changed (with the secrets store openbao, once per new version of the `grafana-sso` Secret, noted on its ExternalSecret as `central-hub/restarted-for-version`; before this, only the store-off path restarted it, and a Grafana started before the realm import kept a client secret Keycloak refused, seen on prod 2026-11-22 at the sign-in check's step 5).
 3. Run it again: same command as step 2.
    why: proves the run is idempotent.
    expect: `changed=0`.
