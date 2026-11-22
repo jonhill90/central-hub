@@ -3,7 +3,7 @@
 # with the box's own prod node key, so no Mac runs it (docs/runbooks/set-up-the-secrets-store.md, "On prod").
 # It runs as user `keys` through sudo, so the session never sees the node key, the seal key or the admin IDs.
 # Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/openbao-prod.sh key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|handover|refresh <tap id>|reset-failed-start <tap id>|drop-box-path <tap id>|admin-firewall-check|admin-firewall <tap id>|secrets-status|log
+#   sudo -n -u keys /usr/local/libexec/agent-box/openbao-prod.sh key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|handover|refresh <tap id>|reset-failed-start <tap id>|drop-box-path <tap id>|admin-firewall-check|admin-firewall <tap id>|secrets-status|jobs-status|log
 # key       makes the box's prod node key once (/etc/agent-keys/prod-node-key, ed25519, never replaced) and prints its
 #           public half. Putting it on prod's nodes gives the agents a root login there, a new access right, so that step
 #           waits for the owner's tap (D-0042 rule 6) and is done once, by a run that already reaches the nodes.
@@ -59,6 +59,10 @@
 #           Ready condition (status, reason, message), `get externalsecrets -A -o wide`, and for each ExternalSecret that is
 #           not Ready its condition message and the last 20 lines of the external-secrets controller's log that name it.
 #           Names, conditions and log lines only: no Secret is read and no object is changed. No tap.
+# jobs-status  read-only: why a Job failed. Every Job with failed pods in any namespace (namespace, name, owning CronJob, failed and
+#           succeeded counts, start time), and for each of the first 6 the last 30 log lines of its pods (`kubectl logs job/<name>
+#           --all-containers`, then each failed pod by name), scrubbed of secrets by hosts/diag-apps.py. Reads nothing else and
+#           changes nothing. No tap.
 # log       the newest run's lines: the action, the commit, the tap id, and the PASS, FAIL, SKIP and play-recap lines.
 # Settings (agent_box_openbao_prod, private, in <work>/openbao-prod.json): seal_node (a k8s_nodes host of the prod inventory,
 # its Kubernetes node name), store_host (the store's name as the box reaches it; secrets-store-prod checks its own address
@@ -84,11 +88,11 @@ settings=$work/openbao-prod.json
 export HOME=$work PATH=$libexec/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin
 export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-home
 
-usage() { echo "usage: openbao-prod key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|handover|refresh <tap id>|reset-failed-start <tap id>|drop-box-path <tap id>|admin-firewall-check|admin-firewall <tap id>|secrets-status|log" >&2; exit 2; }
+usage() { echo "usage: openbao-prod key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|handover|refresh <tap id>|reset-failed-start <tap id>|drop-box-path <tap id>|admin-firewall-check|admin-firewall <tap id>|secrets-status|jobs-status|log" >&2; exit 2; }
 action=${1:-}
 tap=''
 case $action in
-  key | check | l2-policy | gitops | ca | handover | admin-firewall-check | secrets-status | log) [[ $# -eq 1 ]] || usage ;;
+  key | check | l2-policy | gitops | ca | handover | admin-firewall-check | secrets-status | jobs-status | log) [[ $# -eq 1 ]] || usage ;;
   seal | seal-copy | refresh | reset-failed-start | drop-box-path | admin-firewall)
     [[ $# -eq 2 ]] || usage
     tap=$2
@@ -391,6 +395,29 @@ for i in d.get("items", []):
       { grep -F -- "$name" <<< "$ctl" || true; } | tail -n 20 | cut -c1-400
     done <<< "$ess"
     echo "PASS: openbao-prod: secrets-status: read, nothing changed"
+    ;;
+  jobs-status)
+    # Read-only (kc get and logs only). The pod logs go through hosts/diag-apps.py scrub, so a secret in a log line is masked.
+    jobs=$(kc get jobs -A -o json | python3 -I -c '
+import json, sys
+for j in json.load(sys.stdin)["items"]:
+    s = j.get("status") or {}
+    if not s.get("failed", 0):
+        continue
+    m = j["metadata"]
+    o = [x["name"] for x in m.get("ownerReferences") or [] if x.get("kind") == "CronJob"]
+    print(m.get("namespace", ""), m["name"], o[0] if o else "-", "failed=%s" % s.get("failed", 0), "succeeded=%s" % s.get("succeeded", 0), s.get("startTime", ""))
+') || { echo "openbao-prod: could not read the Jobs" >&2; exit 1; }
+    echo "openbao-prod: Jobs with failed pods (namespace, job, cronjob, failed, succeeded, start):"
+    echo "${jobs:-none}"
+    n=0
+    while read -r jns jname _; do
+      [[ -n $jname ]] || continue
+      n=$((n + 1)); [[ $n -le 6 ]] || break
+      echo "openbao-prod: last 30 log lines of $jns/$jname (scrubbed):"
+      { kc -n "$jns" logs "job/$jname" --tail=30 --all-containers=true 2>&1 || true; } | python3 -I "$repo/hosts/diag-apps.py" scrub | cut -c1-400
+    done <<< "$jobs"
+    echo "PASS: openbao-prod: jobs-status: read, nothing changed"
     ;;
   ca)
     mkdir -p "$store_keys"
