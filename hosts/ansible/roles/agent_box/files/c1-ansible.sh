@@ -33,7 +33,7 @@ export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-
 # gateway: the shared Gateway and its node firewall ports (tag gateway only: not the smoke test, which applies and removes an app).
 # gitops: the GitOps engine's source, web UI route and sign-in settings (tags source, ui, sso only: never install, the pinned
 # upstream install of Argo CD). It passes k8s_gitops_source_jellyfin_setup=false, because prod is rebuilt from a restore of its own Jellyfin config
-# (with the admin password the config holds), which a fresh admin Secret cannot match, and it maps the sign-in's CA file to <keys>/prod/lab-ca/root.crt. observability: metrics-server, kube-prometheus-stack, Loki, Alloy and Grafana's route, with every tag the
+# (with the admin password the config holds), which a fresh admin Secret cannot match, and it maps the sign-in's CA file to <keys>/prod/lab-ca/root.crt. It also sets the root Application's own variables (the store's address and seal node, the notebook runner, the stable local-path folders) from the box's store settings, through the file prod's rebuild uses too (prod-root-vars.py), so `check gitops` plans no change to them; it stops when the settings are missing. observability: metrics-server, kube-prometheus-stack, Loki, Alloy and Grafana's route, with every tag the
 # role has named, so a tag added later is not run until this line names it. None of them needs a private file on the box: the inventory carries their values. k8s-certs.yml is not
 # a name here: it needs the lab CA's key and the Cloudflare token on the controller, and the box holds neither.
 # clients: makes sure clients `proxmox`, `openbao`, `opnsense` and `central-hub-app` are in the live realm (tags secrets and clients, the role's add-in-place path: files/ensure-client.sh
@@ -140,8 +140,8 @@ install -d -m 700 "$inventory"
 seed_dir=$keys/prod/backup-sftp
 [[ $name != backup-check ]] || seed_dir=$work/state/backup-check-seed
 python3 -I -c "$(cat <<'PY'
-import os, sys, yaml
-src, dst, key, known, themes, sftp_keys, which = sys.argv[1:8]
+import ipaddress, json, os, sys, yaml
+src, dst, key, known, themes, sftp_keys, which, settings, rootvars = sys.argv[1:10]
 def die(m):
     print("c1-ansible: " + m, file=sys.stderr); sys.exit(1)
 d = yaml.safe_load(open(src))
@@ -186,6 +186,8 @@ pve_addr = pve_address(d)
 DROP = {"ansible_ssh_common_args", "ansible_ssh_extra_args", "ansible_ssh_args", "ansible_ssh_private_key_file",
         "ansible_ssh_host", "ansible_ssh_executable", "ansible_connection", "ansible_ssh_pass", "ansible_password",
         "ansible_private_key_file", "ansible_host_key_checking"}
+exec(open(rootvars).read())   # prod-root-vars.py: the root Application's variables, shared with rebuild-prod.sh
+DROP |= ROOT_VARS_DROP
 def walk(n):
     if isinstance(n, dict):
         for k in list(n):
@@ -226,6 +228,20 @@ def find(n, name):
 g = find(d, "k8s_nodes")
 if g is None: die("the prod inventory has no k8s_nodes group")
 v = g.setdefault("vars", {})
+# The root Application's own variables, the same as prod's rebuild passes (prod-root-vars.py): without them `gitops` plans to drop the
+# store's admin address, the notebook runner and the stable local-path folders. `gitops` needs the settings; the other names carry them
+# when the box has them, and they change nothing a play outside the root's source reads.
+hostnames = set()
+def hosts(n):
+    if isinstance(n, dict):
+        for k, x in n.items():
+            if k == "hosts" and isinstance(x, dict): hostnames.update(x)
+            else: hosts(x)
+hosts(g)
+if os.path.isfile(settings):
+    rs = read_root_settings(settings, die)
+    set_root_vars(v, hostnames, *rs, die)
+elif which == "gitops": die("the store's settings %s are missing; gitops builds the root Application from them" % settings)
 if names:
     v["k8s_identity_proxmox_hosts"] = sorted(set(names))
     print("c1-ansible: %d Proxmox web names passed to the identity play" % len(set(names)))
@@ -241,7 +257,7 @@ v["ansible_ssh_private_key_file"] = key
 v["ansible_ssh_common_args"] = "-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=" + known
 yaml.safe_dump(d, open(dst, "w"), default_flow_style=False)
 PY
-)" "$inv_src" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$keys/prod/identity-theme" "${seed_dir}" "$name" || exit 1
+)" "$inv_src" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$keys/prod/identity-theme" "${seed_dir}" "$name" "$work/openbao-prod.json" "$libexec/prod-root-vars.py" || exit 1
 chmod 600 "$inventory/hosts.yml"
 
 # Every k8s node: plain ssh to ansible_host with the box's key and nothing else; no host labelled another env than prod.

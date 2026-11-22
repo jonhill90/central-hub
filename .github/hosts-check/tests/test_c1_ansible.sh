@@ -32,6 +32,7 @@ ok() { echo "ok   $*"; }
 bad() { echo "FAIL $*"; fail=1; }
 
 venv=$t/libexec/ansible-venv/bin
+mkdir -p "$t/libexec"; cp hosts/ansible/roles/agent_box/files/prod-root-vars.py "$t/libexec/prod-root-vars.py"
 mkdir -p "$t/bin" "$venv" "$t/keys/prod" "$t/work/state" "$t/work/central-hub" "$t/run"
 ln -s "$(command -v python3)" "$venv/python3"
 cat > "$t/bin/git" <<'S'
@@ -69,6 +70,7 @@ prod_inv=("all:" "  children:" "    proxmox:" "      hosts:" "        pve-a: {an
           "      children:" "        k8s_control_plane:" "          hosts:" "            cp-a: {ansible_host: 192.0.2.10}")
 inventory "${prod_inv[@]}"
 echo node-key > "$t/keys/prod-node-key"
+echo '{"seal_node": "cp-a", "store_host": "bao.invalid", "box_cidr": "192.0.2.50/32", "admin_address": "192.0.2.60"}' > "$t/work/openbao-prod.json"
 clr=cmsg_01X43rfNYp4H1dL1V2dkfkwNaaaaaaaaaaaaaaaaaaaaaa
 
 r1=""
@@ -129,6 +131,22 @@ run check gitops; seen=$(cat "$t/seen-inventory.yml" 2>/dev/null)
 if [[ $rc -eq 0 && $seen == *"k8s_gitops_sso_root_ca_file: $t/keys/prod/lab-ca/root.crt"* && $seen != *".config/central-hub"* && $seen == *"k8s_gitops_sso: true"* ]]; then
   ok "7c. the sign-in's CA file is remapped to the box's copy under <keys>/prod/lab-ca; the sso switch is kept as the inventory has it"
 else bad "7c. $rc [$calls] $out | $seen"; fi
+# 7d: the root Application's variables come from the box's store settings, the same as prod's rebuild passes them (prod-root-vars.py): without
+# them `check gitops` plans to drop the admin address, the notebook runner and the stable local-path folders. A value the Mac's inventory
+# holds for them is replaced; `gitops` without the settings stops; another name without them still runs.
+inventory "${prod_inv[@]}" "        k8s_gitops_source_notebook_runner: false" "        k8s_gitops_source_openbao_admin_address: 10.9.9.9"
+run check gitops; seen=$(cat "$t/seen-inventory.yml" 2>/dev/null)
+mv "$t/work/openbao-prod.json" "$t/work/openbao-prod.json.off"
+run check gitops; nr=$rc no=$out
+run check gateway; gr=$rc
+mv "$t/work/openbao-prod.json.off" "$t/work/openbao-prod.json"
+if [[ $seen == *"k8s_gitops_source_openbao_in_cluster: true"* && $seen == *"k8s_gitops_source_notebook_runner: true"* &&
+      $seen == *"k8s_gitops_source_openbao_seal_node: cp-a"* && $seen == *"k8s_gitops_source_openbao_store_host: bao.invalid"* &&
+      $seen == *"k8s_gitops_source_openbao_box_cidr: 192.0.2.50/32"* && $seen == *"k8s_gitops_source_openbao_admin_address: 192.0.2.60"* &&
+      $seen == *"k8s_gitops_source_local_path_stable_folders: true"* && $seen != *"10.9.9.9"* &&
+      $nr -ne 0 && $no == *"settings"*"are missing"* && $gr -eq 0 ]]; then
+  ok "7d. gitops: the root's variables (store, seal node, box address, admin address, notebook runner, stable folders) are the box's own, as in prod's rebuild; no settings stops gitops only"
+else bad "7d. $rc | $nr $no | $gr | $seen"; fi
 inventory "${prod_inv[@]}"
 r7=""
 for args in "check certs" "check k8s-certs" "apply certs $clr" "check gitops-install" "apply gateway" "apply gitops badid"; do

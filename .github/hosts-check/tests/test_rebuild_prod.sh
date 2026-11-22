@@ -33,6 +33,7 @@ bad() { echo "FAIL $*"; fail=1; }
 sha=0123456789abcdef0123456789abcdef01234567
 
 venv=$t/libexec/ansible-venv/bin
+mkdir -p "$t/libexec"; cp hosts/ansible/roles/agent_box/files/prod-root-vars.py "$t/libexec/prod-root-vars.py"
 mkdir -p "$t/bin" "$venv" "$t/keys/prod/tfvars" "$t/keys/prod/state" "$t/keys/secrets-bundle" "$t/work/state" \
   "$t/work/central-hub" "$t/work/rebuild-dev/logs" "$t/run"
 ln -s "$(command -v python3)" "$venv/python3"
