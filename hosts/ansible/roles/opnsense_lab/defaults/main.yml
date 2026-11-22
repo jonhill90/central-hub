@@ -43,7 +43,7 @@ opnsense_lab_host_overrides: []
 # the same host and domain, so if their value or description differs, each run rewrites the record
 # twice.
 opnsense_lab_short_app_names:
-  - central-hub-app
+  - hub
   - openbao
   - vault
 

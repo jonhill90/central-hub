@@ -33,7 +33,7 @@ flowchart LR
 |---|---|---|---|
 | `grafana` | confidential, PKCE S256 | `https://grafana.apps.c1.prod.<zone>/login/generic_oauth` | `monitoring/grafana-sso`, key `client-secret` |
 | `argocd` | confidential | `https://argocd.apps.c1.prod.<zone>/auth/callback` | `argocd/argocd-sso`, key `clientSecret` |
-| `central-hub-app` | confidential, PKCE S256 | `https://central-hub-app.apps.c1.prod.<zone>/auth/callback` and the short name's | `central-hub-app/central-hub-app-sso`, key `client-secret`; the issuer and origins in `central-hub-app/central-hub-app-oidc` ([runbook](sign-in-to-the-central-hub-app-with-keycloak.md)) |
+| `central-hub-app` | confidential, PKCE S256 | `https://hub.apps.c1.prod.<zone>/auth/callback` and the short name's | `central-hub-app/central-hub-app-sso`, key `client-secret`; the issuer and origins in `central-hub-app/central-hub-app-oidc` ([runbook](sign-in-to-the-central-hub-app-with-keycloak.md)) |
 | `argocd-cli` | public, PKCE S256 | `http://localhost:8085/auth/callback` | none (public) |
 | `jellyfin` | confidential | `https://jellyfin.apps.c1.prod.<zone>/sso/OID/redirect/keycloak` and `/sso/OID/r/keycloak` | `media/jellyfin-sso`, key `client-secret` |
 | `proxmox` (only with `k8s_identity_proxmox_hosts`) | confidential | `https://<web UI name>` for each name | the controller's `identity.env`, read by role `proxmox_sso` ([runbook](sign-in-to-proxmox-through-keycloak.md)) |
