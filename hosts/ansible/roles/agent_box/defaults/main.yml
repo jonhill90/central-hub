@@ -111,7 +111,7 @@ agent_box_wrappers:
     args: [check, status]
   # The pass ledger the merge sweep reads (D-0042 rule 2) and its stop switch (rule 8). The wrapper checks every argument.
   - name: pass-record
-    args: ["add *", "show *", "halt *", "resume *"]
+    args: ["add *", "show *", "digest-pass *", "halt *", "resume *"]
   # The dev rebuild (hosts/rebuild-k8s.sh), dev VMs 250-257 only.
   - name: rebuild
     # up and rebuild may name the commit to build (`*`); the wrapper takes only 7 to 40 hex digits on main.
