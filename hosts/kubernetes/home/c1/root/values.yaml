@@ -205,6 +205,8 @@ apps:
     needsZone: true
     zoneParameters:
       gateway.https: "{gatewayHttps}"
+    rootParameters:
+      adminSecret.store: appSecretsStore
     switchOffParameters:
       sso.labRoot.certificate: labCaIssuer
     autoSync: true

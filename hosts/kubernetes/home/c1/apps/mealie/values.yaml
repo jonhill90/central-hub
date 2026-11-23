@@ -29,6 +29,20 @@ gateway:
   shortNames: true
   https: true
 
+# Mealie's first account has a published e-mail and password, which its API accepts whatever ALLOW_PASSWORD_LOGIN says. The
+# guard (templates/admin-guard.yaml, files/admin-guard.sh) replaces that password with the generated one in Secret <name>-admin
+# before the route exists, and proves the published one is refused; a CronJob repeats the proof. The root chart sets
+# adminSecret.store from appSecretsStore (openbao: key c1/mealie-admin, property password; else made once in the cluster).
+adminSecret:
+  store: c1
+adminGuard:
+  schedule: "*/10 * * * *"
+  # The published first account, docs.mealie.io "Installation" (public, and the reason for the guard).
+  publishedEmail: changeme@example.com
+  publishedPassword: MyPassword
+  # The same stock curl image as sso.initImage.
+  image: docker.io/curlimages/curl:8.22.0@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777
+
 # Sign-in through the lab's Keycloak (Mealie's own OpenID Connect, https://docs.mealie.io/documentation/getting-started/authentication/oidc-v2/).
 # The client `mealie` and its secret (Secret <name>/<secretName>, key client-secret) come from the realm role
 # k8s_identity; this chart only reads the secret. It is optional, so the pod starts before the identity run has
