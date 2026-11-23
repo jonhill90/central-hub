@@ -42,7 +42,7 @@ export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-
 # names; a changed Certificate makes cert-manager issue again with a new key (rotationPolicy Always). It never installs cert-manager (tag certmanager),
 # never touches the nodes' trust (tag nodetrust) and never deletes: a run with issuing off in the inventory would remove the issuers, so
 # `apply certs` stops before that. `check certs` prints the diff of what would change.
-# clients: makes sure clients `proxmox`, `openbao`, `opnsense` and `central-hub-app` are in the live realm (tags secrets and clients, the role's add-in-place path: files/ensure-client.sh
+# clients: makes sure clients `proxmox`, `openbao`, `opnsense`, `central-hub-app` and `mealie` are in the live realm (tags secrets and clients, the role's add-in-place path: files/ensure-client.sh
 # creates a client that is missing and updates one that is there; users, groups and the other clients are not touched, and the realm is
 # never replaced). Unlike `identity` it does not run the operator, database or keycloak tags, so a pending Keycloak or operator version
 # change on prod is not rolled out by it.
@@ -84,7 +84,7 @@ declare -A fixed_vars=([identity]="k8s_identity_realm_replace=false k8s_identity
 # k8s_identity_ensure_clients (empty by default), so the wrapper names them: proxmox, the client the realm gained after prod's
 # realm was made. It is added in place, with no realm replace. Name another client here, in its own pull request, to add it.
 declare -A fixed_tags=([identity]="all,clients" [gateway]="gateway" [gitops]="source,ui,sso" [observability]="metrics_server,metrics,logs,route,proof" [users]="secrets,users" [clients]="secrets,clients" [identity-values]="always" [certs]="issue")
-declare -A fixed_json=([identity]='{"k8s_identity_ensure_clients":["proxmox"]}' [users]='{"k8s_identity_ensure_users":["signin-test"]}' [clients]='{"k8s_identity_ensure_clients":["proxmox","openbao","opnsense","central-hub-app"]}')
+declare -A fixed_json=([identity]='{"k8s_identity_ensure_clients":["proxmox"]}' [users]='{"k8s_identity_ensure_users":["signin-test"]}' [clients]='{"k8s_identity_ensure_clients":["proxmox","openbao","opnsense","central-hub-app","mealie"]}')
 
 usage() { echo "usage: c1-ansible list|check <name>|apply <name> <clearance id>|log" >&2; exit 2; }
 action=${1:-} name='' clearance=''

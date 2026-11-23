@@ -1,0 +1,158 @@
+# Mealie on c1: one pod, SQLite on a volume (Mealie's default; a Postgres database is the way out when it outgrows this).
+# Recreate, because a ReadWriteOnce volume on one node can't be held by two pods while a rolling update runs.
+{{- $v := .Values }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Release.Namespace }}
+  annotations:
+    # Deleting the namespace would delete the claim in it.
+    argocd.argoproj.io/sync-options: Delete=false
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $v.name }}-data
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    # Never delete the data, even if the Application or this chart goes away.
+    argocd.argoproj.io/sync-options: Delete=false
+    helm.sh/resource-policy: keep
+spec:
+  {{- with $v.storage.className }}
+  storageClassName: {{ . }}
+  {{- end }}
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: {{ $v.storage.dataSize }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $v.name }}
+  namespace: {{ .Release.Namespace }}
+  labels: {app.kubernetes.io/name: mealie}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app.kubernetes.io/name: mealie}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: mealie}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: {{ $v.uid }}
+        runAsGroup: {{ $v.uid }}
+        fsGroup: {{ $v.uid }}
+        seccompProfile: {type: RuntimeDefault}
+      {{- if $v.sso.enabled }}
+      initContainers:
+        # The CA bundle Mealie trusts: the public roots plus the lab root. Safe to run again.
+        - name: ca-bundle
+          image: {{ $v.sso.initImage }}
+          command: [/bin/sh, -c]
+          args:
+            - |
+              set -eu
+              cp /etc/ssl/certs/ca-certificates.crt /tls/ca-bundle.crt
+              if [ -e /lab-ca/lab-root-ca.pem ]; then
+                grep -q 'BEGIN CERTIFICATE' /lab-ca/lab-root-ca.pem
+                cat /lab-ca/lab-root-ca.pem >> /tls/ca-bundle.crt
+              else
+                echo "no lab root yet (the lab CA's Secret): sign-in stays off until it exists"
+              fi
+              echo "ca bundle: $(grep -c 'BEGIN CERTIFICATE' /tls/ca-bundle.crt) certificates"
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {memory: 128Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: tls, mountPath: /tls}
+            - {name: lab-root-ca, mountPath: /lab-ca, readOnly: true}
+      {{- end }}
+      containers:
+        - name: mealie
+          image: {{ $v.image }}
+          env:
+            - {name: BASE_URL, value: "https://{{ include "mealie.shortHost" . }}"}
+            - {name: TZ, value: {{ $v.timezone | quote }}}
+            - {name: ALLOW_SIGNUP, value: "false"}
+            # Behind the Gateway: without this uvicorn ignores X-Forwarded-Proto and Mealie builds an http redirect
+            # URI for Keycloak (Mealie docs, "OpenID Connect"). The pod is reachable only through the Gateway.
+            - {name: FORWARDED_ALLOW_IPS, value: "*"}
+            - {name: PUID, value: {{ $v.uid | quote }}}
+            - {name: PGID, value: {{ $v.uid | quote }}}
+            {{- if $v.sso.enabled }}
+            - {name: SSL_CERT_FILE, value: /tls/ca-bundle.crt}
+            - {name: REQUESTS_CA_BUNDLE, value: /tls/ca-bundle.crt}
+            - {name: OIDC_AUTH_ENABLED, value: "true"}
+            - {name: OIDC_SIGNUP_ENABLED, value: "true"}
+            - {name: OIDC_AUTO_REDIRECT, value: "true"}
+            - {name: OIDC_SIGNOUT_ENABLED, value: "true"}
+            # Keycloak holds the groups in a client mapper, not in a scope called `groups`, so ask for the three it has.
+            - {name: OIDC_SCOPES_OVERRIDE, value: "openid profile email"}
+            - {name: OIDC_TLS_CACERTFILE, value: /tls/ca-bundle.crt}
+            - {name: OIDC_PROVIDER_NAME, value: {{ $v.sso.providerName | quote }}}
+            - {name: OIDC_CONFIGURATION_URL, value: "https://{{ include "mealie.ssoHost" . }}/realms/{{ $v.sso.realm }}/.well-known/openid-configuration"}
+            - {name: OIDC_CLIENT_ID, value: {{ $v.sso.clientId | quote }}}
+            - {name: OIDC_ADMIN_GROUP, value: {{ $v.sso.adminGroup | quote }}}
+            - name: OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef: {name: {{ $v.sso.secretName }}, key: client-secret, optional: true}
+            {{- end }}
+          ports:
+            - {name: http, containerPort: {{ $v.port }}}
+          startupProbe:
+            httpGet: {path: {{ $v.healthPath }}, port: http}
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: {path: {{ $v.healthPath }}, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: {{ $v.healthPath }}, port: http}
+            periodSeconds: 30
+            timeoutSeconds: 10
+          resources:
+            requests: {cpu: {{ $v.resources.requests.cpu }}, memory: {{ $v.resources.requests.memory }}}
+            limits: {memory: {{ $v.resources.limits.memory }}}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: data, mountPath: /app/data}
+            {{- if $v.sso.enabled }}
+            - {name: tls, mountPath: /tls, readOnly: true}
+            {{- end }}
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: {{ $v.name }}-data}
+        {{- if $v.sso.enabled }}
+        - name: tls
+          emptyDir: {sizeLimit: 2Mi}
+        - name: lab-root-ca
+          secret:
+            {{- if $v.sso.labRoot.certificate }}
+            secretName: {{ $v.sso.labRoot.secretName }}
+            items: [{key: {{ $v.sso.labRoot.key }}, path: lab-root-ca.pem}]
+            {{- else }}
+            secretName: {{ $v.name }}-lab-root-ca
+            {{- end }}
+            optional: true
+        {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $v.name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector: {app.kubernetes.io/name: mealie}
+  ports:
+    - {name: http, port: {{ $v.port }}, targetPort: http}

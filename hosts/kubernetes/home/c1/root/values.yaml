@@ -196,6 +196,19 @@ apps:
       setup.enabled: jellyfinSetup
     autoSync: true    # on 2026-11-10: its diff on c1 at 03:08 UTC was Argo CD's tracking only
     prune: false
+  # Mealie, the recipe manager (owner ask 38): one pod with SQLite on a volume, signing in through Keycloak's client
+  # `mealie` (apps/mealie). Like Jellyfin, it reads the lab CA's public root from a Certificate on lab-ca, so a
+  # cluster with no ClusterIssuer lab-ca (dev) skips that Certificate and Mealie starts with its own login only.
+  mealie:
+    namespace: mealie
+    local: true
+    needsZone: true
+    zoneParameters:
+      gateway.https: "{gatewayHttps}"
+    switchOffParameters:
+      sso.labRoot.certificate: labCaIssuer
+    autoSync: true
+    prune: false
   # The Central Hub web app (spec 2026-11-central-hub-app-on-c1): built at pod start from a pinned commit of
   # its own public repository. Its route is in the gateway app (routes: hub).
   central-hub-app:
