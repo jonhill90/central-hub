@@ -1,0 +1,68 @@
+# Mealie on c1 (https://docs.mealie.io). Every value here is public; the zone comes only from the root
+# Application's `zone` parameter (CLAUDE.md rule 4).
+zone: ""
+
+name: mealie
+
+# Mealie v3.30.0, built 2026-11-01 (image config `created`; STD-0003 asks for at least 14 days, and v3.31.0 is
+# from 2026-11-13). The project publishes on ghcr.io only; pinned by multi-arch index digest (D-0054: by digest).
+image: ghcr.io/mealie-recipes/mealie:v3.30.0@sha256:90f83da6f3ab0a421efc827118a556168573930105f13fa3321768f42163d784
+uid: 1000
+port: 9000
+healthPath: /api/app/about
+
+timezone: America/New_York
+
+storage:
+  className: ""      # empty: the cluster's default StorageClass
+  dataSize: 5Gi      # /app/data: the SQLite database, the recipe images and the backups
+
+resources:
+  requests: {cpu: 100m, memory: 256Mi}
+  limits: {memory: 1Gi}
+
+# The shared Gateway and the name under it: <name>.apps.c1.prod.<zone>, and <name>.<zone> with shortNames.
+gateway:
+  name: apps
+  namespace: gateway
+  hostSuffix: apps.c1.prod
+  shortNames: true
+  https: true
+
+# Mealie's first account has a published e-mail and password, which its API accepts whatever ALLOW_PASSWORD_LOGIN says. The
+# guard (templates/admin-guard.yaml, files/admin-guard.sh) replaces that password with the generated one in Secret <name>-admin
+# before the route exists, and proves the published one is refused; a CronJob repeats the proof. The root chart sets
+# adminSecret.store from appSecretsStore (openbao: key c1/mealie-admin, property password; else made once in the cluster).
+adminSecret:
+  store: c1
+adminGuard:
+  schedule: "*/10 * * * *"
+  # The published first account, docs.mealie.io "Installation" (public, and the reason for the guard).
+  publishedEmail: changeme@example.com
+  publishedPassword: MyPassword
+  # The same stock curl image as sso.initImage.
+  image: docker.io/curlimages/curl:8.22.0@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777
+
+# Sign-in through the lab's Keycloak (Mealie's own OpenID Connect, https://docs.mealie.io/documentation/getting-started/authentication/oidc-v2/).
+# The client `mealie` and its secret (Secret <name>/<secretName>, key client-secret) come from the realm role
+# k8s_identity; this chart only reads the secret. It is optional, so the pod starts before the identity run has
+# made it (Mealie then shows only its own login); the identity role restarts the Deployment once the secret exists.
+# Mealie calls Keycloak's public address, so it needs the lab CA's public root: an init container builds a bundle
+# (public roots plus the lab root) for SSL_CERT_FILE and REQUESTS_CA_BUNDLE, as the Jellyfin chart does.
+sso:
+  enabled: true
+  issuerHost: sso
+  shortNames: true     # must match k8s_identity_short_names (sso.<zone> or sso.apps.c1.prod.<zone>)
+  realm: lab
+  clientId: mealie
+  secretName: mealie-sso
+  providerName: Keycloak
+  # Realm group lab-admins makes the account a Mealie admin; any other account of the realm signs up as a user.
+  adminGroup: lab-admins
+  # The same stock curl image as Jellyfin's init container (busybox shell, the public CA bundle).
+  initImage: docker.io/curlimages/curl:8.22.0@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777
+  labRoot:
+    certificate: true
+    issuer: lab-ca
+    secretName: mealie-lab-ca
+    key: ca.crt
