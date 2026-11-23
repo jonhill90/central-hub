@@ -68,7 +68,8 @@ k8s_identity_password_keys: >-
 # OPENBAO_CLIENT_SECRET only with a store name, so a realm with no openbao client keeps today's values and hash.
 # OPNSENSE_CLIENT_SECRET likewise, only with an OPNsense GUI name.
 k8s_identity_client_secret_keys: >-
-  {{ ['GRAFANA_CLIENT_SECRET', 'ARGOCD_CLIENT_SECRET', 'JELLYFIN_CLIENT_SECRET', 'PROXMOX_CLIENT_SECRET', 'CENTRAL_HUB_APP_CLIENT_SECRET', 'MEALIE_CLIENT_SECRET']
+  {{ ['GRAFANA_CLIENT_SECRET', 'ARGOCD_CLIENT_SECRET', 'JELLYFIN_CLIENT_SECRET', 'PROXMOX_CLIENT_SECRET',
+  'CENTRAL_HUB_APP_CLIENT_SECRET', 'MEALIE_CLIENT_SECRET']
   + (['OPENBAO_CLIENT_SECRET'] if k8s_identity_openbao_hosts | length > 0 else [])
   + (['OPNSENSE_CLIENT_SECRET'] if k8s_identity_opnsense_hosts | length > 0 else []) }}
 # Each member of k8s_identity_otp_group has a TOTP seed: TOTP_ and the user name as for passwords.
