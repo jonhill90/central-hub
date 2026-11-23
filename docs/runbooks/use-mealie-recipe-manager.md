@@ -8,7 +8,7 @@ outcome: https://mealie.<zone>/ sends a visitor to Keycloak's sign-in page for c
 needs: Argo CD app `mealie` Synced, realm lab with client `mealie`, Secret `mealie/mealie-sso` (key `client-secret`), the lab CA's public root in Secret `mealie/mealie-lab-ca`
 private-values: [k8s_identity_zone, MEALIE_CLIENT_SECRET]
 files: [hosts/kubernetes/home/c1/apps/mealie/, hosts/kubernetes/home/c1/apps/mealie/files/admin-guard.sh, hosts/kubernetes/home/c1/root/values.yaml, hosts/ansible/roles/k8s_identity/templates/realm.yaml.j2, hosts/ansible/roles/k8s_identity/tasks/secrets.yml, hosts/ansible/roles/agent_box/files/c1-ansible.sh]
-last-tested: not yet; written with the pull request that adds it
+last-tested: 2026-11-23, the Keycloak sign-in by the agent box's signin-check (step 6)
 superseded-by:
 ---
 
@@ -38,6 +38,7 @@ Mealie makes a first account on first start, with an e-mail and password the pro
 4. Prove it without a password. Read the guard's proof first: `c1-read logs -n mealie job/<newest mealie-admin-guard job>` ends with `mealie-admin: PASS the published sign-in is refused and the generated one works; first-login banner off`. Then: `curl -sI https://mealie.<zone>/` answers 200 (the single-page app); `curl -sI https://mealie.<zone>/api/app/about` is 200; Mealie's `/api/app/about` says `oidcReady`/`enableOidc` true (`curl -s .../api/app/about`); and the Keycloak authorize URL for client `mealie` with redirect `https://mealie.<zone>/login` answers 200 (the sign-in page), not "Invalid parameter: redirect_uri".
    expect: all of the above.
 5. A typed sign-in is the owner's: open the address, sign in as a lab account, and Mealie opens.
+6. Prove the Keycloak sign-in from the agent box: the box's `signin-check` (its browser part) signs the lab test user in through Keycloak and reads `/api/users/self`; `signin-check log` shows the latest run. `expect`: the Mealie line says `passed: /api/users/self answers HTTP 200 for the test user`, ending at `mealie.<zone>/g/home`. Measured 2026-11-23, 06:23 UTC: that line passed, with 8 passed and 0 failed among the apps that have a Keycloak sign-in.
 
 ## The first account
 
