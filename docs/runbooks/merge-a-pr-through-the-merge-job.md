@@ -16,7 +16,7 @@ superseded-by:
 
 **Status:** in use. Written 2026-11-14 with the sweep ([D-0056](../decisions/0056-merge-with-a-sweep-on-the-box-in-place-of-the-merge-job.md)). The sweep, `pr-merge check`, the verdict script and `pass-record` reached the box by two controller runs of the agent box playbook on 2026-11-15: the first at 05:40 to 05:44 UTC (owner card row 19a), the second at 08:21 to 08:23 UTC at main e0a9b3e (row 19d), which also put #367's owner path on the box (run times as the orchestrator reported them). The workflow `merge.yml` that D-0042 rule 2 first named was removed, and D-0042 rule 2 and AGENTS.md rule 2 name the sweep. This page keeps its old file name because D-0042 links to it.
 
-A cloud session cannot start a GitHub workflow here (the GitHub integration answers 403, measured 2026-11-14), so the merge does not run by dispatch. A timer on the agent box runs `pr-merge.sh sweep` as the keys user every few minutes. It merges a PR only when that PR's exact head holds the reviewer's recorded pass (the three councils were dropped on 2026-11-18). It is not GitHub's auto-merge, and it never passes `--admin`.
+A cloud session cannot start a GitHub workflow here (the GitHub integration answers 403, measured 2026-11-14), so the merge does not run by dispatch. A timer on the agent box runs `pr-merge.sh sweep` as the keys user every few minutes. It merges every open, non-draft PR whose head is green with a clean merge; a PR that changes a guarded path (AGENTS.md rule 2) also needs the reviewer's recorded pass for its exact head. It is not GitHub's auto-merge, and it never passes `--admin`.
 
 ## Before you start
 
@@ -43,7 +43,7 @@ expect: `pass-record: <role> recorded for <repo>#<pr> <head7>`.
 
 ## What happens next
 
-The timer's next turn reads the ledger. With the reviewer's pass recorded for the head and every check green, it squash-merges pinned to the head and comments on the PR. Anything else, it skips and tries again next turn. Read `journalctl -t pr-merge -u pr-merge-sweep` on the box for the reasons, or run the read-only check yourself:
+The timer's next turn judges every open PR. With every check green (and, for a guarded path, the reviewer's pass recorded for the head), it squash-merges pinned to the head and comments on the PR. Anything else, it skips and tries again next turn. Read `journalctl -t pr-merge -u pr-merge-sweep` on the box for the reasons, or run the read-only check yourself:
 
 ```text
 pr-merge check jonhill90/<repo> <pr number> <40-character head>

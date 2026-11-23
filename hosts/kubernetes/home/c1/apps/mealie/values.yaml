@@ -17,8 +17,9 @@ storage:
   className: ""      # empty: the cluster's default StorageClass
   dataSize: 5Gi      # /app/data: the SQLite database, the recipe images and the backups
 
+# CPU requests are what the scheduler counts, not what the pod uses: c1's one worker (2 CPUs) had 99% of its CPU requested at 16% real use, so a new app did not fit.
 resources:
-  requests: {cpu: 100m, memory: 256Mi}
+  requests: {cpu: 25m, memory: 256Mi}
   limits: {memory: 1Gi}
 
 # The shared Gateway and the name under it: <name>.apps.c1.prod.<zone>, and <name>.<zone> with shortNames.

@@ -23,6 +23,40 @@ RECORD_STATUS = ("accepted", "rejected", "parked")
 STANDARD_STATUS = ("active",)
 MAX_RECORDS = 20
 
+# Paths that still need the reviewer's pass for the exact head: the kinds the owner keeps (firewall, tailnet, secrets,
+# access rights, the agents' own rules), the workflows, the Mac's command wrappers and the Proxmox host job (root on the
+# host, run on the agents' pass). Any other green PR merges on its checks alone (the owner's order of 2026-11-23,
+# 00:50:45 UTC; the list is an agent pick, D-0065). The agent box role is not listed: box-apply still installs
+# a change to its limits only on the reviewer's digest pass (D-0044), so a merge-time pass on it was the same check twice.
+GUARDED_ANY = (".github/", "AGENTS.md", "CLAUDE.md", "SECURITY.md")
+GUARDED_CENTRAL = ("hosts/wrappers/", "hosts/ansible/playbooks/proxmox-proxy.yml", "hosts/ansible/roles/proxmox_proxy/",
+                   "hosts/ansible/roles/k8s_identity/")
+GUARDED_WORDS = ("opnsense", "tailnet", "tailscale", "firewall", "sops", "secret", "sudoers", "openbao", "realm")
+# An added or removed line that handles a secret or a password guards its file whatever the file's name.
+GUARDED_LINE = re.compile(r"ExternalSecret|secretKeyRef|kind:\s*Secret\b|password", re.I)
+
+
+def guarded_file(full, f):
+    """A changed file from GitHub's PR files list: guarded by its path, or by a changed line that touches a secret.
+    A file GitHub sends no patch for (too large, or binary) counts as guarded when it has changes."""
+    if guarded(full, f["filename"]):
+        return True
+    patch = f.get("patch")
+    if patch is None:
+        return f.get("changes", 1) != 0
+    return any(l[:1] in "+-" and not l.startswith(("+++", "---")) and GUARDED_LINE.search(l) for l in patch.splitlines())
+
+
+def guarded(full, name):
+    if name.startswith(GUARDED_ANY) or name.rsplit("/", 1)[-1] in GUARDED_ANY:
+        return True
+    if full == "jonhill90/central-hub-app":
+        return name.startswith("docs/evidence/")   # its screenshot allow-list and images
+    if full != "jonhill90/central-hub":
+        return False
+    low = name.lower()
+    return name.startswith(GUARDED_CENTRAL) or any(w in low for w in GUARDED_WORDS)
+
 
 DROP_TOP = re.compile(r"^[+-](status|date|accepted-evidence):")
 DROP_NESTED = re.compile(r"^[+-]  (approved-by|approved-at|approved-commit|approval-ref|approval-names|check|merged):")
@@ -180,11 +214,13 @@ def main():
     if gh:
         notes.append("NOTE: this PR edits %d files under .github/; green is from the PR's own copy of them (%s)" % (len(gh), ", ".join(gh[:5])))
 
-    # The ledger: the reviewer's pass for this exact head.
+    # The ledger: the reviewer's pass for this exact head, needed only when a guarded path changed or a record's status
+    # changes (decided below, after the record checks).
     roles, lines, err = read_ledger(os.path.join(d, "ledger.jsonl"), full, head, pr_no)
-    if err: why.append(err)
-    missing = [r for r in ROLES if r not in roles]
-    if not err and missing: why.append("ledger lacks " + ", ".join(missing))
+    hit = [f["filename"] for f in files if guarded_file(full, f)]
+    # Only a PR whose head branch is in this repository may merge without a pass: a fork's PR is someone else's code.
+    if ((pr.get("head") or {}).get("repo") or {}).get("full_name") != full:
+        hit.append("(head branch is not in %s)" % full)
 
     central = full == "jonhill90/central-hub"
     # The Proxmox host job runs this playbook and role as root on the host on the agents' pass (pick 241).
@@ -223,6 +259,7 @@ def main():
         st = ntop.get("status", "")
         if st not in want or (old is not None and otop.get("status") == st):
             continue
+        hit.append(n)   # a status change (accepting a record) always needs the reviewer's pass
         if st in ("accepted", "active") and nev.get("approved-by") == "owner":
             # The owner's own card tap: the PR's ledger holds an owner-tap line whose relay ref is the record's approval-ref, and
             # the PR changes nothing but the acceptance fields (no approved-commit and no passes on one are needed).
@@ -273,6 +310,15 @@ def main():
         diff = sorted(f for f in set(a) | set(h) if a.get(f, collections.Counter()) != h.get(f, collections.Counter()))
         if diff:
             why.append("%s: the PR's net change differs from approved-commit %s in %s" % (n, ac[:7], ", ".join(diff[:3])))
+
+    if hit:
+        notes.append("NOTE: guarded paths changed, so the reviewer's pass is needed: %s" % ", ".join(hit[:5]))
+        if err: why.append(err)
+        missing = [r for r in ROLES if r not in roles]
+        if not err and missing: why.append("ledger lacks " + ", ".join(missing))
+    else:
+        notes.append("NOTE: no guarded path changed; green checks and a clean merge are enough")
+        if err and err != "no ledger": why.append(err)
 
     for x in notes: print(x)
     if not why:

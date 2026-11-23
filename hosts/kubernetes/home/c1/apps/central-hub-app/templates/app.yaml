@@ -183,12 +183,12 @@ spec:
         # The sync containers see only the token; the app container sees only the snapshot.
         - name: feed-token
           secret:
-            secretName: {{ $v.name }}-feed
+            secretName: {{ $v.name }}-feed-token
             optional: true
             items: [{key: notebook-token, path: notebook-token}]
         - name: feed-app
           secret:
-            secretName: {{ $v.name }}-feed
+            secretName: {{ $v.name }}-feed-app
             optional: true
             items: [{key: proxmox-json, path: proxmox.json}]
 {{- end }}
@@ -261,12 +261,13 @@ spec:
     - fromEntities: [ingress]
 {{- if $feed }}
 ---
-# The feed the agent box writes into the store every 30 minutes (ci-runner.sh hub-feed): a one-hour read-only notebook token and
-# a Proxmox snapshot. Only with sign-in on; a refresh of 1m keeps the app within a minute of the box's timer.
+# The feed the agent box writes into the store every 30 minutes (ci-runner.sh hub-feed), in two Secrets so that a missing part of
+# one never holds back the other: -feed-token is the one-hour read-only notebook token, -feed-app the Proxmox snapshot. Only with
+# sign-in on; a refresh of 1m keeps the app within a minute of the box's timer.
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
-  name: {{ $v.name }}-feed
+  name: {{ $v.name }}-feed-token
   namespace: {{ .Release.Namespace }}
 spec:
   refreshInterval: 1m
@@ -274,11 +275,26 @@ spec:
     kind: ClusterSecretStore
     name: {{ $v.feed.store }}
   target:
-    name: {{ $v.name }}-feed
+    name: {{ $v.name }}-feed-token
     creationPolicy: Owner
   data:
     - secretKey: notebook-token
       remoteRef: {key: {{ $v.feed.key }}, property: notebook-token}
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ $v.name }}-feed-app
+  namespace: {{ .Release.Namespace }}
+spec:
+  refreshInterval: 1m
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ $v.feed.store }}
+  target:
+    name: {{ $v.name }}-feed-app
+    creationPolicy: Owner
+  data:
     - secretKey: proxmox-json
       remoteRef: {key: {{ $v.feed.key }}, property: proxmox-json}
 {{- end }}

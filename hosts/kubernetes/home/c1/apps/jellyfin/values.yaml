@@ -18,7 +18,7 @@ storage:
   cacheLimit: 8Gi
 
 resources:
-  requests: {cpu: 250m, memory: 512Mi}
+  requests: {cpu: 100m, memory: 512Mi}
   limits: {memory: 2Gi}
 
 # The shared Gateway (role k8s_gateway) and the name under it: <name>.apps.c1.prod.<zone>.

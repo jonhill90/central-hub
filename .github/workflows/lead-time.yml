@@ -1,0 +1,21 @@
+# Scheduled, read-only: time from PR open to merge for the last 24 hours, and fail when a plain (unguarded) PR took over
+# 30 minutes (AGENTS.md rules 2 and 7). A failed scheduled run is GitHub's notice to the owner. No agent runs here.
+name: lead-time
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+  pull-requests: read
+jobs:
+  lead-time:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Time PRs merged in the last 24 hours
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 -I .github/speed/lead-time.py "$GITHUB_REPOSITORY" 24 30 | tee -a "$GITHUB_STEP_SUMMARY"; exit "${PIPESTATUS[0]}"

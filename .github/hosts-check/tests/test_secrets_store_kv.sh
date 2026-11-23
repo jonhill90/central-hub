@@ -16,6 +16,7 @@
 #   9. With SECRETS_STORE_RESOLVE set (dev: the wrapper points every call at dev's Gateway), every curl call carries
 #      --resolve with that value; without it (every run above), none does.
 #  11. put-new writes a key OpenBao lacks (SOPS, then OpenBao) and nothing when OpenBao already holds it.
+#  12. put-short writes OpenBao only: the value is in OpenBao, the SOPS file does not hold its path, and compare still passes.
 #  10. A failed sign-in names its cause and nothing private: no HTTP answer gives curl's exit code and its name; a
 #      refusal gives the HTTP code and OpenBao's text, with the secret ID as <id>, a source address (IPv4 or IPv6) only
 #      as the box's /32, another address, or an address while SECRETS_STORE_BOX_CIDR is empty, and a tailnet name as
@@ -289,9 +290,21 @@ if [[ $a_rc -eq 0 && $a_out == *"put-new: kv/c1/adopt/one key password written t
   ok "11. put-new writes a key OpenBao lacks, SOPS then OpenBao; a key OpenBao holds is kept, nothing written, and a second key at the path is added"
 else bad "11. new rc=$a_rc $a_out | again rc=$b_rc $b_out | second rc=$c_rc"; fi
 
+# 12: put-short writes OpenBao only: the short-lived value is not left in the SOPS file
+kv put-short c1/short/feed token < <(printf '%s' 'short-lived-Tx74v')
+s_rc=$rc s_out=$out
+kv compare
+s_cmp=$rc
+if [[ $s_rc -eq 0 && $s_out == *"put-short: kv/c1/short/feed key token written to OpenBao only, no SOPS copy"* &&
+      $(bao_val c1/short/feed token) == 'short-lived-Tx74v' &&
+      $(plain | python3 -c 'import json,sys; print("c1/short/feed" in json.load(sys.stdin))') == False &&
+      $s_cmp -eq 0 ]]; then
+  ok "12. put-short writes OpenBao only: the value is in OpenBao, SOPS holds no copy, and compare still passes"
+else bad "12. rc=$s_rc $s_out | compare rc=$s_cmp"; fi
+
 # 4 (over every run above)
 leak=0
-for s in "$v1" "$v2" adopted-value-Qm41z other-value-Rn52y adopted-user-Sp63x first-value second-value Wv93m fifth-value tenth-value tok-secret-1 "$rid" "$sid" changed-in-bao only-in-bao 192.0.2.77 fd7a:115c:a1e0::5 box.example.ts.net; do
+for s in "$v1" "$v2" adopted-value-Qm41z other-value-Rn52y adopted-user-Sp63x short-lived-Tx74v first-value second-value Wv93m fifth-value tenth-value tok-secret-1 "$rid" "$sid" changed-in-bao only-in-bao 192.0.2.77 fd7a:115c:a1e0::5 box.example.ts.net; do
   if grep -qF -- "$s" "$t/args"; then echo "     in an argument: $s"; leak=1; fi
   if [[ $all == *"$s"* ]]; then echo "     in the output: $s"; leak=1; fi
 done
