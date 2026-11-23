@@ -24,7 +24,7 @@ Home Assistant (Apache-2.0) runs as the container install: one pod in namespace 
 | The client `homeassistant`: public, PKCE S256, redirect `https://<name>/auth/oidc/callback` for the short and the long name. Public, so no secret exists | `realm.yaml.j2` |
 | The first-run owner: a fresh Home Assistant makes whoever reaches its first-run screen first the owner. A CronJob (`homeassistant-setup`, every 5 minutes) creates the owner through the onboarding API from inside the cluster, with a password made in the cluster by an External Secrets generator (made once, in every cluster, whatever store the other apps use, so a missing OpenBao key can never leave the Job waiting), so no person types it | `templates/setup-*.yaml`, `files/setup.sh` |
 | The route: **off** (`route.enabled: false`) on a new install, so the name serves nothing until the screen is closed | `values.yaml`, `route.enabled` |
-| Who may open it: realm group `lab-admins` becomes a Home Assistant administrator, `lab-viewers` a user, anyone else is refused | `values.yaml`, `sso.adminGroup`, `sso.userGroup` |
+| Who may open it: realm group `lab-admins` becomes a Home Assistant administrator, everyone else who signs in becomes a user (the user role is left unset, so nobody gets the plugin's "invalid" role). Home Assistant applies the role only when it first creates the person: someone created earlier keeps their role until changed in Settings > People | `values.yaml`, `sso.adminGroup`, `sso.userGroup` |
 | Keycloak's certificate trust: a small cert-manager Certificate on `lab-ca` whose `ca.crt` the component reads (`network.tls_ca_path`) | `templates/lab-ca.yaml` |
 
 ## Why no host network
@@ -42,7 +42,7 @@ Home Assistant's first-run screen has no password: the first visitor creates the
    why: a realm replace ends every open sign-in. The wrapper's client list now has `homeassistant`.
    expect: `client homeassistant: ok`, `failed=0`.
 3. The names: `homeassistant.apps.c1.prod.<zone>` resolves through the wildcard at once. The short name `homeassistant.<zone>` needs the firewall's Unbound override (`opnsense-prod`) and the tailnet's split-DNS entry (`tailnet-stack`), both lists changed in this pull request ([set-up-short-app-names.md](set-up-short-app-names.md)).
-4. Check the first-run screen is closed: the newest setup Job's log prints `PASS: onboarding user step done by the setup job` (or `already done, and the Secret's owner password is accepted`; `already done` alone is not a pass, and a `FAIL` that says the password is refused means someone else made the owner): `c1-read logs -n home job/<newest homeassistant-setup job>`. A `FAIL` line means the screen may still be open: leave the route off and read the line.
+4. Check the first-run screen is closed: the newest setup Job's log prints `PASS: onboarding user step done by the setup job` (or `already done, and the Secret's owner password is accepted`; `already done` alone is not a pass, and a `FAIL` that says the password is refused means someone else made the owner): `c1-read logs -n home job/<newest homeassistant-setup job>`. The Job also finishes the core config, analytics and integration steps, so the first sign-in lands on the dashboard (only steps still open are called, and only then does the Job sign in for a token, so a finished system makes no new tokens; a refused step prints a `note:` line and the Job still prints `PASS` for the user step). A `FAIL` line means the screen may still be open: leave the route off and read the line.
    expect: `PASS`. The Job runs every 5 minutes, so a new log appears within 5 minutes of the apply.
 5. Open the route, in its own pull request: set `route.enabled: true` in the chart values. Then `openbao-prod adopt` copies the owner's password (Secret `homeassistant-owner` in namespace `home`) into OpenBao key `c1/homeassistant-owner` and the SOPS copy, from its fixed table, once the box has installed the row ([set-up-the-secrets-store.md](set-up-the-secrets-store.md)). Until that is done a rebuild makes a new owner password, which only matters if Home Assistant's volume is restored from a backup that holds the old one.
    why: the route is the only thing that exposes the app, and the password must outlive a teardown.
@@ -63,7 +63,7 @@ Home Assistant's first-run screen has no password: the first visitor creates the
 
 - Backup of the volume: **not backed up yet.** It is a kept claim on local-path; the c1 restic job does not include namespace `home`, so a node loss or a teardown loses Home Assistant's data (the owner account and everything added later). Home Assistant's own backups (Settings, System, Backups) are a manual interim. Adding the namespace to the job is the next change.
 - A person signing in through Keycloak creates a second Home Assistant user, mapped by group; the local `owner` account made by the setup Job stays as the break-glass login, its password in OpenBao.
-- Proven only against a mock of the onboarding API (`PASS` on a first and a second run); not yet against Home Assistant itself.
+- Proven only against a mock of the onboarding API (`PASS` on a first and a second run, including the extra steps); not yet against Home Assistant itself.
 
 ## Afterwards
 
