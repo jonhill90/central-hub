@@ -88,8 +88,13 @@ if [[ $rc -eq 0 && $out == *"signin-check: PASS"* && $(grep -c ' mode=600 passwo
   ok "4a. four checks and the browser step ran on private files holding the password and seed, and the run passed"
 else bad "4a. rc=$rc $out / $calls"; fi
 [[ -z $(find "$t/work/state" -maxdepth 1 -name 'signin-check.*' -type d) ]] && ok "4b. no temporary folder is left behind" || bad "4b. a temporary folder stayed"
-[[ $calls == *"browser-urls https://hub.example.invalid https://openbao.example.invalid https://ntfy.example.invalid https://opnsense.example.invalid https://pve.example.invalid https://mealie.apps.c1.prod.example.invalid"* ]] && ok "4d. the browser file names the hub, OpenBao, ntfy, OPNsense and Proxmox by swapping the Argo CD name's label" || bad "4d. $calls"
-latest=$(readlink "$t/shots/latest"); [[ -f $latest/1-hub.png && $(stat -c %a "$latest") == 755 && $(stat -c %a "$latest/1-hub.png") == 644 && $out == *"screenshots: $t/shots/"* ]] && ok "4e. the shots folder is world-readable and latest points at it" || bad "4e. $latest $out"
+[[ $calls == *"browser-urls https://hub.example.invalid https://openbao.example.invalid https://ntfy.example.invalid https://opnsense.example.invalid https://pve.example.invalid https://mealie.example.invalid"* ]] && ok "4d. the browser file names the hub, OpenBao, ntfy, OPNsense and Proxmox by swapping the Argo CD name's label" || bad "4d. $calls"
+latest=$(readlink "$t/shots/latest"); [[ -f $latest/1-hub.png && $(stat -c %a "$latest") == 700 && $(stat -c %a "$latest/1-hub.png") == 600 && $(stat -c %a "$t/shots") == 700 && $out == *"screenshots: $t/shots/"* ]] && ok "4e. the shots folder and its files are readable by the keys user only and latest points at it" || bad "4e. $latest $out"
+run shot 1-hub.png; [[ $rc -eq 0 && $out == png ]] && ok "4f. shot writes the newest run's screenshot" || bad "4f. rc=$rc $out"
+for bad_name in ../x.png 1-hub.png/../../x 1-hub.txt 'a b.png' ""; do run shot "$bad_name"; [[ $rc -eq 2 ]] || bad "4g. shot accepted the name [$bad_name]: rc=$rc"; done; ok "4g. shot refuses names that are not digits, a dash, letters and .png"
+run shot 9-nothing.png; [[ $rc -eq 1 && $out == *"no such screenshot"* ]] && ok "4h. shot of a missing file says so" || bad "4h. rc=$rc $out"
+for d in 20200101T000000Z 20200102T000000Z 20200103T000000Z 20200104T000000Z 20200105T000000Z 20200106T000000Z; do mkdir -p "$t/shots/$d"; done
+run run; [[ $(find "$t/shots" -mindepth 1 -maxdepth 1 -type d -name '20*Z' | wc -l) -eq 5 && ! -d "$t/shots/20200101T000000Z" ]] && ok "4i. only the newest 5 runs are kept" || bad "4i. $(ls "$t/shots")"
 [[ $out == *"== jellyfin"* && $out == *"== argocd"* && $out == *"== proxmox"* && $out == *"== grafana"* && $out == *"1 step 1: HTTP 200 ok"* ]] && ok "4c. the checks' own lines are printed" || bad "4c. $out"
 cp "$t/out" "$t/out-pass"
 
