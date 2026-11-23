@@ -1,0 +1,6 @@
+apiVersion: v2
+name: home-assistant
+description: Home Assistant on c1, with sign-in through the lab's Keycloak (the hass-oidc-auth custom component)
+type: application
+version: 0.1.0
+appVersion: "2026.11.1"

@@ -7,7 +7,7 @@
 #   4. The client lookup fails (forbidden): "client lookup failed: forbidden".
 #   5. A lookup whose first line is followed by more lines still takes the first (no pipe into head).
 #   7. Admin sign-in refused with "Invalid user credentials [invalid_grant]" (kcadm's text for a wrong password): the line
-#      says "admin sign-in failed: wrong admin username or password", the script asked once (no five minutes of retries),
+#      says "admin sign-in failed: refused (invalid_grant: wrong username or password, or a disabled or locked account)", the script asked twice, once for each admin account, with no retries (no five minutes of waiting),
 #      and the text "invalid input" is not used for it. A sign-in that fails for another reason is still retried.
 #   6. The role's assert task (tasks/clients.yml, cut out and run with real ansible): every client passed -> the task
 #      passes (an empty fail_msg would be an error); one failed -> the run fails with its reason line and no secret;
@@ -60,8 +60,8 @@ if [[ $rc -eq 0 && $out == updated ]]; then ok "5. several lines from the lookup
 # 7
 : > "$t/calls"
 run FAKE_FAIL=signin FAKE_ERR='Invalid user credentials [invalid_grant] SECRETVALUE' FAKE_CALLS="$t/calls"; n7=$(wc -l < "$t/calls" | tr -d ' ')
-if [[ $rc -eq 1 && $out == "ensure-client: admin sign-in failed: wrong admin username or password"* && $out != *SECRETVALUE* && $n7 -eq 1 ]]; then
-  ok "7. wrong admin password: named as such, asked once, no error text"
+if [[ $rc -eq 1 && $out == "ensure-client: admin sign-in failed: refused (invalid_grant: wrong username or password, or a disabled or locked account)"* && $out != *SECRETVALUE* && $n7 -eq 2 ]]; then
+  ok "7. wrong admin password: refused for both accounts, named as such, no retries, no error text"
 else bad "7. rc=$rc calls=$n7 [$out]"; fi
 
 # 6

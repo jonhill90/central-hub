@@ -1,0 +1,37 @@
+{{- $v := .Values }}
+# configuration.yaml, written onto the volume on every start (files/install-sso.sh). Everything else Home Assistant
+# keeps (users, integrations, automations) lives in /config/.storage and the UI's yaml files, on the volume.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $v.name }}-config
+  namespace: {{ .Release.Namespace }}
+data:
+  configuration.yaml: |
+    # Managed by the chart (hosts/kubernetes/home/c1/apps/home-assistant); a change made in a file on the volume is
+    # overwritten at the next start.
+    default_config:
+    homeassistant:
+      external_url: https://{{ include "homeassistant.shortHost" . }}
+    http:
+      use_x_forwarded_for: true
+      trusted_proxies:
+        {{- range $v.trustedProxies }}
+        - {{ . }}
+        {{- end }}
+    automation: !include automations.yaml
+    script: !include scripts.yaml
+    scene: !include scenes.yaml
+    {{- if $v.sso.enabled }}
+    auth_oidc:
+      client_id: {{ $v.sso.clientId }}
+      discovery_url: https://{{ include "homeassistant.issuerHost" . }}/realms/{{ $v.sso.realm }}/.well-known/openid-configuration
+      display_name: {{ $v.sso.displayName | quote }}
+      roles:
+        admin: {{ $v.sso.adminGroup }}
+        user: {{ $v.sso.userGroup }}
+      {{- if $v.sso.labRoot.certificate }}
+      network:
+        tls_ca_path: /lab-ca/lab-root-ca.pem
+      {{- end }}
+    {{- end }}

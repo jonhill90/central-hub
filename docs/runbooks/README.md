@@ -8,6 +8,7 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 |---|---|---|
 | [Rebuild the home lab from bare metal (top-level order)](rebuild-home-lab-from-scratch.md) | manual | draft |
 | [Rebuild one cluster's Kubernetes layer with one command](rebuild-k8s-layer-with-one-command.md) | automated | tested |
+| [Run Home Assistant on c1 and sign in with Keycloak](run-home-assistant-on-c1.md) | automated | draft |
 | [Set up the lab controller](set-up-lab-controller.md) | manual | draft |
 | [Set up the lab network, the OPNsense firewall and the tailnet connector container from code](set-up-lab-network-and-firewall.md) | automated | draft |
 | [Put the OPNsense image and the Debian 13 template on the Proxmox host](stage-lab-images-on-proxmox.md) | manual | draft |
@@ -62,6 +63,7 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | [Get c1's alerts on a phone or in a browser](get-c1-alerts-on-your-phone.md) | manual | draft |
 | [Run the Central Hub web app on c1](run-the-central-hub-app-on-c1.md) | manual | draft |
 | [Turn on sign-in to the Central Hub app through the lab's Keycloak](sign-in-to-the-central-hub-app-with-keycloak.md) | automated | draft |
+| [Deploy Mealie and sign in to it through the lab's Keycloak](use-mealie-recipe-manager.md) | automated | draft |
 | [Know when c1 itself is down, from a heartbeat outside the lab](know-when-c1-is-down.md) | manual | draft |
 | [Turn on sign-in to Argo CD through the lab's Keycloak](sign-in-to-argo-cd-with-keycloak.md) | automated | draft |
 | [Back up c1 off the box](back-up-c1-off-box.md) | automated | draft |

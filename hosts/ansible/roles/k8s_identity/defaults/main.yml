@@ -100,6 +100,13 @@ k8s_identity_central_hub_app_name: central-hub-app
 k8s_identity_central_hub_app_host_label: hub
 k8s_identity_central_hub_app_namespace: central-hub-app
 
+# Mealie's client (apps/mealie): its own OpenID Connect, confidential, calling back on /login. The secret is copied to
+# Secret <ns>/mealie-sso, key client-secret, and Mealie's Deployment is restarted when it changes (Mealie reads it as an
+# environment variable). The names it is served on: mealie.<zone> and mealie.apps.c1.prod.<zone> (the chart's route).
+k8s_identity_mealie_name: mealie
+k8s_identity_mealie_host_label: mealie
+k8s_identity_mealie_namespace: mealie
+
 # Argo CD's clients (k8s_gitops): argocd for the web UI, argocd-cli (public, PKCE) for
 # `argocd login --sso`. The secret is copied to Secret <argocd ns>/argocd-sso, key clientSecret,
 # labelled part-of argocd so argocd-cm can name it as $argocd-sso:clientSecret.
@@ -117,6 +124,10 @@ k8s_identity_jellyfin_provider: keycloak
 # which Jellyfin's chart mounts to trust Keycloak's certificate. Empty: no Secret, and Jellyfin's
 # setup Job skips the sign-in step.
 k8s_identity_jellyfin_root_ca_file: ""
+
+# Home Assistant's client (hosts/kubernetes/home/c1/apps/home-assistant), for the hass-oidc-auth component. A public
+# client with PKCE, so no secret and no Secret copy. The first label of its hostnames, which is also the gateway route name.
+k8s_identity_homeassistant_name: homeassistant
 
 # Proxmox VE's web UI (role proxmox_sso): its DNS names, the same as proxmox_cert_names. Private, from the
 # inventory. The client allows https://<name> for each, because the UI sends its own origin as the redirect

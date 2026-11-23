@@ -1044,6 +1044,29 @@
   when: agent_box_ci_runner | length > 0 and not (ansible_check_mode and agent_box_ci_runner_units is changed)
   tags: [wrappers]
 
+- name: Central Hub app feed service and timer
+  ansible.builtin.template:
+    src: "hub-feed.{{ item }}.j2"
+    dest: "/etc/systemd/system/hub-feed.{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [service, timer]
+  loop_control:
+    label: "/etc/systemd/system/hub-feed.{{ item }}"
+  register: agent_box_hub_feed_units
+  when: agent_box_ci_runner | length > 0
+  tags: [wrappers]
+
+- name: Central Hub app feed timer on
+  ansible.builtin.systemd_service:
+    name: hub-feed.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ agent_box_hub_feed_units is changed }}"
+  when: agent_box_ci_runner | length > 0 and not (ansible_check_mode and agent_box_hub_feed_units is changed)
+  tags: [wrappers]
+
 - name: The tailnet cleanup's limits hold (pick 214)
   ansible.builtin.assert:
     that:

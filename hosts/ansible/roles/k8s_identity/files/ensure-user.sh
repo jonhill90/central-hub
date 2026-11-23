@@ -11,16 +11,26 @@
 set -euo pipefail
 realm=$1
 username=$2
-kcadm=/opt/keycloak/bin/kcadm.sh
+kcadm=${KCADM:-/opt/keycloak/bin/kcadm.sh}
 config=$(mktemp)
 body=$(mktemp)
 trap 'rm -f "$config" "$body"' EXIT
 cat > "$body"
 grep -q "\"username\" *: *\"$username\"" "$body" || { echo "the JSON on stdin is not user $username" >&2; exit 1; }
+# The first admin account from the container's environment; when Keycloak refuses it (invalid_grant), the recovery admin
+# c1-admin with the same password (made by `c1-ansible apply identity-admin-recover`), as ensure-client.sh does.
+user=${KC_BOOTSTRAP_ADMIN_USERNAME:-${KEYCLOAK_ADMIN:-}}
+recovery=${KC_RECOVERY_ADMIN_USERNAME:-c1-admin}
+errf=$(mktemp)
+trap 'rm -f "$config" "$body" "$errf"' EXIT
 for try in $(seq 1 60); do
   "$kcadm" config credentials --config "$config" --server http://localhost:8080 --realm master \
-    --user "${KC_BOOTSTRAP_ADMIN_USERNAME:-${KEYCLOAK_ADMIN:-}}" \
-    --password "${KC_BOOTSTRAP_ADMIN_PASSWORD:-${KEYCLOAK_ADMIN_PASSWORD:-}}" >/dev/null 2>&1 && break
+    --user "$user" \
+    --password "${KC_BOOTSTRAP_ADMIN_PASSWORD:-${KEYCLOAK_ADMIN_PASSWORD:-}}" >/dev/null 2>"$errf" && break
+  if grep -q -e "nvalid user credentials" -e "invalid_grant" "$errf"; then
+    [ "$user" != "$recovery" ] && { user=$recovery; continue; }
+    echo "admin sign-in refused (invalid_grant: wrong username or password, or a disabled or locked account)" >&2; exit 1
+  fi
   [ "$try" = 60 ] && { echo "could not sign in to Keycloak at localhost:8080" >&2; exit 1; }
   sleep 5
 done

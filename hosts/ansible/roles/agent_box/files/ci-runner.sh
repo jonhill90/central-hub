@@ -3,7 +3,7 @@
 # (docs/runbooks/set-up-the-ci-runner.md). It runs as user `keys` through sudo, so the session that
 # asks for it never sees the Proxmox token, the runner's SSH key or the GitHub App key. Installed
 # by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/ci-runner.sh plan|apply|configure|destroy|bump|c1-token
+#   sudo -n -u keys /usr/local/libexec/agent-box/ci-runner.sh plan|apply|configure|destroy|bump|c1-token|hub-feed
 #   (weekly is for the timer, which runs it as `keys` without sudo)
 # plan, apply, destroy: OpenTofu on hosts/terraform/home/ci-runner with the agents' Proxmox token.
 # configure: the ci_runner playbook over SSH, with a one-hour registration token minted from the
@@ -14,14 +14,18 @@
 # c1-token: mint a one-hour registration token the same way and write it to prod's store (kv
 # c1/notebook-runner, key registration-token) through the prod secrets-store wrapper, for the notebook
 # runner pod on c1's first start (docs/runbooks/run-the-notebook-runner-on-c1.md). The token goes on stdin only.
+# hub-feed: put what the Central Hub app shows into prod's store (kv c1/hub-feed), two keys: notebook-token, a one-hour
+# read-only token (contents:read, agent-notebook only) for the app pod's notebook sync, and proxmox-json, a snapshot of
+# Proxmox's /cluster/resources trimmed to status, cpu, memory, disk and uptime, read with the agents' own Proxmox token.
+# The box's timer runs it every 30 minutes (hub-feed.timer); neither value reaches an argument or the log.
 # weekly: configure, then bump. The agent box's timer runs it (role agent_box); the runner's
 # self-update is off, so this is how a merged pin reaches the runner.
 set -euo pipefail
 umask 077
 
 case ${1:-} in
-  plan | apply | configure | destroy | bump | weekly | c1-token) action=$1 ;;
-  *) echo "usage: ci-runner plan|apply|configure|destroy|bump|weekly|c1-token" >&2; exit 2 ;;
+  plan | apply | configure | destroy | bump | weekly | c1-token | hub-feed) action=$1 ;;
+  *) echo "usage: ci-runner plan|apply|configure|destroy|bump|weekly|c1-token|hub-feed" >&2; exit 2 ;;
 esac
 
 keys=/etc/agent-keys
@@ -343,10 +347,66 @@ c1_token() {
   echo "ci-runner: a one-hour registration token is in prod's store at kv c1/notebook-runner (registration-token)"
 }
 
+# The app's feed, into prod's store: a read-only notebook token and a Proxmox snapshot. Each part is tried on its own, so a
+# Proxmox failure still refreshes the token; the exit status is 1 if either failed.
+hub_feed() {
+  local rc=0 token snap put=/usr/local/libexec/agent-box/secrets-store-prod.sh
+  if token=$(app_token jonhill90 agent-notebook '{"contents":"read"}') && [[ -n $token ]]; then
+    printf '%s' "$token" | "$put" put-short c1/hub-feed notebook-token
+    echo "ci-runner: a one-hour read-only notebook token is in prod's store at kv c1/hub-feed (notebook-token; OpenBao only, no SOPS copy)"
+  else
+    echo "ci-runner: no read-only notebook token (does the App have Contents: read on the notebook?)" >&2
+    rc=1
+  fi
+  if snap=$(proxmox_snapshot) && [[ -n $snap ]]; then
+    printf '%s' "$snap" | "$put" put-short c1/hub-feed proxmox-json
+    echo "ci-runner: a Proxmox snapshot is in prod's store at kv c1/hub-feed (proxmox-json; OpenBao only, no SOPS copy)"
+  else
+    echo "ci-runner: no Proxmox snapshot (the call to /cluster/resources failed; see the line above)" >&2
+    rc=1
+  fi
+  return $rc
+}
+
+# GET /cluster/resources with the agents' Proxmox token, cut down to the fields the app shows. Prints the JSON on stdout;
+# the token is read from the environment file inside python and never printed.
+proxmox_snapshot() {
+  (
+    set -a
+    # shellcheck source=/dev/null
+    . "$keys/proxmox-dev.env"
+    set +a
+    python3 -I - <<'PY'
+import json, os, ssl, sys, time, urllib.request
+base = os.environ["PROXMOX_VE_ENDPOINT"].rstrip("/")
+ctx = ssl.create_default_context()
+if os.environ.get("PROXMOX_VE_INSECURE", "").lower() in ("1", "true", "yes"):
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+req = urllib.request.Request(base + "/api2/json/cluster/resources", headers={"Authorization": "PVEAPIToken=" + os.environ["PROXMOX_VE_API_TOKEN"]})
+try:
+    data = json.load(urllib.request.urlopen(req, timeout=20, context=ctx))["data"]
+except Exception as e:
+    print("ci-runner: Proxmox answered with an error: " + type(e).__name__, file=sys.stderr)
+    sys.exit(1)
+keep = ("id", "type", "name", "node", "status", "cpu", "maxcpu", "mem", "maxmem", "disk", "maxdisk", "uptime")
+rows = []
+for r in data:
+    if r.get("type") not in ("node", "qemu", "lxc", "storage"):
+        continue
+    row = {k: r[k] for k in keep if k in r}
+    row.setdefault("name", r.get("storage") or r.get("node") or r.get("id", ""))
+    rows.append(row)
+print(json.dumps({"generatedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "source": "proxmox", "resources": rows}))
+PY
+  )
+}
+
 case $action in
   plan | apply | destroy) tofu_run ;;
   configure) configure ;;
   c1-token) c1_token ;;
+  hub-feed) hub_feed ;;
   bump) bump ;;
   weekly)
     # Each half runs even if the other fails, and the run fails if either did.

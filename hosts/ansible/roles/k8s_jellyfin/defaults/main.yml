@@ -26,7 +26,7 @@ k8s_jellyfin_cache_limit: 8Gi
 k8s_jellyfin_uid: 1000
 
 # Requests and a memory limit for the 2-vCPU, 8 GB worker; no CPU limit, so playback can burst.
-k8s_jellyfin_cpu_request: 250m
+k8s_jellyfin_cpu_request: 100m
 k8s_jellyfin_memory_request: 512Mi
 k8s_jellyfin_memory_limit: 2Gi
 

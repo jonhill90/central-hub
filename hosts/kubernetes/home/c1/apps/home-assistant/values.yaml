@@ -1,0 +1,78 @@
+# Home Assistant on c1 (container install: no add-ons, no Supervisor). Every value here is public; the zone comes
+# only from the root Application's `zone` parameter (CLAUDE.md rule 4).
+zone: ""
+
+name: homeassistant
+
+# Home Assistant 2026.11.1 (released 2026-11-09, STD-0003: at least 14 days old on 2026-11-23), multi-arch index digest
+# read from ghcr.io on 2026-11-23. The image starts as root (s6-overlay's /init), so the pod does too, with every
+# capability dropped except the few s6 and the config chown need.
+image: ghcr.io/home-assistant/home-assistant:2026.11.1@sha256:6785d1eca68747a524c156faae1b139ed415c07357386ae6fe17291986e59e82
+port: 8123
+healthPath: /manifest.json
+
+storage:
+  className: ""      # empty: the cluster's default StorageClass
+  configSize: 5Gi    # the config folder, including the recorder's SQLite database (local disk only, never NFS)
+
+resources:
+  requests: {cpu: 100m, memory: 512Mi}
+  limits: {memory: 2Gi}
+
+# The shared Gateway and the name under it: <name>.apps.c1.prod.<zone>, and <name>.<zone> as the short alias.
+gateway:
+  name: apps
+  namespace: gateway
+  hostSuffix: apps.c1.prod
+  shortNames: true
+  https: true
+
+# What Home Assistant trusts as a reverse proxy: the Gateway's Envoy reaches the pod from a pod address, so c1's pod
+# network (k8s_control_plane_pod_cidr, STD-0002 cluster 1). Anything else sending X-Forwarded-For is refused with a 400.
+trustedProxies: [10.240.0.0/16]
+
+# The route (and with it the name in DNS) is OFF on a new install. A fresh Home Assistant makes whoever reaches its
+# first-run screen first the owner, so the setup Job below closes that screen from inside the cluster first. Turn the
+# route on, in its own pull request, only after the newest setup Job's log says PASS (runbook, "Open the route").
+route:
+  enabled: false
+
+# First-run setup (templates/setup-*.yaml, files/setup.sh).
+setup:
+  enabled: true
+  schedule: "*/5 * * * *"
+  ownerName: Owner
+  ownerUser: owner
+  language: en
+  # Same curl image as sso.initImage.
+  image: docker.io/curlimages/curl:8.22.0@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777
+
+# Sign-in through the lab's Keycloak (hass-oidc-auth, MIT). Home Assistant has no OIDC of its own, so the custom
+# component is copied into /config/custom_components from a pinned, checksummed archive before Home Assistant starts
+# (initContainer). The client is public with PKCE, as the component recommends, so no secret exists to keep.
+# configuration.yaml comes from the chart on every start; the UI's own files (automations.yaml, scripts.yaml,
+# scenes.yaml, .storage) stay on the volume.
+sso:
+  enabled: true
+  issuerHost: sso            # Keycloak's host label; with shortNames it is <issuerHost>.<zone> (as Jellyfin's)
+  shortNames: true
+  realm: lab
+  clientId: homeassistant
+  displayName: Lab sign-in
+  # Realm groups, from the `groups` claim the realm adds to every client: lab-admins become Home Assistant
+  # administrators, lab-viewers regular users; anyone else is refused.
+  adminGroup: lab-admins
+  userGroup: lab-viewers
+  plugin:
+    version: "1.2.1"          # released 2026-08-19
+    url: https://github.com/christiaangoossens/hass-oidc-auth/archive/refs/tags/v1.2.1.tar.gz
+    sha256: 14ee70f00395f145d9280238a88f54af96f086746233578153c6e2d593a1ea64
+  # curl 8.22.0 (2026-09-02, STD-0003), multi-arch index digest; same image as Jellyfin's init container.
+  initImage: docker.io/curlimages/curl:8.22.0@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777
+  # Keycloak's certificate comes from the lab CA; Home Assistant needs its public root (a small Certificate on
+  # ClusterIssuer lab-ca, as Jellyfin does: cert-manager writes the issuing CA as ca.crt into the Secret).
+  labRoot:
+    certificate: true
+    issuer: lab-ca
+    secretName: homeassistant-lab-ca
+    key: ca.crt

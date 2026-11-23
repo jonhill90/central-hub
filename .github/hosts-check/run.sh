@@ -152,6 +152,7 @@ check_ansible() {
   suite bash "$here/tests/test_jellyfin_login_button.sh"
   suite bash "$here/tests/test_client_json_check.sh"
   suite bash "$here/tests/test_ensure_client_reason.sh"
+  suite bash "$here/tests/test_identity_admin_recover.sh"
   suite bash "$here/tests/test_sudoers_session_args.sh"
   # A pipeline job's check run changes nothing (D-0041 rule 4): the playbooks the box's host jobs run.
   suite python3 "$here/check-check-mode.py" . playbooks/proxmox-proxy.yml playbooks/proxmox-memory.yml playbooks/proxmox-connector.yml playbooks/proxmox-connector-route.yml playbooks/proxmox-ksm.yml playbooks/proxmox-ksm-off.yml playbooks/proxmox-restic-box.yml
@@ -249,6 +250,23 @@ check_manifests() {
     > "$work/rendered/app-central-hub-app-oidc.yaml"
   grep -q 'name: central-hub-app-oidc' "$work/rendered/app-central-hub-app-oidc.yaml" && grep -q 'name: HUB_OIDC_DIR' "$work/rendered/app-central-hub-app-oidc.yaml" ||
     { echo "central-hub-app: oidc render lacks the Secret volume or env" >&2; return 1; }
+  # The feed (notebook sync and the c1/hub-feed ExternalSecret) is private data, so it renders only with sign-in on, and the
+  # app container never mounts the notebook token.
+  if helm template central-hub-app "$app" --namespace central-hub-app | grep -q -e 'notebook-sync' -e 'central-hub-app-feed' -e HUB_NOTEBOOK_DIR; then
+    echo "central-hub-app: the feed must not render while sign-in is off" >&2; return 1
+  fi
+  local on="$work/rendered/app-central-hub-app-oidc.yaml"
+  grep -q 'name: notebook-sync' "$on" && grep -q 'name: central-hub-app-feed-token$' "$on" && grep -q 'name: central-hub-app-feed-app$' "$on" && grep -q 'name: HUB_NOTEBOOK_DIR' "$on" ||
+    { echo "central-hub-app: the oidc render lacks the notebook sync, the two feed ExternalSecrets or HUB_NOTEBOOK_DIR" >&2; return 1; }
+  if ! grep -q 'feed-app' "$on" || python3 - "$on" <<'PY'
+import sys, yaml
+d = [x for x in yaml.safe_load_all(open(sys.argv[1])) if x and x.get("kind") == "Deployment"][0]
+app = next(c for c in d["spec"]["template"]["spec"]["containers"] if c["name"] == "app")
+sys.exit(0 if any(m["name"] == "feed-token" for m in app["volumeMounts"]) else 1)
+PY
+  then
+    echo "central-hub-app: the app container must mount only the snapshot, never the notebook token" >&2; return 1
+  fi
   # The secret-store app with OpenBao in the cluster turned on (dev first, D-0058), so its `openbao`
   # store and test ExternalSecret are schema-checked too.
   helm template secret-store hosts/kubernetes/home/c1/apps/secret-store --namespace external-secrets \

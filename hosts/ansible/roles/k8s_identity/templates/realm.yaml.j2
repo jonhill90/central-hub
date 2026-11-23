@@ -147,6 +147,25 @@ spec:
           pkce.code.challenge.method: S256
           post.logout.redirect.uris: "{{ k8s_identity_central_hub_app_hosts | map('regex_replace', '^(.*)$', 'https://\\1/') | join('##') }}"
 {{ mappers }}
+      # Mealie, the recipe manager (its own OpenID Connect, docs.mealie.io "OpenID Connect"): confidential, code flow. It
+      # calls back on /login and, with sign-out on, returns there after the identity provider's sign-out.
+      - clientId: {{ k8s_identity_mealie_name }}
+        name: Mealie
+        protocol: openid-connect
+        publicClient: false
+        clientAuthenticatorType: client-secret
+        secret: "${MEALIE_CLIENT_SECRET}"
+        standardFlowEnabled: true
+        directAccessGrantsEnabled: false
+        implicitFlowEnabled: false
+        serviceAccountsEnabled: false
+        rootUrl: https://{{ k8s_identity_mealie_hosts | first }}
+        baseUrl: /
+        redirectUris: {{ k8s_identity_mealie_hosts | map('regex_replace', '^(.*)$', 'https://\\1/login') | list | to_json }}
+        webOrigins: {{ k8s_identity_mealie_hosts | map('regex_replace', '^(.*)$', 'https://\\1') | list | to_json }}
+        attributes:
+          post.logout.redirect.uris: "{{ k8s_identity_mealie_hosts | map('regex_replace', '^(.*)$', 'https://\\1/login') | join('##') }}"
+{{ mappers }}
       # Argo CD's web UI (Argo CD docs, "Keycloak"): confidential, code flow. PKCE is allowed, not
       # required, so it works whether or not argocd-cm sets enablePKCEAuthentication. Argo CD's
       # callback is /auth/callback on its own name.
@@ -202,6 +221,23 @@ spec:
           - "https://{{ host }}/sso/OID/r/{{ k8s_identity_jellyfin_provider }}"
 {% endfor %}
         webOrigins: {{ k8s_identity_jellyfin_hosts | map('regex_replace', '^(.*)$', 'https://\\1') | list | to_json }}
+{{ mappers }}
+      # Home Assistant, through the custom component hass-oidc-auth (MIT): a public client with PKCE, as the
+      # component recommends, so no secret exists. The component calls back on /auth/oidc/callback.
+      - clientId: {{ k8s_identity_homeassistant_name }}
+        name: Home Assistant
+        protocol: openid-connect
+        publicClient: true
+        standardFlowEnabled: true
+        directAccessGrantsEnabled: false
+        implicitFlowEnabled: false
+        serviceAccountsEnabled: false
+        rootUrl: https://{{ k8s_identity_homeassistant_hosts | first }}
+        baseUrl: /
+        redirectUris: {{ k8s_identity_homeassistant_hosts | map('regex_replace', '^(.*)$', 'https://\\1/auth/oidc/callback') | list | to_json }}
+        webOrigins: {{ k8s_identity_homeassistant_hosts | map('regex_replace', '^(.*)$', 'https://\\1') | list | to_json }}
+        attributes:
+          pkce.code.challenge.method: S256
 {{ mappers }}
 {% if k8s_identity_proxmox_hosts | length > 0 %}
       # Proxmox VE's web UI, through its own OpenID Connect realm (role proxmox_sso; Proxmox wiki, "User

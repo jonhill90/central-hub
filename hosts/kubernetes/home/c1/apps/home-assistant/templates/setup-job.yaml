@@ -1,0 +1,54 @@
+{{- $s := .Values.setup }}
+# Closes the first-run screen (files/setup.sh) every few minutes until it is closed, then prints PASS on every run. A
+# CronJob, not a sync hook, for the same reason as Jellyfin's: a hook runs only when a sync does, so a pod that starts
+# later would stay open. The route is off (route.enabled) until the newest Job log says PASS.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ .Values.name }}-setup
+  namespace: {{ .Release.Namespace }}
+spec:
+  schedule: {{ $s.schedule | quote }}
+  suspend: {{ not $s.enabled }}
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 300
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels: {app.kubernetes.io/name: home-assistant-setup}
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 100
+            runAsGroup: 101
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: setup
+              image: {{ $s.image }}
+              command: [/bin/sh, -c]
+              args:
+                - |
+{{ .Files.Get "files/setup.sh" | indent 18 }}
+              env:
+                - {name: BASE, value: "http://{{ .Values.name }}.{{ .Release.Namespace }}.svc:{{ .Values.port }}"}
+                - {name: OWNER_NAME, value: {{ $s.ownerName | quote }}}
+                - {name: LANGUAGE, value: {{ $s.language | quote }}}
+                - name: OWNER_USER
+                  valueFrom: {secretKeyRef: {name: {{ .Values.name }}-owner, key: username}}
+                - name: OWNER_PASSWORD
+                  valueFrom: {secretKeyRef: {name: {{ .Values.name }}-owner, key: password}}
+              resources:
+                requests: {cpu: 10m, memory: 16Mi}
+                limits: {memory: 64Mi}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}

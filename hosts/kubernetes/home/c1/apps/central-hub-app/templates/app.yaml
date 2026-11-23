@@ -12,6 +12,7 @@ runner), ingress only from the Gateway.
 {{- if and (eq $v.auth.mode "oidc") (not (and (kindIs "bool" $v.auth.secretsConfirmed) $v.auth.secretsConfirmed)) }}
 {{- fail "auth.mode oidc needs auth.secretsConfirmed: true (a real boolean, not a quoted string), set only after the realm client and the Secrets central-hub-app-sso and central-hub-app-oidc exist (runbook sign-in-to-the-central-hub-app-with-keycloak.md, Turn it on)" }}
 {{- end }}
+{{- $feed := and (eq $v.auth.mode "oidc") $v.feed.enabled }}
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -81,7 +82,43 @@ spec:
             - {name: work, mountPath: /work}
             - {name: out, mountPath: /out}
             - {name: tmp, mountPath: /tmp}
+{{- if $feed }}
+        # First clone of the notebook with the read-only token. No token yet is not a failure: the app then says no notebook is
+        # connected, and the sidecar clones as soon as the token appears.
+        - name: notebook-clone
+          image: {{ $v.image }}
+          command: [/bin/sh, -c]
+          args: [{{ include "hub.notebookSync" (dict "once" true "v" $v) | quote }}]
+          resources:
+            requests: {cpu: 20m, memory: 64Mi}
+            limits: {memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: notebook, mountPath: /notebook}
+            - {name: feed-token, mountPath: /var/run/hub/feed-token, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+{{- end }}
       containers:
+{{- if $feed }}
+        - name: notebook-sync
+          image: {{ $v.image }}
+          command: [/bin/sh, -c]
+          args: [{{ include "hub.notebookSync" (dict "once" false "v" $v) | quote }}]
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: notebook, mountPath: /notebook}
+            - {name: feed-token, mountPath: /var/run/hub/feed-token, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+{{- end }}
         - name: app
           image: {{ $v.image }}
           command: [node, server.js]
@@ -95,6 +132,10 @@ spec:
             - {name: HUB_OIDC_DIR, value: /var/run/hub/oidc}
             - {name: HUB_OIDC_INTERNAL_URL, value: {{ $v.auth.internalURL | quote }}}
             - {name: HUB_OIDC_ALLOWED_GROUPS, value: {{ $v.auth.allowedGroups | quote }}}
+{{- end }}
+{{- if $feed }}
+            - {name: HUB_NOTEBOOK_DIR, value: /notebook/repo}
+            - {name: HUB_FEED_DIR, value: /var/run/hub/feed}
 {{- end }}
           ports:
             - {name: http, containerPort: {{ $v.port }}}
@@ -122,6 +163,10 @@ spec:
 {{- if eq $v.auth.mode "oidc" }}
             - {name: oidc, mountPath: /var/run/hub/oidc, readOnly: true}
 {{- end }}
+{{- if $feed }}
+            - {name: notebook, mountPath: /notebook, readOnly: true}
+            - {name: feed-app, mountPath: /var/run/hub/feed, readOnly: true}
+{{- end }}
       volumes:
         - name: build-script
           configMap: {name: {{ $v.name }}-build}
@@ -131,6 +176,22 @@ spec:
           emptyDir: {sizeLimit: {{ $v.outSize }}}
         - name: tmp
           emptyDir: {sizeLimit: 64Mi}
+{{- if $feed }}
+        - name: notebook
+          emptyDir: {sizeLimit: {{ $v.feed.notebookSize }}}
+        # optional: the box writes the store entry on its own timer, and the pod must start without it.
+        # The sync containers see only the token; the app container sees only the snapshot.
+        - name: feed-token
+          secret:
+            secretName: {{ $v.name }}-feed-token
+            optional: true
+            items: [{key: notebook-token, path: notebook-token}]
+        - name: feed-app
+          secret:
+            secretName: {{ $v.name }}-feed-app
+            optional: true
+            items: [{key: proxmox-json, path: proxmox.json}]
+{{- end }}
 {{- if eq $v.auth.mode "oidc" }}
         # optional: a rebuild starts this pod before the identity stage makes the Secrets; the kubelet fills the
         # folders when they appear and the app reads the files on each request, so nothing restarts.
@@ -198,3 +259,42 @@ spec:
   endpointSelector: {}
   ingress:
     - fromEntities: [ingress]
+{{- if $feed }}
+---
+# The feed the agent box writes into the store every 30 minutes (ci-runner.sh hub-feed), in two Secrets so that a missing part of
+# one never holds back the other: -feed-token is the one-hour read-only notebook token, -feed-app the Proxmox snapshot. Only with
+# sign-in on; a refresh of 1m keeps the app within a minute of the box's timer.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ $v.name }}-feed-token
+  namespace: {{ .Release.Namespace }}
+spec:
+  refreshInterval: 1m
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ $v.feed.store }}
+  target:
+    name: {{ $v.name }}-feed-token
+    creationPolicy: Owner
+  data:
+    - secretKey: notebook-token
+      remoteRef: {key: {{ $v.feed.key }}, property: notebook-token}
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ $v.name }}-feed-app
+  namespace: {{ .Release.Namespace }}
+spec:
+  refreshInterval: 1m
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ $v.feed.store }}
+  target:
+    name: {{ $v.name }}-feed-app
+    creationPolicy: Owner
+  data:
+    - secretKey: proxmox-json
+      remoteRef: {key: {{ $v.feed.key }}, property: proxmox-json}
+{{- end }}
