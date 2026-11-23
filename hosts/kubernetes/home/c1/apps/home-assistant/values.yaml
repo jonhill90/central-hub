@@ -4,10 +4,12 @@ zone: ""
 
 name: homeassistant
 
-# Home Assistant 2026.11.1 (released 2026-11-09, STD-0003: at least 14 days old on 2026-11-23), multi-arch index digest
-# read from ghcr.io on 2026-11-23. The image starts as root (s6-overlay's /init), so the pod does too, with every
+# Home Assistant 2026.7.4, the last release before 2026.8 (STD-0003: well over 14 days old), multi-arch index digest
+# read from ghcr.io on 2026-11-23. Held back on purpose: from 2026.8 the `http:` block (reverse-proxy trust) is no longer
+# applied from configuration.yaml, only from the UI or an unsupported storage file, so every request behind the Gateway
+# gets 400. YAML still works here; it stops working in 2027.2, so move forward only with the http settings seeded another way. The image starts as root (s6-overlay's /init), so the pod does too, with every
 # capability dropped except the few s6 and the config chown need.
-image: ghcr.io/home-assistant/home-assistant:2026.11.1@sha256:6785d1eca68747a524c156faae1b139ed415c07357386ae6fe17291986e59e82
+image: ghcr.io/home-assistant/home-assistant:2026.7.4@sha256:5a531753cea96444200158fc2b0ac7ccd739291ec50414877b396de6e0bb29b3
 port: 8123
 healthPath: /manifest.json
 

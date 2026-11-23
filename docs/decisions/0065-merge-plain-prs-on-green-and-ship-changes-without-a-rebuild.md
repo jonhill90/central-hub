@@ -16,7 +16,7 @@ revisit-when: a merged plain PR breaks prod; the agents get GitHub identities of
 
 ## Context and Problem Statement
 
-This record **amends D-0042 rule 2 and D-0056**, which have every merge wait for the reviewer's recorded pass, and narrows D-0035 rule 3(a) to full prod rebuilds. Between 2026-11-15 and 2026-11-22, 530 PRs merged on `main`; 48 of them only approved a box install, and prod was torn down and rebuilt 9 times on 2026-11-21 to ship small fixes. Each PR waited for a reviewer turn, and each fix waited for a full dev run (25 to 32 minutes). On 2026-11-23 at 00:50:45 UTC the owner ordered the review steps that slow small changes removed and the pipeline made fast, and at 00:53 UTC he said a rebuild proof and a change are different things. The standing go of 2026-11-18 07:40:44 UTC (D-0061) covers the steps that rule 6 of D-0042 keeps.
+This record **amends D-0042 rules 2 and 5 and D-0056**: rule 2 and D-0056 have every merge wait for the reviewer's recorded pass, and rule 5 has a production apply rest on the reviewer's clearance, which rule 4 below replaces with the merge itself. It also narrows D-0035 rule 3(a) to full prod rebuilds. Between 2026-11-15 and 2026-11-22, 530 PRs merged on `main`; 48 of them only approved a box install, and prod was torn down and rebuilt 9 times on 2026-11-21 to ship small fixes. Each PR waited for a reviewer turn, and each fix waited for a full dev run (25 to 32 minutes). On 2026-11-23 at 00:50:45 UTC the owner ordered the review steps that slow small changes removed and the pipeline made fast, and at 00:53 UTC he said a rebuild proof and a change are different things. The standing go of 2026-11-18 07:40:44 UTC (D-0061) covers the steps that rule 6 of D-0042 keeps.
 
 ## Decision Drivers
 

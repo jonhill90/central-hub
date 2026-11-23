@@ -119,6 +119,17 @@ bin=$(dirname "$(command -v ansible-playbook)")
 sed -e "s|^dir=.*|dir=$t/dir|" -e "s|^work=.*|work=$t/work|" -e "s|^ansible_bin=.*|ansible_bin=$bin|" \
     -e "s|^collections=.*|collections=$root/hosts/ansible/collections|" -e "s|^repo_url=.*|repo_url=$t/main.git|" \
     "$root/hosts/ansible/roles/agent_box/files/proxmox-host.sh" > "$t/job.sh"
+# The inventory wrapper's `view proxmox` (the sudo call to the invops user, whose form test_proxmox_host_args.sh checks) is a file here.
+cat > "$t/view.yml" <<VIEW
+all:
+  children:
+    proxmox:
+      hosts:
+        proxmox_host:
+          proxmox_cert_names: [pve.example.test]
+VIEW
+sed -i "s|sudo -n -u invops \"\$libexec/inventory.sh\" view proxmox|cat $t/view.yml|" "$t/job.sh"
+grep -q "cat $t/view.yml" "$t/job.sh" || { echo "FAIL: the test could not stand in for the inventory view"; exit 1; }
 grep -q "^repo_url=$t/main.git" "$t/job.sh" || { echo "FAIL: the test could not point the wrapper at its folders"; exit 1; }
 hashof() { sed -n 's/^proxmox-host: check \([0-9a-f]\{12\}\): .*/\1/p' "$1"; }
 

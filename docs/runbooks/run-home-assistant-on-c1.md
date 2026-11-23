@@ -18,7 +18,7 @@ Home Assistant (Apache-2.0) runs as the container install: one pod in namespace 
 
 | What | Where it comes from |
 |---|---|
-| The image, pinned by tag and digest (2026.11.1, 14 days old on 2026-11-23, STD-0003) | `apps/home-assistant/values.yaml`, `image` |
+| The image, pinned by tag and digest (2026.7.4, the last release before 2026.8, STD-0003; held back on purpose, see "If it fails") | `apps/home-assistant/values.yaml`, `image` |
 | Sign-in: the custom component hass-oidc-auth 1.2.1 (MIT), copied into `/config/custom_components` by an init container from a sha256-checked archive | `values.yaml`, `sso.plugin` |
 | `configuration.yaml`, written on every start from a ConfigMap: proxy trust, the `auth_oidc` block, the three UI files | `templates/configmap.yaml` |
 | The client `homeassistant`: public, PKCE S256, redirect `https://<name>/auth/oidc/callback` for the short and the long name. Public, so no secret exists | `realm.yaml.j2` |
@@ -54,7 +54,7 @@ Home Assistant's first-run screen has no password: the first visitor creates the
 - **Pod stuck at the init container:** `c1-read logs -n home deploy/homeassistant -c install-sso`; a `sha256sum` failure means the archive changed, so check the pin.
 - **Sign-in page has no "Lab sign-in":** the component did not load; `c1-read logs -n home deploy/homeassistant` and look for `auth_oidc`. A wrong discovery URL or a certificate error names itself there.
 - **Keycloak says "Invalid parameter: redirect_uri":** the client is not in the live realm yet; run step 2.
-- **400 on every request:** the proxy is not trusted; the Gateway's source address is outside `trustedProxies`.
+- **400 on every request:** the proxy is not trusted. On 2026.8 and later the `http:` block in configuration.yaml is not applied (the settings live in the UI, and a change is dropped unless an admin confirms it within 5 minutes; official page: https://www.home-assistant.io/integrations/http/), so the chart holds the image at 2026.7.4. On 2026.7.4 the other cause is the Gateway's source address being outside `trustedProxies`. The YAML block stops working in 2027.2, so the pin has to move before then.
 - **The route is on and the setup Job says FAIL:** set `route.enabled: false` at once and sync, then read the Job log.
 - **The way back:** set `sso.enabled: false` in the chart values and sync; Home Assistant's own login (the first user made at first run) then stands alone.
 
