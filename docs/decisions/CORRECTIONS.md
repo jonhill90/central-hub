@@ -12,25 +12,6 @@ This PR: the agents' pass (D-0042 rule 1), with the owner's tap line if the merg
 
 - 2026-11-18 · D-0042 title, Context, Decision Drivers, Decision Outcome, its diagram, rules 1 and 2, and Consequences; D-0044 diagram and its text, and rule 1's `digest`; D-0056 Context, rules 2, 3 and 5; D-0001 statuses, what the owner approves and immutability; AGENTS.md rule 1; the decisions index · the agents' pass for a head is the reviewer thread's clearance alone, in place of the reviewer's clearance and a pass from each of the three council threads, Councils A, B and C (four recorded passes on the sweep's ledger); the built change (`pr-merge.sh`, `pr-merge-verdict.py`, their tests, `box-apply.py`'s comment) and the runbooks that named the councils' passes (`merge-a-pr-through-the-merge-job.md`, `apply-the-agent-box-from-itself.md`, `serve-proxmox-on-443.md`, `set-up-the-agent-box.md`, `give-agents-access-to-azure.md`) are in the same PR · the owner's message of 2026-11-18 00:03:15 UTC dropping the council threads (cmsg_01X43rfNYp4H1dL1V2dkfkwN4Zahj7f5i1barqCMaC7fZF)
 - 2026-11-18 · this file · the approval facts and merge commit of PR #519 added to its section (D-0006 step 6) · this PR
-- 2026-11-23 · D-0011 · an owner quote is restated in neutral words; the decision is unchanged (D-0006, D-0016 rule 5) · PR #942
-- 2026-11-23 · D-0023 · an owner quote is restated in neutral words; the decision is unchanged (D-0006, D-0016 rule 5) · PR #942
-- 2026-11-23 · D-0027 · an owner quote is restated in neutral words; the decision is unchanged (D-0006, D-0016 rule 5) · PR #942
-- 2026-11-23 · D-0028 · an owner quote is restated in neutral words; the decision is unchanged (D-0006, D-0016 rule 5) · PR #942
-- 2026-11-23 · D-0031 · an owner quote is restated in neutral words; the decision is unchanged (D-0006, D-0016 rule 5) · PR #942
-- 2026-11-23 · D-0032 · an owner quote is restated in neutral words; the decision is unchanged (D-0006, D-0016 rule 5) · PR #942
-- 2026-11-23 · D-0034 · an owner quote is restated in neutral words; the decision is unchanged (D-0006, D-0016 rule 5) · PR #942
-- 2026-11-23 · D-0035 · an owner quote is restated in neutral words; the decision is unchanged (D-0006, D-0016 rule 5) · PR #942
-- 2026-11-23 · D-0036 · an owner quote is restated in neutral words; the decision is unchanged (D-0006, D-0016 rule 5) · PR #942
-- 2026-11-23 · D-0037 · an owner quote is restated in neutral words; the decision is unchanged (D-0006, D-0016 rule 5) · PR #942
-- 2026-11-23 · D-0038 · an owner quote is restated in neutral words; the decision is unchanged (D-0006, D-0016 rule 5) · PR #942
-- 2026-11-23 · D-0042 · an owner quote is restated in neutral words; the decision is unchanged (D-0006, D-0016 rule 5) · PR #942
-- 2026-11-23 · D-0044 · an owner quote is restated in neutral words; the decision is unchanged (D-0006, D-0016 rule 5) · PR #942
-- 2026-11-23 · D-0060 · an owner quote is restated in neutral words; the decision is unchanged (D-0006, D-0016 rule 5) · PR #942
-- 2026-11-23 · D-0061 · an owner quote is restated in neutral words; the decision is unchanged (D-0006, D-0016 rule 5) · PR #942
-- 2026-11-23 · evidence 0027 · an owner quote is restated in neutral words; the findings are unchanged (D-0006, D-0016 rule 5) · PR #942
-- 2026-11-23 · evidence 0028 · an owner quote is restated in neutral words; the findings are unchanged (D-0006, D-0016 rule 5) · PR #942
-- 2026-11-23 · evidence 0038 · an owner quote is restated in neutral words; the findings are unchanged (D-0006, D-0016 rule 5) · PR #942
-- 2026-11-23 · evidence 0060 · an owner quote is restated in neutral words; the findings are unchanged (D-0006, D-0016 rule 5) · PR #942
 
 ### Accepted with PR #519
 
@@ -297,3 +278,22 @@ A folded decision number has no file and no row in the index until the next new 
 - 2026-11-18 · this file · the approval facts and merge commit of PR #429 added to its section (D-0006 step 6) · this PR
 - 2026-11-18 · D-0031 rules 3 and 4, D-0034 rule 4, D-0035 rule 3(b), D-0041 rule 6 and D-0043's Keeping the exit ready, evidence 0042's title, evidence 0057 item 4 and the glossary's pass ledger row · the agents' pass is named as the reviewer's clearance alone, as D-0042 rule 1 reads since PR #448; these lines still named the council, which PR #448 missed · this PR
 - 2026-11-18 · D-0035 `revisit-when` and rule 2; D-0049 Decision Outcome (Debian) and Consequences · CT 259, the jumpbox rehearsal's container, leaves the list of guests agents never touch, because the owner chose to delete it; VM 258 and the VPS node stay on it, and `agent-access.sh` keeps `NoAccess` on VM 258 only; D-0049 says the container's Debian gap ends with its delete · the owner's tap "Delete it" on the card "Delete CT 259, the leftover container from the 9 Nov agent-box test?" (2026-11-18 00:00:40 UTC, card cmsg_01X43rfNYp4H1dL1V2dkfkwNQ7sG8Po9aMWS1gTVrv55ht) · this PR
+- 2026-11-23 · D-0011 · an owner quote is restated in neutral words; the decision is unchanged (D-0006, D-0016 rule 5) · PR #942
+- 2026-11-23 · D-0023 · an owner quote is restated in neutral words; the decision is unchanged (D-0006, D-0016 rule 5) · PR #942
+- 2026-11-23 · D-0027 · an owner quote is restated in neutral words; the decision is unchanged (D-0006, D-0016 rule 5) · PR #942
+- 2026-11-23 · D-0028 · an owner quote is restated in neutral words; the decision is unchanged (D-0006, D-0016 rule 5) · PR #942
+- 2026-11-23 · D-0031 · an owner quote is restated in neutral words; the decision is unchanged (D-0006, D-0016 rule 5) · PR #942
+- 2026-11-23 · D-0032 · an owner quote is restated in neutral words; the decision is unchanged (D-0006, D-0016 rule 5) · PR #942
+- 2026-11-23 · D-0034 · an owner quote is restated in neutral words; the decision is unchanged (D-0006, D-0016 rule 5) · PR #942
+- 2026-11-23 · D-0035 · an owner quote is restated in neutral words; the decision is unchanged (D-0006, D-0016 rule 5) · PR #942
+- 2026-11-23 · D-0036 · an owner quote is restated in neutral words; the decision is unchanged (D-0006, D-0016 rule 5) · PR #942
+- 2026-11-23 · D-0037 · an owner quote is restated in neutral words; the decision is unchanged (D-0006, D-0016 rule 5) · PR #942
+- 2026-11-23 · D-0038 · an owner quote is restated in neutral words; the decision is unchanged (D-0006, D-0016 rule 5) · PR #942
+- 2026-11-23 · D-0042 · an owner quote is restated in neutral words; the decision is unchanged (D-0006, D-0016 rule 5) · PR #942
+- 2026-11-23 · D-0044 · an owner quote is restated in neutral words; the decision is unchanged (D-0006, D-0016 rule 5) · PR #942
+- 2026-11-23 · D-0060 · an owner quote is restated in neutral words; the decision is unchanged (D-0006, D-0016 rule 5) · PR #942
+- 2026-11-23 · D-0061 · an owner quote is restated in neutral words; the decision is unchanged (D-0006, D-0016 rule 5) · PR #942
+- 2026-11-23 · evidence 0027 · an owner quote is restated in neutral words; the findings are unchanged (D-0006, D-0016 rule 5) · PR #942
+- 2026-11-23 · evidence 0028 · an owner quote is restated in neutral words; the findings are unchanged (D-0006, D-0016 rule 5) · PR #942
+- 2026-11-23 · evidence 0038 · an owner quote is restated in neutral words; the findings are unchanged (D-0006, D-0016 rule 5) · PR #942
+- 2026-11-23 · evidence 0060 · an owner quote is restated in neutral words; the findings are unchanged (D-0006, D-0016 rule 5) · PR #942
