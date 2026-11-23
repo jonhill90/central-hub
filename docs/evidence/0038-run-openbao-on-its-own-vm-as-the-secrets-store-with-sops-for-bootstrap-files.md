@@ -12,7 +12,7 @@ This file summarises the research behind D-0038. It adds nothing the research di
 
 ## Question
 
-Is OpenBao free software with no paid edition, and how should the lab run it so that it unseals with no person, is backed up and restored, feeds External Secrets on c1 and the agent box's jobs, and has a break-glass path? What does SOPS add, and how does it fit the owner's earlier "no SOPS" and "no ciphertext in the repository"?
+Is OpenBao free software with no paid edition, and how should the lab run it so that it unseals with no person, is backed up and restored, feeds External Secrets on c1 and the agent box's jobs, and has a break-glass path? What does SOPS add, and how does it fit the owner's earlier rulings of no SOPS and no ciphertext in the repository?
 
 ## Findings
 

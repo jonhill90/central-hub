@@ -16,7 +16,7 @@ revisit-when: the lab gets a second always-on host outside Proxmox that agents c
 
 ## Context and Problem Statement
 
-At 06:04:55 UTC on 2026-11-18 the owner said the VPS is a second jump box: it hosts our own apps (OmniRoute, OpenClaw, Hermes Agent), and "if my Proxmox went down and I needed you to rebuild it, that would be another jump box you would have" (cmsg_01X43rfNYp4H1dL1V2dkfkwNXDyf8bn8y8AKU2K7JFBKhu).
+At 06:04:55 UTC on 2026-11-18 the owner said the VPS is a second jump box: it hosts the lab's own apps (OmniRoute, OpenClaw, Hermes Agent), and if the Proxmox host went down it would be the agents' other route in to rebuild it (cmsg_01X43rfNYp4H1dL1V2dkfkwNXDyf8bn8y8AKU2K7JFBKhu).
 
 D-0046 rule 3 gives `tag:vps` no grant into the lab, so the VPS cannot do that. Two more facts decide the shape:
 
