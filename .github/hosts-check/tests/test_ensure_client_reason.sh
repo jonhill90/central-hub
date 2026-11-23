@@ -6,6 +6,9 @@
 #   3. The create fails with an unknown error: "unclassified", still no error text.
 #   4. The client lookup fails (forbidden): "client lookup failed: forbidden".
 #   5. A lookup whose first line is followed by more lines still takes the first (no pipe into head).
+#   7. Admin sign-in refused with "Invalid user credentials [invalid_grant]" (kcadm's text for a wrong password): the line
+#      says "admin sign-in failed: wrong admin username or password", the script asked once (no five minutes of retries),
+#      and the text "invalid input" is not used for it. A sign-in that fails for another reason is still retried.
 #   6. The role's assert task (tasks/clients.yml, cut out and run with real ansible): every client passed -> the task
 #      passes (an empty fail_msg would be an error); one failed -> the run fails with its reason line and no secret;
 #      a result with no rc -> the failure names the exit as none, no templating error. Needs ansible-playbook.
@@ -22,7 +25,8 @@ cat > "$t/kcadm.sh" <<'SH'
 #!/usr/bin/env bash
 # $1 = config|get|update|create; FAKE_FAIL names the step that fails, FAKE_ERR its error text; FAKE_IDS the lookup's output.
 case "$1" in
-  config) exit 0 ;;
+  config) echo x >> "${FAKE_CALLS:-/dev/null}"
+          if [[ ${FAKE_FAIL:-} == signin ]]; then echo "${FAKE_ERR:-}" >&2; exit 1; fi; exit 0 ;;
   get) if [[ $2 == realms/* ]]; then exit 0; fi
        if [[ ${FAKE_FAIL:-} == lookup ]]; then echo "${FAKE_ERR:-}" >&2; exit 1; fi
        printf '%b' "${FAKE_IDS:-}"; exit 0 ;;
@@ -52,6 +56,13 @@ else bad "4. rc=$rc [$out]"; fi
 
 run FAKE_IDS='abc\ndef\nghi\n'
 if [[ $rc -eq 0 && $out == updated ]]; then ok "5. several lines from the lookup: the first is used"; else bad "5. rc=$rc [$out]"; fi
+
+# 7
+: > "$t/calls"
+run FAKE_FAIL=signin FAKE_ERR='Invalid user credentials [invalid_grant] SECRETVALUE' FAKE_CALLS="$t/calls"; n7=$(wc -l < "$t/calls" | tr -d ' ')
+if [[ $rc -eq 1 && $out == "ensure-client: admin sign-in failed: wrong admin username or password"* && $out != *SECRETVALUE* && $n7 -eq 1 ]]; then
+  ok "7. wrong admin password: named as such, asked once, no error text"
+else bad "7. rc=$rc calls=$n7 [$out]"; fi
 
 # 6
 if ! command -v ansible-playbook >/dev/null; then echo "skip 6. no ansible-playbook here"; exit "$fail"; fi
