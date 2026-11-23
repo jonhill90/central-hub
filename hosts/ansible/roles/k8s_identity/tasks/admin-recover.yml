@@ -1,0 +1,193 @@
+---
+# Give the Keycloak master realm an admin that takes the password the bootstrap admin Secret holds, when the restored master
+# realm's own admin does not (prod, 2026-11-23: the master realm came back from a backup with its admin user temp-admin, made
+# 2026-10-28; Keycloak makes the bootstrap admin only when the master realm has no user, so the password in c1/identity-admin
+# never reached it, and every kcadm step of this role was refused with invalid_grant).
+# What it does, in order:
+#   1. files/admin-probe.sh inside the Keycloak pod: can the env admin, or the recovery admin c1-admin with the same password, sign in?
+#      Either one: stop, nothing to do (a second run changes nothing). Neither refused but an error: stop and say so.
+#   2. Both refused, and not in check mode: stop Keycloak (the CR's instances 0; the Keycloak docs say every node must be stopped before
+#      bootstrap-admin, https://www.keycloak.org/server/bootstrap-admin-recovery), run one Job from the same image with
+#      `kc.sh bootstrap-admin user --username:env --password:env --no-prompt`, user c1-admin (a public name), password read by
+#      secretKeyRef from Secret <name>-bootstrap-admin, key password: no value passes through Ansible or a command line. It
+#      adds a user; with a name that exists it adds nothing (Keycloak 26.0.0 ApplianceBootstrap.createTemporaryMasterRealmAdminUser
+#      returns false on ModelDuplicateException), so the old admin is never changed.
+#   3. Always, even when the Job failed: Keycloak is started again (instances 1) and the Job is deleted. Then the probe runs again
+#      and the play fails unless c1-admin signs in.
+# The Job's own output is not shown, only a fixed phrase for it.
+- name: "admin recover | Keycloak pod is there"
+  ansible.builtin.command: >-
+    kubectl --kubeconfig /etc/kubernetes/admin.conf -n {{ k8s_identity_namespace }} get pod {{ k8s_identity_name }}-0
+    -o jsonpath={.status.phase}
+  register: k8s_identity_ar_phase
+  changed_when: false
+  check_mode: false
+
+- name: "admin recover | Probe the admin accounts"
+  ansible.builtin.command:
+    argv: >-
+      {{ ['kubectl', '--kubeconfig', '/etc/kubernetes/admin.conf', '-n', k8s_identity_namespace, 'exec', '-i',
+      k8s_identity_name ~ '-0', '--', 'bash', '-s'] }}
+    stdin: "{{ lookup('ansible.builtin.file', 'admin-probe.sh') }}"
+  register: k8s_identity_ar_probe
+  changed_when: false
+  check_mode: false
+
+- name: "admin recover | What the probe says"
+  ansible.builtin.debug:
+    msg: "{{ k8s_identity_ar_probe.stdout_lines }}"
+
+- name: "admin recover | The probe could tell"
+  ansible.builtin.assert:
+    that:
+      - "'admin-probe: env-user error' not in k8s_identity_ar_probe.stdout"
+      - "'admin-probe: recovery-user error' not in k8s_identity_ar_probe.stdout"
+      - "k8s_identity_ar_probe.stdout_lines | length == 2"
+    fail_msg: the probe could not tell (an error, not a refusal); nothing was changed
+    quiet: true
+
+- name: "admin recover | Nothing to do, an admin account signs in"
+  ansible.builtin.debug:
+    msg: admin recover - an admin account signs in, nothing was changed
+  when: "'admin-probe: env-user ok' in k8s_identity_ar_probe.stdout or 'admin-probe: recovery-user ok' in k8s_identity_ar_probe.stdout"
+
+- name: "admin recover | Both refused: recover"
+  when:
+    - "'admin-probe: env-user refused' in k8s_identity_ar_probe.stdout"
+    - "'admin-probe: recovery-user refused' in k8s_identity_ar_probe.stdout"
+  vars:
+    __kc: [kubectl, --kubeconfig, /etc/kubernetes/admin.conf, -n, "{{ k8s_identity_namespace }}"]
+    __job: "{{ k8s_identity_name }}-admin-recover"
+  block:
+    - name: "admin recover | Check mode stops here"
+      ansible.builtin.meta: end_play
+      when: ansible_check_mode
+
+    - name: "admin recover | Image Keycloak runs from"
+      ansible.builtin.command:
+        argv: "{{ __kc + ['get', 'statefulset', k8s_identity_name, '-o', 'jsonpath={.spec.template.spec.containers[0].image}'] }}"
+      register: k8s_identity_ar_image
+      changed_when: false
+
+    - name: "admin recover | Stop Keycloak, and wait until its pod is gone"
+      ansible.builtin.shell: >-
+        set -o pipefail &&
+        kubectl --kubeconfig /etc/kubernetes/admin.conf -n {{ k8s_identity_namespace }} patch keycloak {{ k8s_identity_name }}
+        --type merge -p '{"spec":{"instances":0}}' &&
+        for i in $(seq 120); do
+        n=$(kubectl --kubeconfig /etc/kubernetes/admin.conf -n {{ k8s_identity_namespace }} get statefulset {{ k8s_identity_name }}
+        -o jsonpath='{.status.replicas}');
+        [ "${n:-0}" = 0 ] && exit 0;
+        sleep 5; done; echo "Keycloak still runs after 600 s" >&2; exit 1
+      args: {executable: /bin/bash}
+      changed_when: true
+
+    - name: "admin recover | Run the Job that adds c1-admin"
+      ansible.builtin.command:
+        argv: "{{ __kc + ['apply', '-f', '-'] }}"
+        stdin: "{{ __manifest | to_json }}"
+      vars:
+        __kc_command:
+          - /opt/keycloak/bin/kc.sh
+          - bootstrap-admin
+          - user
+          - "--username:env"
+          - RECOVERY_ADMIN_USER
+          - "--password:env"
+          - RECOVERY_ADMIN_PASSWORD
+          - --no-prompt
+        __manifest:
+          apiVersion: batch/v1
+          kind: Job
+          metadata: {name: "{{ __job }}", namespace: "{{ k8s_identity_namespace }}"}
+          spec:
+            backoffLimit: 0
+            ttlSecondsAfterFinished: 600
+            template:
+              spec:
+                restartPolicy: Never
+                containers:
+                  - name: bootstrap-admin
+                    image: "{{ k8s_identity_ar_image.stdout }}"
+                    command: "{{ __kc_command }}"
+                    env:
+                      - {name: KC_DB, value: postgres}
+                      - {name: KC_DB_URL_HOST, value: "{{ k8s_identity_name }}-postgres"}
+                      - {name: KC_DB_URL_DATABASE, value: keycloak}
+                      - {name: KC_CACHE, value: local}
+                      - {name: KC_DB_USERNAME, valueFrom: {secretKeyRef: {name: "{{ k8s_identity_db_secret }}", key: username}}}
+                      - {name: KC_DB_PASSWORD, valueFrom: {secretKeyRef: {name: "{{ k8s_identity_db_secret }}", key: password}}}
+                      - {name: RECOVERY_ADMIN_USER, value: c1-admin}
+                      - name: RECOVERY_ADMIN_PASSWORD
+                        valueFrom: {secretKeyRef: {name: "{{ k8s_identity_name }}-bootstrap-admin", key: password}}
+      changed_when: true
+
+    - name: "admin recover | Wait for the Job"
+      ansible.builtin.command:
+        argv: "{{ __kc + ['wait', 'job/' ~ __job, '--for=condition=complete', '--timeout=300s'] }}"
+      changed_when: false
+
+  rescue:
+    - name: "admin recover | The Job did not complete; its result in a fixed phrase"
+      ansible.builtin.shell: >-
+        set -o pipefail &&
+        { kubectl --kubeconfig /etc/kubernetes/admin.conf -n {{ k8s_identity_namespace }} logs job/{{ k8s_identity_name }}-admin-recover 2>&1
+        | grep -o -i -E 'already exists|ModelDuplicate|Connection refused|password authentication failed|FATAL|ERROR' | sort -u | head -n 5
+        | sed 's/^/admin recover - job said (matched words only): /' ; true; }
+      args: {executable: /bin/bash}
+      register: k8s_identity_ar_why
+      changed_when: false
+
+    - name: "admin recover | Show the matched words"
+      ansible.builtin.debug:
+        msg: "{{ k8s_identity_ar_why.stdout_lines | default([]) }}"
+
+    - name: "admin recover | Failed"
+      ansible.builtin.fail:
+        msg: admin recover - the Job that adds c1-admin did not complete; Keycloak is started again below
+  always:
+    - name: "admin recover | Start Keycloak again, and wait until it is Ready"
+      ansible.builtin.shell: >-
+        set -o pipefail &&
+        kubectl --kubeconfig /etc/kubernetes/admin.conf -n {{ k8s_identity_namespace }} patch keycloak {{ k8s_identity_name }}
+        --type merge -p '{"spec":{"instances":1}}' &&
+        kubectl --kubeconfig /etc/kubernetes/admin.conf -n {{ k8s_identity_namespace }} wait pod/{{ k8s_identity_name }}-0
+        --for=condition=Ready --timeout=600s
+      args: {executable: /bin/bash}
+      changed_when: true
+      when:
+        - not ansible_check_mode
+        - "'admin-probe: env-user refused' in k8s_identity_ar_probe.stdout"
+        - "'admin-probe: recovery-user refused' in k8s_identity_ar_probe.stdout"
+
+    - name: "admin recover | Remove the Job"
+      ansible.builtin.command: >-
+        kubectl --kubeconfig /etc/kubernetes/admin.conf -n {{ k8s_identity_namespace }} delete job {{ k8s_identity_name }}-admin-recover
+        --ignore-not-found
+      changed_when: false
+      when:
+        - not ansible_check_mode
+        - "'admin-probe: env-user refused' in k8s_identity_ar_probe.stdout"
+        - "'admin-probe: recovery-user refused' in k8s_identity_ar_probe.stdout"
+
+- name: "admin recover | Probe again"
+  ansible.builtin.command:
+    argv: >-
+      {{ ['kubectl', '--kubeconfig', '/etc/kubernetes/admin.conf', '-n', k8s_identity_namespace, 'exec', '-i',
+      k8s_identity_name ~ '-0', '--', 'bash', '-s'] }}
+    stdin: "{{ lookup('ansible.builtin.file', 'admin-probe.sh') }}"
+  register: k8s_identity_ar_after
+  changed_when: false
+  check_mode: false
+  when:
+    - not ansible_check_mode
+    - "'admin-probe: env-user refused' in k8s_identity_ar_probe.stdout"
+    - "'admin-probe: recovery-user refused' in k8s_identity_ar_probe.stdout"
+
+- name: "admin recover | An admin account signs in now"
+  ansible.builtin.assert:
+    that: "'admin-probe: recovery-user ok' in k8s_identity_ar_after.stdout or 'admin-probe: env-user ok' in k8s_identity_ar_after.stdout"
+    fail_msg: admin recover - after the Job neither admin account signs in
+    quiet: true
+  when:
+    - k8s_identity_ar_after is not skipped

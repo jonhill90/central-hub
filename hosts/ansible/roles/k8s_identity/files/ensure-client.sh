@@ -31,12 +31,20 @@ fail() {
 }
 cat > "$body"
 grep -q "\"clientId\" *: *\"$client_id\"" "$body" || { echo "the JSON on stdin is not client $client_id" >&2; exit 1; }
+# The first admin account from the container's environment; when Keycloak refuses it (invalid_grant), the recovery admin
+# c1-admin with the same password, which `c1-ansible apply identity-admin-recover` makes when the restored master realm's
+# admin does not take the password the Secret holds. Each is tried once; neither is retried, a refusal is not a slow start.
+user=${KC_BOOTSTRAP_ADMIN_USERNAME:-${KEYCLOAK_ADMIN:-}}
+recovery=${KC_RECOVERY_ADMIN_USERNAME:-c1-admin}
 for try in $(seq 1 60); do
   "$kcadm" config credentials --config "$config" --server http://localhost:8080 --realm master \
-    --user "${KC_BOOTSTRAP_ADMIN_USERNAME:-${KEYCLOAK_ADMIN:-}}" \
+    --user "$user" \
     --password "${KC_BOOTSTRAP_ADMIN_PASSWORD:-${KEYCLOAK_ADMIN_PASSWORD:-}}" >/dev/null 2>"$err" && break
-  # A wrong username or password is not a Keycloak that is still starting: waiting five minutes will not fix it.
-  grep -q -e "nvalid user credentials" -e "invalid_grant" "$err" && fail "admin sign-in" 1
+  if grep -q -e "nvalid user credentials" -e "invalid_grant" "$err"; then
+    # A wrong username or password is not a Keycloak that is still starting: waiting five minutes will not fix it.
+    [ "$user" != "$recovery" ] && { user=$recovery; continue; }
+    fail "admin sign-in" 1
+  fi
   [ "$try" = 60 ] && { echo "could not sign in to Keycloak at localhost:8080" >&2; fail "admin sign-in" 1; }
   sleep 5
 done
