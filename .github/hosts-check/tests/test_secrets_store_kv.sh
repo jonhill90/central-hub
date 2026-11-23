@@ -17,6 +17,7 @@
 #      --resolve with that value; without it (every run above), none does.
 #  11. put-new writes a key OpenBao lacks (SOPS, then OpenBao) and nothing when OpenBao already holds it.
 #  12. put-short writes OpenBao only: the value is in OpenBao, the SOPS file does not hold its path, and compare still passes.
+#  13. forget removes a path from SOPS only: after put then put-short, compare names the old copy; after forget it passes, OpenBao still holds the newer value, and a second forget changes nothing.
 #  10. A failed sign-in names its cause and nothing private: no HTTP answer gives curl's exit code and its name; a
 #      refusal gives the HTTP code and OpenBao's text, with the secret ID as <id>, a source address (IPv4 or IPv6) only
 #      as the box's /32, another address, or an address while SECRETS_STORE_BOX_CIDR is empty, and a tailnet name as
@@ -302,9 +303,27 @@ if [[ $s_rc -eq 0 && $s_out == *"put-short: kv/c1/short/feed key token written t
   ok "12. put-short writes OpenBao only: the value is in OpenBao, SOPS holds no copy, and compare still passes"
 else bad "12. rc=$s_rc $s_out | compare rc=$s_cmp"; fi
 
+# 13: forget removes a path from SOPS only
+kv put c1/feedcopy token < <(printf '%s' 'old-copy-Ab12c')
+kv put-short c1/feedcopy token < <(printf '%s' 'newer-value-Cd34e')
+kv compare
+f_cmp1=$rc f_out1=$out
+kv forget c1/feedcopy
+f_rc=$rc f_out=$out
+kv compare
+f_cmp2=$rc
+kv forget c1/feedcopy
+f_rc2=$rc f_out2=$out
+if [[ $f_cmp1 -ne 0 && $f_out1 == *feedcopy* && $f_rc -eq 0 && $f_out == *"kv/c1/feedcopy removed from the SOPS file; OpenBao untouched"* &&
+      $(plain | python3 -c 'import json,sys; print("c1/feedcopy" in json.load(sys.stdin))') == False &&
+      $(bao_val c1/feedcopy token) == 'newer-value-Cd34e' && $f_cmp2 -eq 0 &&
+      $f_rc2 -eq 0 && $f_out2 == *"is not in the SOPS file; nothing changed"* ]]; then
+  ok "13. forget removes a path from SOPS only: compare named the old copy before and passes after, OpenBao keeps the newer value, a second forget changes nothing"
+else bad "13. compare-before rc=$f_cmp1 $f_out1 | forget rc=$f_rc $f_out | compare-after rc=$f_cmp2 | again rc=$f_rc2 $f_out2"; fi
+
 # 4 (over every run above)
 leak=0
-for s in "$v1" "$v2" adopted-value-Qm41z other-value-Rn52y adopted-user-Sp63x short-lived-Tx74v first-value second-value Wv93m fifth-value tenth-value tok-secret-1 "$rid" "$sid" changed-in-bao only-in-bao 192.0.2.77 fd7a:115c:a1e0::5 box.example.ts.net; do
+for s in "$v1" "$v2" adopted-value-Qm41z other-value-Rn52y adopted-user-Sp63x short-lived-Tx74v old-copy-Ab12c newer-value-Cd34e first-value second-value Wv93m fifth-value tenth-value tok-secret-1 "$rid" "$sid" changed-in-bao only-in-bao 192.0.2.77 fd7a:115c:a1e0::5 box.example.ts.net; do
   if grep -qF -- "$s" "$t/args"; then echo "     in an argument: $s"; leak=1; fi
   if [[ $all == *"$s"* ]]; then echo "     in the output: $s"; leak=1; fi
 done
