@@ -9,13 +9,14 @@ steps=$(curl -fsS --max-time 20 "$BASE/api/onboarding") || { echo "FAIL: onboard
 case $steps in
   *'"step": "user", "done": true'* | *'"step":"user","done":true'*) echo "PASS: onboarding user step already done"; exit 0 ;;
 esac
-body=$(printf '{"client_id":"%s","name":"%s","username":"%s","password":"%s","language":"%s"}' "$CID" "$OWNER_NAME" "$OWNER_USER" "$OWNER_PASSWORD" "$LANGUAGE")
-resp=$(curl -fsS --max-time 30 -X POST -H 'Content-Type: application/json' -d "$body" "$BASE/api/onboarding/users") \
+# The body goes in on stdin, never as an argument, so the password is not in any process's argument list.
+resp=$(printf '{"client_id":"%s","name":"%s","username":"%s","password":"%s","language":"%s"}' "$CID" "$OWNER_NAME" "$OWNER_USER" "$OWNER_PASSWORD" "$LANGUAGE" \
+  | curl -fsS --max-time 30 -X POST -H 'Content-Type: application/json' -d @- "$BASE/api/onboarding/users") \
   || { echo "FAIL: creating the owner failed"; exit 1; }
 code=$(printf '%s' "$resp" | sed -n 's/.*"auth_code": *"\([^"]*\)".*/\1/p')
 [ -n "$code" ] || { echo "FAIL: no auth_code in the answer"; exit 1; }
-tok=$(curl -fsS --max-time 20 -X POST --data-urlencode grant_type=authorization_code --data-urlencode "code=$code" \
-  --data-urlencode "client_id=$CID" "$BASE/auth/token" | sed -n 's/.*"access_token": *"\([^"]*\)".*/\1/p')
+tok=$(printf 'grant_type=authorization_code&code=%s&client_id=%s' "$code" "$CID" \
+  | curl -fsS --max-time 20 -X POST -d @- "$BASE/auth/token" | sed -n 's/.*"access_token": *"\([^"]*\)".*/\1/p')
 [ -n "$tok" ] || { echo "FAIL: no access token for the owner"; exit 1; }
 for step in core_config analytics; do
   curl -fsS --max-time 30 -X POST -H "Authorization: Bearer $tok" -H 'Content-Type: application/json' -d '{}' \

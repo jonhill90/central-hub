@@ -37,11 +37,6 @@ trustedProxies: [10.240.0.0/16]
 route:
   enabled: false
 
-# Where the owner's password comes from: `openbao` reads c1/homeassistant-owner (key password) through store openbao,
-# else External Secrets makes it once in the cluster. The root chart sets it from appSecretsStore.
-adminSecret:
-  store: c1
-
 # First-run setup (templates/setup-*.yaml, files/setup.sh).
 setup:
   enabled: true
