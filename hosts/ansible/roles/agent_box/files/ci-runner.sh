@@ -16,7 +16,7 @@
 # runner pod on c1's first start (docs/runbooks/run-the-notebook-runner-on-c1.md). The token goes on stdin only.
 # hub-feed: put what the Central Hub app shows into prod's store (kv c1/hub-feed), two keys: notebook-token, a one-hour
 # read-only token (contents:read, agent-notebook only) for the app pod's notebook sync, and proxmox-json, a snapshot of
-# Proxmox's /cluster/resources trimmed to status, cpu, memory, disk and uptime, read with the agents' own Proxmox token.
+# Proxmox's /cluster/resources trimmed to status, cpu, memory, disk and uptime, read with the lab token (proxmox-lab.env, every guest but VM 258 and the desktop) or, without it, the dev token.
 # The box's timer runs it every 30 minutes (hub-feed.timer); neither value reaches an argument or the log.
 # weekly: configure, then bump. The agent box's timer runs it (role agent_box); the runner's
 # self-update is off, so this is how a merged pin reaches the runner.
@@ -372,9 +372,14 @@ hub_feed() {
 # the token is read from the environment file inside python and never printed.
 proxmox_snapshot() {
   (
+    # The dev token sees only the dev rebuild VMs (/cluster/resources lists what the token may audit), so the snapshot was two
+    # guests. The lab token (give-agents-proxmox-rights-for-the-whole-lab.md) audits every guest except VM 258 and the desktop's,
+    # which it has NoAccess on on purpose. Use it when the box holds it, the dev token otherwise.
+    envfile=$keys/proxmox-lab.env
+    [[ -s $envfile ]] || envfile=$keys/proxmox-dev.env
     set -a
     # shellcheck source=/dev/null
-    . "$keys/proxmox-dev.env"
+    . "$envfile"
     set +a
     python3 -I - <<'PY'
 import json, os, ssl, sys, time, urllib.request
