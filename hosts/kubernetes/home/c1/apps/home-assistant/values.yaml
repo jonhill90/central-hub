@@ -14,6 +14,10 @@ port: 8123
 healthPath: /manifest.json
 
 storage:
+  # A new claim for 2026.7.4: the old one, `homeassistant-config`, was written by 2026.11.1, whose `http` storage file
+  # (version 3) 2026.7.4 refuses to read (UnsupportedStorageVersionError). The old claim stays, kept and unused; delete it
+  # once nothing needs it. A move forward past 2026.8 may reuse neither claim.
+  claimName: homeassistant-data
   className: ""      # empty: the cluster's default StorageClass
   configSize: 5Gi    # the config folder, including the recorder's SQLite database (local disk only, never NFS)
 
