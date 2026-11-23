@@ -66,8 +66,9 @@ agent_box_wrappers:
   # The four scripted sign-in checks (Jellyfin, Argo CD, Grafana, Proxmox) against prod with the test user (files/signin-check.sh). It runs as
   # the keys user, because the test user's password and seed are lines in identity.env. run makes nothing in any app; it reads
   # signin-check.json, which the controller's prod-files run copies, and prints only the checks' numbered lines.
+  # `shot <n-app.png>` writes one screenshot of the newest browser run to stdout (the shots are readable by the keys user only; the wrapper checks the name).
   - name: signin-check
-    args: [run, log]
+    args: [run, log, "shot *"]
   # Prod's teardown and rebuild under D-0035 (files/rebuild-prod.sh). check is read-only; the `*` on rebuild passes
   # the owner's tap id and the commit the go names, which the wrapper checks (7 to 40 hex digits, on main); the run
   # needs dev to have passed at that same commit first. The `*` on resume passes the same tap id (the stopped run's go) and the
