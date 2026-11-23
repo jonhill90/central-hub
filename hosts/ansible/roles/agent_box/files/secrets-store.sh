@@ -30,7 +30,7 @@
 set -euo pipefail
 umask 077
 
-usage() { echo "usage: secrets-store recovery|status|snapshot|restore|restore-rebuilt [raft-<time>.snap]|clear-hold|put c1/<path> <key>|put-new c1/<path> <key>|put-apps|compare|reseed|owner-login owner|test|check-test|remove-test|plan|ssh-ca plan|apply|check|public|sign-host <names>" >&2; exit 2; }
+usage() { echo "usage: secrets-store recovery|status|snapshot|restore|restore-rebuilt [raft-<time>.snap]|clear-hold|put c1/<path> <key>|put-new c1/<path> <key>|put-short c1/<path> <key>|put-apps|compare|reseed|owner-login owner|test|check-test|remove-test|plan|ssh-ca plan|apply|check|public|sign-host <names>" >&2; exit 2; }
 named='' kv_path='' kv_key='' ssh_args=()
 env=dev
 if [[ ${1:-} == --prod ]]; then env=prod; shift; fi
@@ -52,8 +52,8 @@ case ${1:-} in
     if [[ $named == sign-host ]]; then [[ $# -eq 3 ]] || usage; ssh_args=("$3"); else [[ $# -eq 2 ]] || usage; fi
     ;;
   # The value comes on stdin, never as an argument; the helper checks the path and key again. put-new (run by openbao-prod adopt) writes
-  # nothing when OpenBao already holds the key.
-  put | put-new)
+  # nothing when OpenBao already holds the key; put-short writes OpenBao only, for a value a timer makes again within the hour.
+  put | put-new | put-short)
     action=$1
     [[ $# -eq 3 ]] || usage
     kv_path=$2 kv_key=$3
@@ -288,7 +288,7 @@ no_hold() {
 
 # One key into SOPS, then the store (rule 8). The value is this run's stdin, passed straight to the helper.
 put() {
-  sops_copies
+  [[ $action == put-short ]] || sops_copies
   no_hold
   kv "$action" "$kv_path" "$kv_key"
 }
@@ -378,7 +378,7 @@ case $action in
   restore) restore ;;
   restore-rebuilt) restore_rebuilt ;;
   clear-hold) clear_hold ;;
-  put | put-new) put ;;
+  put | put-new | put-short) put ;;
   put-apps) put_apps ;;
   # owner, test and check-test write keys, and a key in a fresh rebuilt store makes restore-rebuilt refuse, so they wait for the
   # hold like put; remove-test only deletes, so it may run (the reviewer's ask on #821).
