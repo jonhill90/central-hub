@@ -11,11 +11,11 @@ supersedes: []
 superseded-by:
 accepted-evidence:
   approved-by: agents
-  approved-at: 2026-11-23T02:20:47Z
+  approved-at: 2026-11-23T23:32:13Z
   approved-commit: b8007590b459ebf53042c1dde7e3294248df519d
-  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNXhRg7JZG4oHckL4Cywu4HF
-  approval-names: "the reviewer's pass of D-0065 at main commit b8007590b459ebf53042c1dde7e3294248df519d (the record as merged in #926 and amended by #937), as recorded by the orchestrator; the record is that text, apart from these acceptance fields"
-  check: "the reviewer's pass of the head is review post cmsg_01X43rfNYp4H1dL1V2dkfkwNEUkeYLQzESw51ZyDCXwQvk; the orchestrator's message recording it is the approval-ref; this PR changes only this record's status and accepted-evidence and its index row"
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNDRt9Urfqv8Dd6E87XGjkZA
+  approval-names: "the reviewer's pass of D-0065 at main commit b8007590b459ebf53042c1dde7e3294248df519d (the record as merged in #926 and amended by #937), recorded by the orchestrator; the record is that text, apart from these acceptance fields"
+  check: "the reviewer's pass of the record at b8007590b459ebf53042c1dde7e3294248df519d is review post cmsg_01X43rfNYp4H1dL1V2dkfkwNDRt9Urfqv8Dd6E87XGjkZA (2026-11-23T23:32:13Z), recorded by the orchestrator in the box ledger for that commit; this PR changes only this record's status and accepted-evidence and its index row"
   merged: "PR #926 squash-merged at head c1772fd as 0180690 on 2026-11-23T02:22:52Z"
 revisit-when: a merged plain PR breaks prod; the agents get GitHub identities of their own and GitHub can require their reviews; or the owner asks for review on every PR again
 ---
