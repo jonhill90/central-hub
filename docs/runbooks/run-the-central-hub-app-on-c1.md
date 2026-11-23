@@ -30,6 +30,18 @@ The app (public repository `jonhill90/central-hub-app`) runs as one pod in names
 4. Open the app. `https://hub.<zone>/` (or the long name `https://hub.apps.c1.prod.<zone>/`) from the lab network or the tailnet. The Gateway route key is `hub` (`apps/gateway/values.yaml`); the Argo CD app, the namespace and the Service stay `central-hub-app`.
    expect: the Hub with its menu; `/api/v1/catalog` answers 200.
 
+## The notebook and the Proxmox snapshot (the feed)
+
+With sign-in on (`auth.mode: oidc`), the app also shows the agents' notebook at `/notebook` and a Proxmox snapshot at `/systems`. Both are private, so the chart renders them only with sign-in on, and the app itself answers "closed" while `HUB_AUTH` is not `oidc`. How the data gets in:
+
+1. The agent box's timer `hub-feed.timer` runs `ci-runner.sh hub-feed` every 30 minutes as the `keys` user. It puts two values into prod's store at `c1/hub-feed`: `notebook-token`, a one-hour GitHub App token with `contents: read` on the notebook repository only, and `proxmox-json`, a trimmed `/cluster/resources` read with the agents' own Proxmox token (status, cpu, memory, disk, uptime). Neither value is printed or passed as an argument.
+2. The ExternalSecret `central-hub-app-feed` copies both into one Secret every minute.
+3. In the pod, an init container clones the notebook with the token and a sidecar pulls it every 300 seconds (`feed.syncSeconds`). The token is mounted only into those two containers; the app container mounts the snapshot file and the notebook folder and nothing else.
+
+Check it from the box: `sudo -n -u keys /usr/local/libexec/agent-box/ci-runner.sh hub-feed` prints the two `ci-runner: ...is in prod's store` lines; `c1-read logs -n central-hub-app deploy/central-hub-app -c notebook-sync` shows `notebook-sync: at <sha>`; after sign-in, `/notebook` shows a note count and `/systems` shows the snapshot's time. The way back: set `feed.enabled: false` in the chart values.
+
+Not proven when this was written: that the agents' Proxmox token sees nodes (its permissions are on the dev and ci pools, so `/cluster/resources` may list only the guests it can see), and the first live run of the timer.
+
 ## If it fails
 
 - Init container `OOMKilled`: raise `resources.build.limits.memory` in values; the prod worker has about 7.9 GiB shared, so check node memory first (`c1-read top nodes`).
