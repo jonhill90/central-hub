@@ -194,7 +194,7 @@ argument_specs:
       opnsense_lab_short_app_names_retired:
         type: list
         elements: str
-        default: [central-hub-app]
+        default: []
         description: Retired app short aliases; each has its Unbound host override removed.
       opnsense_lab_host_overrides:
         type: list
