@@ -43,7 +43,7 @@ Mealie makes a first account on first start, with an e-mail and password the pro
 
 - Sync waves (`templates/`): the Deployment and Service are wave 0, the guard Job (an Argo CD Sync hook, `files/admin-guard.sh`) is wave 1, and both HTTPRoutes are wave 2. Argo CD waits for each wave, so on a first sync the names answer only after the guard passed; a failing guard fails the sync and the route is never made.
 - The guard signs in with the published e-mail and password. If that works it changes the password to the one in Secret `mealie/mealie-admin` (key `password`), then moves the account off the published e-mail to `adminGuard.adminEmail` (a reserved `.invalid` name), because Mealie shows a "first login" banner with the published pair for as long as any account has that e-mail (`isFirstLogin` in `/api/app/about/startup-info`). It then proves the published sign-in is refused and the generated one works, and reports whether the banner is off. A failed e-mail change is a warning, not a failed sync. It reads the password from a file and prints none.
-- A CronJob runs the same script every 10 minutes, for the case that the pod's volume is replaced by an empty one while the route stands; its newest Job log must say PASS.
+- A CronJob runs the same script every 10 minutes, for the case that the pod's volume is replaced by an empty one while the route stands; its newest Job log must say PASS and end with `first-login banner off`; `curl -s https://mealie.<zone>/api/app/about/startup-info` then shows `isFirstLogin` false, because no account has the published e-mail any more.
 - The account is kept: sign-in goes through Keycloak, and its generated password is in OpenBao (`c1/mealie-admin`), not anywhere in git.
 
 ## If it fails
