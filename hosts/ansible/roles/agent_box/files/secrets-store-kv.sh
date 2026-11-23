@@ -116,12 +116,29 @@ plain() {
 }
 valid_path() { [[ $1 =~ ^c1(/[a-z0-9][a-z0-9_-]*)+$ ]]; }
 
+# openbao_holds PATH KEY: 0 when kv/PATH holds KEY, 1 when it does not; stops on a sign-in or read that fails. Prints no value.
+openbao_holds() {
+  local rc
+  token=$(login) && [[ -n $token ]] || die "the admin AppRole did not sign in ($(why)); nothing written"
+  rc=$(call GET "kv/data/$1" -o "$tmp/current.json" -w '%{http_code}') || true
+  [[ $rc == 200 || $rc == 404 ]] || die "reading kv/$1 answered HTTP ${rc:-nothing}; nothing written"
+  [[ $rc == 200 ]] && python3 -I -c 'import json, sys; sys.exit(0 if sys.argv[2] in ((json.load(open(sys.argv[1]))["data"].get("data")) or {}) else 1)' "$tmp/current.json" "$2"
+}
+
 case $action in
   put | put-new | put-short)
     path=${6:-} key=${7:-}
     valid_path "$path" || die "the path must be c1/<name>[/<name>...], lowercase letters, digits, - and _"
     [[ $key =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]*$ ]] || die "the key must be letters, digits, _, . and -"
     cat > "$tmp/value"
+    # put-new with nothing on stdin is fine only for a key OpenBao already holds (adopt, for a Secret the cluster no longer has, as
+    # the first admin's after it was replaced by c1-admin: the key stays as it was). A key it does not hold still fails below.
+    if [[ $action == put-new && ! -s $tmp/value ]]; then
+      if openbao_holds "$path" "$key"; then
+        echo "secrets-store put-new: kv/$path key $key is in OpenBao already; kept, nothing written (no value on stdin)"
+        exit 0
+      fi
+    fi
     [[ -s $tmp/value ]] || die "no value on stdin; nothing written"
     # The SOPS file, made once as an empty document for the box's identity.
     if [[ $action != put-short && ! -e $kvfile ]]; then
@@ -133,14 +150,9 @@ case $action in
       mv -- "$kvfile.part" "$kvfile"
     fi
     # put-new writes nothing when OpenBao already holds the key: a value kept there is never replaced by one adopted later.
-    if [[ $action == put-new ]]; then
-      token=$(login) && [[ -n $token ]] || die "the admin AppRole did not sign in ($(why)); nothing written"
-      rc=$(call GET "kv/data/$path" -o "$tmp/current.json" -w '%{http_code}') || true
-      [[ $rc == 200 || $rc == 404 ]] || die "reading kv/$path answered HTTP ${rc:-nothing}; nothing written"
-      if [[ $rc == 200 ]] && python3 -I -c 'import json, sys; sys.exit(0 if sys.argv[2] in ((json.load(open(sys.argv[1]))["data"].get("data")) or {}) else 1)' "$tmp/current.json" "$key"; then
-        echo "secrets-store put-new: kv/$path key $key is in OpenBao already; kept, nothing written"
-        exit 0
-      fi
+    if [[ $action == put-new ]] && openbao_holds "$path" "$key"; then
+      echo "secrets-store put-new: kv/$path key $key is in OpenBao already; kept, nothing written"
+      exit 0
     fi
     # 1. SOPS: the value as a JSON string on stdin, into the one key. put-short skips it: no copy is kept.
     if [[ $action != put-short ]]; then

@@ -16,6 +16,7 @@
 #   9. With SECRETS_STORE_RESOLVE set (dev: the wrapper points every call at dev's Gateway), every curl call carries
 #      --resolve with that value; without it (every run above), none does.
 #  11. put-new writes a key OpenBao lacks (SOPS, then OpenBao) and nothing when OpenBao already holds it.
+#  11b. put-new with nothing on stdin: a key OpenBao holds is kept (rc 0), a key it lacks is refused, and nothing changes either way.
 #  12. put-short writes OpenBao only: the value is in OpenBao, the SOPS file does not hold its path, and compare still passes.
 #  13. forget removes a path from SOPS only: after put then put-short, compare names the old copy; after forget it passes, OpenBao still holds the newer value, and a second forget changes nothing.
 #  10. A failed sign-in names its cause and nothing private: no HTTP answer gives curl's exit code and its name; a
@@ -290,6 +291,16 @@ if [[ $a_rc -eq 0 && $a_out == *"put-new: kv/c1/adopt/one key password written t
       $c_rc -eq 0 && $(bao_val c1/adopt/one user) == 'adopted-user-Sp63x' && $(sops_val c1/adopt/one user) == 'adopted-user-Sp63x' ]]; then
   ok "11. put-new writes a key OpenBao lacks, SOPS then OpenBao; a key OpenBao holds is kept, nothing written, and a second key at the path is added"
 else bad "11. new rc=$a_rc $a_out | again rc=$b_rc $b_out | second rc=$c_rc"; fi
+
+# 11b: put-new with an empty stdin is fine only for a key OpenBao already holds (openbao-prod adopt, for a Secret the cluster no longer has)
+cp "$t/keys/dev/openbao-kv.sops.json" "$t/sops.before11b"
+kv put-new c1/adopt/one password < <(printf ''); h_rc=$rc h_out=$out
+kv put-new c1/adopt/one missing < <(printf ''); m_rc=$rc m_out=$out
+if [[ $h_rc -eq 0 && $h_out == *"is in OpenBao already; kept, nothing written"* && $m_rc -ne 0 && $m_out == *"no value on stdin; nothing written"* &&
+      $(bao_val c1/adopt/one password) == 'adopted-value-Qm41z' && -z $(bao_val c1/adopt/one missing) ]] &&
+   cmp -s "$t/sops.before11b" "$t/keys/dev/openbao-kv.sops.json"; then
+  ok "11b. put-new with nothing on stdin: a key OpenBao holds is kept, a key it lacks is refused, and nothing is written either way"
+else bad "11b. held rc=$h_rc $h_out | missing rc=$m_rc $m_out"; fi
 
 # 12: put-short writes OpenBao only: the short-lived value is not left in the SOPS file
 kv put-short c1/short/feed token < <(printf '%s' 'short-lived-Tx74v')

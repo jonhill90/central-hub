@@ -576,8 +576,8 @@ print(n if n.replace("-", "").isalnum() and n == n.lower() else "sso", end="")')
       "media jellyfin-admin password c1/jellyfin-admin password"
       "identity $idname-db username c1/identity-db username"
       "identity $idname-db password c1/identity-db password"
-      "identity $idname-initial-admin username c1/identity-admin username"
-      "identity $idname-initial-admin password c1/identity-admin password"
+      "identity $idname-initial-admin username c1/identity-admin username held"
+      "identity $idname-initial-admin password c1/identity-admin password held"
       "monitoring kube-prometheus-stack-grafana admin-user c1/grafana-admin username"
       "monitoring kube-prometheus-stack-grafana admin-password c1/grafana-admin password"
       "argocd argocd-initial-admin-secret password c1/argocd-admin password latest"
@@ -599,6 +599,23 @@ print(n if n.replace("-", "").isalnum() and n == n.lower() else "sso", end="")')
         fi
         if [[ -z $present ]]; then
           echo "openbao-prod: adopt: $a_ns/$a_secret key $a_key: skipped, not in the cluster; $a_path key $a_pkey stays as it was"
+          continue
+        fi
+      fi
+      # A row marked `held` (the first admin's Secret, which the admin recovery made redundant: prod's master realm came back from a
+      # backup, c1/identity-admin keeps the credential the cluster reads, and the operator's own Secret is gone): when the Secret is not in
+      # the cluster, put-new is asked with nothing on stdin, which it accepts only for a key OpenBao already holds. A key OpenBao does not
+      # hold still fails the row, so a lost credential is never taken for a finished one.
+      if [[ ${a_mode:-} == held ]]; then
+        if ! present=$(kc -n "$a_ns" get secret "$a_secret" --ignore-not-found -o name 2>/dev/null); then
+          echo "openbao-prod: adopt: $a_ns/$a_secret key $a_key: not adopted (the read of the Secret failed)" >&2; failed=1; continue
+        fi
+        if [[ -z $present ]]; then
+          if res=$(printf '' | "$libexec/secrets-store-prod.sh" put-new "$a_path" "$a_pkey" 2>&1); then
+            echo "openbao-prod: adopt: $a_ns/$a_secret key $a_key: not in the cluster; $a_path key $a_pkey is held already, kept"
+          else
+            echo "openbao-prod: adopt: $a_ns/$a_secret key $a_key: not in the cluster and $a_path key $a_pkey is not held (${res##*: })" >&2; failed=1
+          fi
           continue
         fi
       fi
