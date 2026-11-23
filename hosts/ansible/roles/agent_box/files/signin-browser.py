@@ -20,6 +20,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import stat
 import struct
 import sys
@@ -115,7 +116,20 @@ def sign_in_app(app, page, cfg):
         code, _ = api(page, cfg["hub_base"] + "/api/v1/catalog")
         if code != 200:
             raise RuntimeError("/api/v1/catalog answered HTTP %s" % code)
-        return "the hub opens and /api/v1/catalog answers HTTP 200 for the test user"
+        # The two pages that read data must show data, not their empty or error state. Smallest signal on each:
+        # /notebook prints "<n> notes, read from the notebook's own files" with n > 0 (its empty state says "No notebook is connected");
+        # /systems has a Guests table (the one right after the Guests heading) with at least one row (its empty states say "Not connected" or "lists no guests").
+        page.goto(cfg["hub_base"] + "/notebook", wait_until="networkidle", timeout=60000)
+        text = page.inner_text("body")
+        m = re.search(r"([\d,]+) notes, read from the notebook", text)
+        if not m or int(m.group(1).replace(",", "")) < 1:
+            raise RuntimeError("/notebook shows no notes (%s)" % re.sub(r"\s+", " ", text)[:120])
+        notes = m.group(1)
+        page.goto(cfg["hub_base"] + "/systems", wait_until="networkidle", timeout=60000)
+        rows = page.locator("h3:has-text(\"Guests\") + table.sys-table tbody tr").count()  # only the table right after the Guests heading: Nodes and Storage still draw when no guest is listed
+        if rows < 1:
+            raise RuntimeError("/systems shows no guest rows (%s)" % re.sub(r"\s+", " ", page.inner_text("body"))[:120])
+        return "the hub opens, /api/v1/catalog answers HTTP 200 for the test user, /notebook lists %s notes and /systems lists %d guests" % (notes, rows)
     if app == "jellyfin":
         page.goto(cfg["jellyfin_base"] + "/web/", wait_until="networkidle", timeout=60000)
         page.locator('button:has-text("Sign in with")').first.click(timeout=30000)

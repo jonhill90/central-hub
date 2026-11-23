@@ -61,9 +61,9 @@ Home Assistant's first-run screen has no password: the first visitor creates the
 
 ## Not covered yet
 
-- Backup of the volume: **not backed up yet.** It is a kept claim on local-path; the c1 restic job does not include namespace `home`, so a node loss or a teardown loses Home Assistant's data (the owner account and everything added later). Home Assistant's own backups (Settings, System, Backups) are a manual interim. Adding the namespace to the job is the next change.
+- Backup of the volume: **not proven.** The claim `homeassistant-data` is on the default StorageClass (local-path) like Jellyfin's, and the c1 restic job backs up the whole local-path folder on each node (`c1-backup-volumes.sh`, `BACKUP_VOLUME_PATHS`), so it should already be in the nightly snapshot. No snapshot listing has been read to confirm it, and the restore test covers only Jellyfin's claim. Until a listing shows `home/homeassistant-data`, treat it as not backed up; Home Assistant's own backups (Settings, System, Backups) are the manual interim.
 - A person signing in through Keycloak creates a second Home Assistant user, mapped by group; the local `owner` account made by the setup Job stays as the break-glass login, its password in OpenBao.
-- Proven only against a mock of the onboarding API (`PASS` on a first and a second run, including the extra steps); not yet against Home Assistant itself.
+- Live proof of sign-in: the agent box's scripted browser check (run 2026-11-23 07:20 UTC, reported by the agent lane that ran it) passed Home Assistant, ending at the dashboard, after the setup Job had finished onboarding (status read: user, core_config, analytics and integration all done). The setup script's steps were tested on a mock; which run completed them on the live system was not recorded.
 
 ## Afterwards
 
