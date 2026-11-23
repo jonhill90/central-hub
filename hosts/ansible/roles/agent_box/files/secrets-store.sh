@@ -30,7 +30,7 @@
 set -euo pipefail
 umask 077
 
-usage() { echo "usage: secrets-store recovery|status|snapshot|restore|restore-rebuilt [raft-<time>.snap]|clear-hold|put c1/<path> <key>|put-apps|compare|reseed|owner-login owner|test|check-test|remove-test|plan|ssh-ca plan|apply|check|public|sign-host <names>" >&2; exit 2; }
+usage() { echo "usage: secrets-store recovery|status|snapshot|restore|restore-rebuilt [raft-<time>.snap]|clear-hold|put c1/<path> <key>|put-new c1/<path> <key>|put-apps|compare|reseed|owner-login owner|test|check-test|remove-test|plan|ssh-ca plan|apply|check|public|sign-host <names>" >&2; exit 2; }
 named='' kv_path='' kv_key='' ssh_args=()
 env=dev
 if [[ ${1:-} == --prod ]]; then env=prod; shift; fi
@@ -51,8 +51,9 @@ case ${1:-} in
     # sign-host takes the names and nothing else (the host key comes on stdin); the others take no argument.
     if [[ $named == sign-host ]]; then [[ $# -eq 3 ]] || usage; ssh_args=("$3"); else [[ $# -eq 2 ]] || usage; fi
     ;;
-  # The value comes on stdin, never as an argument; the helper checks the path and key again.
-  put)
+  # The value comes on stdin, never as an argument; the helper checks the path and key again. put-new (run by openbao-prod adopt) writes
+  # nothing when OpenBao already holds the key.
+  put | put-new)
     action=$1
     [[ $# -eq 3 ]] || usage
     kv_path=$2 kv_key=$3
@@ -289,7 +290,7 @@ no_hold() {
 put() {
   sops_copies
   no_hold
-  kv put "$kv_path" "$kv_key"
+  kv "$action" "$kv_path" "$kv_key"
 }
 
 # Every value this environment's apps read through store c1 (namespace secret-source, docs/runbooks/seed-secret-source.md)
@@ -343,6 +344,16 @@ put_apps() {
     m=$((m + 1))
   done < "$ident"
   if [[ -n $token ]]; then printf '%s' "$value" | kv put c1/cloudflare-api-token value; fi
+  # Dev only: a value the apps need and no file holds is made here, once (put-new keeps one already there). Prod's come from
+  # `openbao-prod adopt`, the running cluster's own values: a random one made here would not match the data prod restores.
+  if [[ $env == dev ]]; then
+    # <path> <key> <value: hex for 24 random bytes, or the literal text>
+    local -a generated=("c1/jellyfin-admin password hex" "c1/identity-db username keycloak" "c1/identity-db password hex")
+    for spec in "${generated[@]}"; do
+      read -r gpath gkey gval <<< "$spec"
+      if [[ $gval == hex ]]; then openssl rand -hex 24 | tr -d '\n' | kv put-new "$gpath" "$gkey"; else printf '%s' "$gval" | kv put-new "$gpath" "$gkey"; fi
+    done
+  fi
   echo "secrets-store: put-apps: $n values from ${src##*/} at c1/<name> key value, $m from ${ident##*/} at c1/identity key <KEY>$([[ -z $token ]] || echo ", and the DNS-01 token at c1/cloudflare-api-token key value"), written to SOPS, then OpenBao"
 }
 
@@ -367,7 +378,7 @@ case $action in
   restore) restore ;;
   restore-rebuilt) restore_rebuilt ;;
   clear-hold) clear_hold ;;
-  put) put ;;
+  put | put-new) put ;;
   put-apps) put_apps ;;
   # owner, test and check-test write keys, and a key in a fresh rebuilt store makes restore-rebuilt refuse, so they wait for the
   # hold like put; remove-test only deletes, so it may run (the reviewer's ask on #821).

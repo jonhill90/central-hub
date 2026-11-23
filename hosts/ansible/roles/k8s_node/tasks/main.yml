@@ -157,14 +157,9 @@
   changed_when: "'changed' in k8s_node_nm_zone.stdout"
 
 # Step 4. Firewall for Kubernetes and Cilium (lab zone only)
-- name: step4 | Kubernetes and Cilium ports
-  ansible.posix.firewalld:
-    zone: "{{ k8s_node_firewall_zone }}"
-    port: "{{ item }}"
-    permanent: true
-    immediate: true
-    state: enabled
-  loop: "{{ k8s_node_ports }}"
+# The ports are their own task file so playbooks/k8s-node-ports.yml can apply only them to a running cluster.
+- name: Step 4 | Kubernetes and Cilium ports
+  ansible.builtin.include_tasks: ports.yml
 
 - name: step4 | Trust the pod range (else CoreDNS never gets Ready)
   ansible.posix.firewalld:

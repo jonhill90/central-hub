@@ -198,7 +198,7 @@
 
     - name: ui | Argo CD's page answers at https://{{ k8s_gitops_ui_host }}/
       ansible.builtin.command: >-  # noqa: command-instead-of-module (curl's own trust store and -k rule, as in k8s_certs smoke)
-        curl -sS --max-time 10 {{ '-k' if __issuer == 'letsencrypt-staging' else '' }}
+        curl -sS --max-time 10 {{ '-k' if __issuer in ['letsencrypt-staging', 'dev-ca'] else '' }} {{ __resolve }}
         -w '\n%{http_code}' https://{{ k8s_gitops_ui_host }}/
       delegate_to: "{{ k8s_gitops_ui_proof_client }}"
       register: k8s_gitops_ui_get
@@ -210,11 +210,12 @@
       changed_when: false
       vars:
         __issuer: "{{ k8s_gitops_ui_facts.stdout_lines[1] }}"
+        __resolve: "{{ k8s_gitops_ui_resolve }}"
 
     # Cilium's Envoy writes the default port into the redirect (measured: https://<name>:443/).
     - name: ui | Plain HTTP for the name never serves the UI
       ansible.builtin.command: >-  # noqa: command-instead-of-module (curl, as in the task above)
-        curl -sS --max-time 10 -o /dev/null -w '%{http_code} %{redirect_url}' http://{{ k8s_gitops_ui_host }}/
+        curl -sS --max-time 10 {{ k8s_gitops_ui_resolve }} -o /dev/null -w '%{http_code} %{redirect_url}' http://{{ k8s_gitops_ui_host }}/
       delegate_to: "{{ k8s_gitops_ui_proof_client }}"
       register: k8s_gitops_ui_plain
       until: >-

@@ -70,6 +70,18 @@ Agents look at c1 from the agent box; they change it only through the repository
 
    expect: the nodes list; `no`; then `c1-read: flag --kubeconfig ... is not allowed` and nothing else.
 
+## After a rebuild
+
+A rebuild makes a new cluster, with a new CA and a new `agent-read-token`, so the kubeconfig on the box stops working: `c1-read` answers `x509: certificate signed by unknown authority`. The box makes the file again from the live cluster, with no Mac step:
+
+```sh
+openbao-prod c1-readonly
+```
+
+It reads the CA and token of Secret `agent-read/agent-read-token` on the first control-plane node (the box's own prod node key), keeps the API address the old file holds (or the inventory's `k8s_control_plane_endpoint`), and writes `/etc/agent-keys/c1-readonly.kubeconfig` only after the new file reads the nodes and answers `no` to listing Secrets and to creating Pods. Otherwise the old file stays. It prints counts and yes or no, never the token. Prod's rebuild runs it after its `store-ca` step, and a failure there only warns, so run it by hand once app `agent-read` is Synced.
+expect: `PASS: openbao-prod: c1-readonly: ... (reads N nodes; list secrets: no; create pods: no)`, then `c1-read get nodes` lists the nodes.
+why: steps 1 to 4 above stay for the first build, and for a rotation, which also needs a new token.
+
 ## Rotate
 
 Delete Secret `agent-read-token` (`ssh <c1-control-plane> sudo kubectl -n agent-read delete secret agent-read-token`). The old token stops working at once; Argo CD makes the Secret again and Kubernetes fills in a new token. Run steps 2 to 5 again.

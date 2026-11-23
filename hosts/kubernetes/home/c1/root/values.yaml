@@ -60,7 +60,7 @@ labCaIssuer: true
 loginProbe: true
 # Whether Jellyfin's setup CronJob (and the admin Secret it signs in with) is made. true, as on c1. Ansible sets it
 # to false only for a cluster that restores prod's volumes before the apps start (k8s_gitops_source_jellyfin_setup):
-# dev. The restored Jellyfin config already holds prod's admin user and password, which the setup Job's own
+# dev, and prod's own rebuild (it restores its backup). The restored Jellyfin config already holds prod's admin user and password, which the setup Job's own
 # Secret, made fresh in that cluster, can't match, so every run signed in with a 401 and failed `checks`.
 jellyfinSetup: true
 # Whether monitoring-extras' panel-check CronJob is suspended. false, as on c1. Ansible sets it to true only for dev
@@ -147,6 +147,8 @@ c1Project:
 #   ignoreDifferences  fields Argo CD leaves alone, for example a password the chart makes at random
 #   rootParameters  value path -> name of a root value; passed as a Helm parameter when that root
 #                value is set (private values such as an address or a node name)
+#   openbaoParameters  value path -> text; passed as a Helm parameter only when appSecretsStore is openbao
+#                (plan step 8a), so a cluster that keeps its apps' secrets in store c1 renders as before
 #   enabledBy    name of a true/false root value: the app's Application is made only when it is true
 #                (dev first, D-0058); without it the app is made on every cluster
 #   clusterResources  cluster-scoped kinds only this app makes, added to the project's whitelist
@@ -187,13 +189,15 @@ apps:
     # so Jellyfin's SSO setup skips (apps/jellyfin, files/setup.sh).
     # No setup CronJob on a cluster that restores prod's Jellyfin config (dev, jellyfinSetup false): the config
     # already has prod's admin password, which the fresh admin Secret there can't match.
+    rootParameters:
+      adminSecret.store: appSecretsStore
     switchOffParameters:
       sso.labRoot.certificate: labCaIssuer
       setup.enabled: jellyfinSetup
     autoSync: true    # on 2026-11-10: its diff on c1 at 03:08 UTC was Argo CD's tracking only
     prune: false
   # The Central Hub web app (spec 2026-11-central-hub-app-on-c1): built at pod start from a pinned commit of
-  # its own public repository. Its route is in the gateway app (routes: central-hub-app).
+  # its own public repository. Its route is in the gateway app (routes: hub).
   central-hub-app:
     namespace: central-hub-app
     local: true
@@ -231,6 +235,13 @@ apps:
       version: 92.3.1   # Prometheus Operator v0.94.1, 2026-10-13; same as k8s_observability today
       digest: sha256:bb8dae4452aefa2e1fcfd23af35c0b3f8aa070e339aa7efec32848efb6886a24
     valueFiles: [values.yaml, values-sso.yaml]
+    # Plan step 8a: with the store openbao Grafana reads its admin account from Secret grafana-admin (ExternalSecret in
+    # monitoring-extras, from c1/grafana-admin, the account `openbao-prod adopt` copied from the running Grafana's Secret)
+    # instead of the chart's own Secret, which the chart renders with a new random password at every render.
+    openbaoParameters:
+      grafana.admin.existingSecret: grafana-admin
+      grafana.admin.userKey: username
+      grafana.admin.passwordKey: password
     zoneParameters:
       # Short aliases (STD-0001 rules 5 and 7), as k8s_observability_short_names.
       grafana.grafana\.ini.server.root_url: "https://grafana.{zone}/"
@@ -342,7 +353,10 @@ apps:
       https: "{gatewayHttps}"
     wave: -1
     autoSync: true
-    prune: false
+    # Prunes: its objects are the Gateway's routes and listeners, so a route that leaves git must leave the cluster. With prune
+    # false, #856 (route key central-hub-app became hub, 2026-11-22 03:17 UTC) left the old HTTPRoute behind and the app OutOfSync,
+    # which failed dev's `apps` stage while a run was going and would fail prod's `checks`. Its cycles have run clean since 2026-11-10.
+    prune: true
   # c1's own alert rules, the Argo CD scrape and the lab dashboard (needs the CRDs from
   # kube-prometheus-stack, so it waits for it).
   monitoring-extras:
@@ -355,6 +369,7 @@ apps:
     rootParameters:
       ntfy.store: appSecretsStore
       heartbeat.store: appSecretsStore
+      grafanaAdmin.store: appSecretsStore
     wave: 1
     autoSync: true
     prune: true

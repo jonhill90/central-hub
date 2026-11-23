@@ -30,6 +30,15 @@
 #          key, prod's own newest volume snapshot back onto the empty data disk (k8s-restore.yml), Argo CD and every
 #          app, the certificates, sign-in, Keycloak's database back from the same snapshot (k8s-identity-restore.yml),
 #          the Argo CD UI, the backup timers on again with the carried certificates, and the checks.
+#          Then four steps this wrapper runs itself, each logged as a stage (store-admin, store-ca, identity-values, store-secrets), so a
+#          resume carries on from the one that failed (owner, 2026-11-22; they were run by hand, each with a clearance, after prod run 9):
+#            store-admin     openbao-prod admin-firewall <tap id>: the node firewall rule for the store's admin path;
+#            store-ca        openbao-prod ca: the rebuilt store's new CA, written for the box and as ConfigMap openbao-ca-bundle, then
+#                            openbao-prod c1-readonly: the box's c1-read kubeconfig made again from the new cluster (a failure there only warns);
+#            identity-values c1-ansible apply identity-values <tap id>: any key the realm needs that the box's identity.env lacks;
+#            store-secrets   secrets-store-prod clear-hold (only when the rebuild hold is set), put-apps, compare.
+#          The run's own tap is the clearance each takes. The hold is cleared, not restored from a snapshot: restore-rebuilt has not been run
+#          on prod, and clear-hold keeps the earlier snapshots in a kept folder. The pin and the carried keys go only after all four passed.
 #          The volume snapshot the restore brings back is always pinned: the snapshot the drill backed up and tested before
 #          the teardown (or the one named by the optional <volume snapshot id>), never "latest". Once the teardown starts,
 #          the box keeps the pin (<state>/prod-restore-pin) until a run ends well. A run that finds the last rebuild
@@ -212,6 +221,12 @@ if [[ $action == rebuild || $action == resume ]]; then
   fi
 fi
 
+# The steps a rebuilt prod store needs after `gateway` and before `identity`, which this wrapper runs itself, in this order, each logged as a stage so a resume
+# carries on from the one that failed (owner, 2026-11-22: they were run by hand, each with its own clearance, after prod run 9).
+post_stages="store-admin store-ca identity-values store-secrets"
+# The order a run goes in: the four steps come after `gateway` and before `identity`, because the identity stage waits on the ExternalSecret
+# that reads the rebuilt store, which needs the admin path, its CA, the realm's keys and the apps' secrets in it first (reviewer, 2026-11-22).
+full_seq="vms cluster storage openbao-seal restore gitops secrets apps certs gateway $post_stages identity identity-db ui backup backup-drill checks"
 fails=0
 pass() { echo "PASS: rebuild-prod: $*"; }
 fail() { echo "FAIL: rebuild-prod: $*"; fails=$((fails + 1)); }
@@ -269,22 +284,11 @@ install -d -m 700 "$inventory"
 inv_ok=false
 if [[ -s $pkeys/inventory-hosts.yml && -s $settings ]] && python3 -I -c "$(cat <<'PY'
 import ipaddress, json, os, sys, yaml
-src, dst, key, known, pkeys, keys, certs, settings, repo, sftp_keys = sys.argv[1:11]
+src, dst, key, known, pkeys, keys, certs, settings, repo, sftp_keys, rootvars = sys.argv[1:12]
 def die(m):
     print("FAIL: rebuild-prod: " + m); sys.exit(1)
-s = json.load(open(settings))
-seal, store, cidr = s.get("seal_node") or "", s.get("store_host") or "", s.get("box_cidr") or ""
-if not seal or not store: die("openbao-prod.json needs seal_node and store_host")
-if cidr:
-    try: n = ipaddress.ip_network(cidr, strict=False)
-    except ValueError: die("box_cidr must be one address as a /32")
-    if n.prefixlen != 32 or n.is_loopback: die("box_cidr must be one address as a /32")
-admin = s.get("admin_address") or ""
-if admin:
-    try: a = ipaddress.ip_address(admin)
-    except ValueError: a = None
-    if a is None or a.version != 4 or a.is_loopback: die("admin_address must be one IPv4 address, not loopback")
-    if not cidr: die("admin_address needs box_cidr: only the box's /32 may reach the admin address")
+exec(open(rootvars).read())   # prod-root-vars.py: the root Application's variables, shared with c1-ansible.sh
+seal, store, cidr, admin = read_root_settings(settings, die)
 d = yaml.safe_load(open(src))
 # The Proxmox host's address on VNet mgmt (proxmox_host_mgmt_address, on the proxmox group or its hosts) is read before the group
 # is dropped, so the nodes' sftp alias can name the host with no proxmox group in the box's copy. Only that one address passes,
@@ -309,9 +313,7 @@ pve_addr = pve_address(d)
 DROP = {"ansible_ssh_common_args", "ansible_ssh_extra_args", "ansible_ssh_args", "ansible_ssh_private_key_file",
         "ansible_ssh_host", "ansible_ssh_executable", "ansible_connection", "ansible_ssh_pass", "ansible_password",
         "ansible_private_key_file", "ansible_host_key_checking", "k8s_gateway_smoke_client", "k8s_certs_smoke_client",
-        "k8s_gitops_source_openbao_address", "k8s_gitops_source_openbao_ca_file", "k8s_gitops_source_openbao_measure",
-        "k8s_gitops_source_openbao_in_cluster", "k8s_gitops_source_openbao_seal_node", "k8s_gitops_source_openbao_box_cidr",
-        "k8s_gitops_source_openbao_store_host", "k8s_gitops_source_openbao_admin_address", "k8s_gitops_source_notebook_runner", "k8s_backup_azure_fixed_cert_file"}
+        "k8s_backup_azure_fixed_cert_file"} | ROOT_VARS_DROP
 def walk(n):
     if isinstance(n, dict):
         for k in list(n):
@@ -340,7 +342,6 @@ def hosts(n):
             if k == "hosts" and isinstance(v, dict): names.update(v)
             else: hosts(v)
 hosts(g)
-if seal not in names: die("seal_node is not a k8s_nodes host of the prod inventory")
 v = g.setdefault("vars", {})
 # The private files the Mac's inventory names, each at the box's copy (prod_files.yml and the keys wrapper).
 MAP = {"k8s_control_plane_encryption_key_file": pkeys + "/c1-secrets-encryption.key",
@@ -362,6 +363,11 @@ def remap(n):
     elif isinstance(n, list):
         for i in n: remap(i)
 remap(d)
+# The identity role's values file must be the box's copy even when the controller's inventory leaves the variable to the role's default
+# (~/.config/central-hub/identity.env): the remap above only rewrites a value that is set, and if the inventory leaves it unset the default
+# under this wrapper's HOME may be another file than the one put-apps and c1-ansible read (<keys>/prod/identity.env). Defensive; the cause
+# of prod resumes 2 and 3 is unproven.
+v["k8s_identity_values_file"] = pkeys + "/identity.env"
 # The plays that restore prod (k8s-restore.yml, k8s-identity-restore.yml) read k8s_gitops_cluster_labels.env in their
 # pre_tasks, where the k8s_gitops role's default (env prod) is not loaded. The Mac's inventory leaves the labels to that
 # default, so with no labels set anywhere the box's copy gets the role's own default labels, which say prod. Labels set
@@ -383,24 +389,17 @@ v["k8s_certs_smoke_client"] = "localhost"
 # keys. The role's default is under /root, which keys can't read: rerun 9 (2026-11-21) stopped there with "Permission denied".
 # Dev's wrapper does the same: a file in the run's own folder, which keys owns. The Mac's value is refused above.
 v["k8s_certs_smoke_root_file"] = known.rsplit("/", 1)[0] + "/lab-root-ca.crt"
-v["k8s_gitops_source_openbao_in_cluster"] = True
+set_root_vars(v, names, seal, store, cidr, admin, die)
 # Argo CD makes cert-manager and the Gateway on a rebuilt cluster, so the certs and gateway stages must not apply the same objects
 # again: dev's inventory sets these true (runbook, "The env's inventory hands every app to Argo CD"). Rerun 7 (2026-11-21) ran
 # the certs stage's own helm install over the cert-manager Argo CD had made and stopped there. Only the switches of the stages
 # that run after apps; the stages that already passed on prod keep the Mac inventory's values.
 for name in ("k8s_certs_cert_manager_by_argocd", "k8s_gateway_by_argocd"):
     v[name] = True
-# The notebook CI runner pod is prod's only (docs/runbooks/run-the-notebook-runner-on-c1.md).
-v["k8s_gitops_source_notebook_runner"] = True
-v["k8s_gitops_source_openbao_seal_node"] = seal
-v["k8s_gitops_source_openbao_store_host"] = store
-if cidr: v["k8s_gitops_source_openbao_box_cidr"] = cidr
-if admin: v["k8s_gitops_source_openbao_admin_address"] = admin
 # The rebuild's own: prod's own snapshot back (k8s-restore.yml, k8s-identity-restore.yml), onto stable folder names
 # so the new claims find the restored folders, the backup certificates carried over, and no throwaway identity copy.
 v["k8s_backup_restore_own_env"] = True
 v["k8s_backup_restore_source_host"] = workers[0]
-v["k8s_gitops_source_local_path_stable_folders"] = True
 v["k8s_backup_azure_seed_dir"] = certs
 # With the Proxmox host as the backup target the rebuilt nodes get their old sftp keys back (carried off the nodes in step 1a)
 # and name the host by the address read above; the host already lets those keys in, and the box holds no key on the host.
@@ -412,7 +411,7 @@ if pve_addr:
 v["k8s_backup_restore_check_identity"] = False
 yaml.safe_dump(d, open(dst, "w"), default_flow_style=False)
 PY
-)" "$pkeys/inventory-hosts.yml" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$pkeys" "$keys" "$certs" "$settings" "$repo" "$sftp_keys"; then
+)" "$pkeys/inventory-hosts.yml" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$pkeys" "$keys" "$certs" "$settings" "$repo" "$sftp_keys" "$libexec/prod-root-vars.py"; then
   chmod 600 "$inventory/hosts.yml"
   # Every k8s_nodes host as Ansible sees it: plain ssh with the box's key, labelled env prod, at an address, and no
   # value that still names a file on the Mac. The names of the mapped files must exist on the box.
@@ -841,7 +840,8 @@ if $resuming; then
   # (a) The stages before the resume point ended well in the one command's own logs since the stopped run's teardown.
   t_stamp=${torn#run-}; t_stamp=${t_stamp%.log}
   resume_stages=''; first_bad=''
-  for st in vms cluster storage openbao-seal restore gitops secrets apps certs gateway identity identity-db ui backup checks; do
+  declare -A good=()
+  for st in $full_seq; do
     last=''
     for f in $(ls -1 "$envdir"/logs/rebuild-*.log 2>/dev/null | sort); do
       fs=${f##*/rebuild-}; fs=${fs%.log}
@@ -849,7 +849,25 @@ if $resuming; then
       l=$(grep -E "^[0-9TZ:-]+ $st end rc=[0-9]+" -- "$f" | tail -n 1 || true)
       [[ -z $l ]] || last=$l
     done
-    if [[ $last =~ ' end rc=0' ]]; then
+    if [[ $last =~ ' end rc=0' ]]; then good[$st]=1; else good[$st]=0; fi
+  done
+  # A post step with no line at all stands as done when a later stage of the same run ended well: a run that began before these steps were
+  # stages had them run by hand (prod, 2026-11-22). A step whose line says it failed (rc not 0) never stands.
+  later_good=0
+  for st in $(printf '%s\n' $full_seq | tac); do
+    if [[ ${good[$st]} == 1 ]]; then later_good=1
+    elif [[ $later_good == 1 && " $post_stages " == *" $st "* ]]; then
+      noline=1
+      for f in $(ls -1 "$envdir"/logs/rebuild-*.log 2>/dev/null | sort); do
+        fs=${f##*/rebuild-}; fs=${fs%.log}
+        [[ $fs < $t_stamp ]] && continue
+        ! grep -qE "^[0-9TZ:-]+ $st end rc=[0-9]+" -- "$f" || noline=0
+      done
+      if [[ $noline == 1 ]]; then good[$st]=1; echo "rebuild-prod: post step $st has no log line and a later stage ended well; counted as done (run by hand)"; fi
+    fi
+  done
+  for st in $full_seq; do
+    if [[ ${good[$st]} == 1 ]]; then
       [[ -z $first_bad ]] || { echo "FAIL: rebuild-prod: stage $st ended well but the stage before it ($first_bad) did not; the run's logs are out of order; nothing was run"; exit 1; }
     else
       [[ -n $first_bad ]] || first_bad=$st
@@ -897,7 +915,7 @@ fi
 
 # certs runs before gateway: the Gateway's HTTPS listener waits on the certificate's Secret, and `apps` leaves out the two apps that
 # need what certs makes (APPS_DEFER); `checks` waits for every app (prod run 6, 2026-11-21, stopped at apps on gateway and jellyfin).
-stages="vms cluster storage openbao-seal restore gitops secrets apps certs gateway identity identity-db ui backup checks"
+stages="vms cluster storage openbao-seal restore gitops secrets apps certs gateway identity identity-db ui backup backup-drill checks"
 cat > "$envdir/rebuild.env" <<ENV
 ENV_NAME=prod
 VM_ID_MIN=$vm_min
@@ -917,13 +935,74 @@ RESTORE_CHECK_HOOK='cd "\$REPO/hosts/ansible" && ansible-playbook -i "\$INVENTOR
 ENV
 chmod 600 "$envdir/rebuild.env"
 rc=0
+post_log="$envdir/logs/rebuild-$(date -u +%Y%m%dT%H%M%SZ)-post.log"
+# The steps after `gateway`: the run's own go (its tap) is the clearance each one takes. Each is idempotent, so a resume runs only the ones
+# with no good end line. The store's rebuild hold is cleared here and the apps' secrets are put in from their SOPS copy and compared, the path
+# run by hand after prod run 9 (restore-rebuilt on prod has not been run: not chosen).
+post_step() { # <stage> <command...>
+  local name=$1 t0 prc=0; shift
+  t0=$(date +%s)
+  echo "$(date -u +%FT%TZ) $name start" >> "$post_log"
+  echo "rebuild-prod: post step $name: $*"
+  "$@" || prc=$?
+  echo "$(date -u +%FT%TZ) $name end rc=$prc $(( $(date +%s) - t0 ))s" >> "$post_log"
+  return "$prc"
+}
+# The store's new CA, then the box's read-only kubeconfig for c1, which a rebuild leaves with the old cluster's CA and token. The second
+# never stops the run: the store's CA is what the stages after it need, and `openbao-prod c1-readonly` can be run again by hand.
+store_ca() {
+  "$libexec/openbao-prod.sh" ca || return 1
+  "$libexec/openbao-prod.sh" c1-readonly || echo "WARN: rebuild-prod: the box's c1-read kubeconfig was not made again; run openbao-prod c1-readonly once app agent-read is Synced"
+}
+store_secrets() {
+  local out moved
+  if [[ -e $work/state/secrets-store-prod.rebuilding ]]; then
+    out=$("$libexec/secrets-store-prod.sh" clear-hold 2>&1) || { printf '%s\n' "$out"; return 1; }
+    printf '%s\n' "$out"
+    # clear-hold sets aside every snapshot that is not of the current store's cluster. On a store the volume restore brought back that is 0.
+    # More than 0 means the store is really fresh and its earlier snapshots may be the way back: put-apps would write keys into it, after
+    # which restore-rebuilt refuses it. So stop here; nothing is deleted (the snapshots are in the kept folder) and nothing is written to the store.
+    moved=$(sed -nE 's/.*rebuild hold removed; ([0-9]+) earlier snapshot.*/\1/p' <<< "$out" | head -n 1)
+    if [[ $moved != 0 ]]; then
+      echo "FAIL: rebuild-prod: clear-hold set aside ${moved:-an unreadable number of} earlier snapshot(s), so the store may be really fresh and a restore may be wanted; put-apps was not run and nothing was written to the store. Move them back from the kept folder and run restore-rebuilt, or decide to go on without them."
+      return 1
+    fi
+  fi
+  "$libexec/secrets-store-prod.sh" put-apps || return 1
+  "$libexec/secrets-store-prod.sh" compare
+}
+# The stages to run, in order. A full run starts with the teardown. Consecutive stages of the one command go in one call of it;
+# a post step ends the group before it.
 if $resuming; then
+  run_list=" ${resume_stages//,/ } "
   echo "rebuild-prod: resume start, no teardown: $resume_stages"
-  bash "$repo/hosts/rebuild-k8s.sh" "$envdir" --only "$resume_stages" || rc=$?
 else
+  run_list=" teardown $full_seq "
   echo "rebuild-prod: teardown and build start: $stages"
-  bash "$repo/hosts/rebuild-k8s.sh" "$envdir" --teardown || rc=$?
 fi
+group=''
+flush_group() {
+  [[ -n $group ]] || return 0
+  local g=${group%,}; group=''
+  bash "$repo/hosts/rebuild-k8s.sh" "$envdir" --only "$g"
+}
+for st in teardown $full_seq; do
+  [[ $run_list == *" $st "* ]] || continue
+  case " $post_stages " in
+    *" $st "*)
+      flush_group || { rc=$?; break; }
+      case $st in
+        store-admin) post_step "$st" "$libexec/openbao-prod.sh" admin-firewall "$tap" || rc=$? ;;
+        store-ca) post_step "$st" store_ca || rc=$? ;;
+        identity-values) post_step "$st" "$libexec/c1-ansible.sh" apply identity-values "$tap" || rc=$? ;;
+        store-secrets) post_step "$st" store_secrets || rc=$? ;;
+      esac
+      [[ $rc -eq 0 ]] || { echo "FAIL: rebuild-prod: post step $st failed (rc $rc); the run stopped; resume continues from it"; break; }
+      ;;
+    *) group+="$st," ;;
+  esac
+done
+[[ $rc -ne 0 ]] || flush_group || rc=$?
 if [[ $rc -eq 0 ]]; then
   # The carried sftp private keys have done their job once the rebuilt nodes hold them and the backup stage and checks passed;
   # the host accepts those keys as the writer, so the box must not keep a key on the host (D-0042 rule 6, an access right

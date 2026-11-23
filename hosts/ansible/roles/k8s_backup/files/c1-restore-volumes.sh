@@ -271,14 +271,29 @@ if [ "$cmd" = check ]; then
   sed 's/^/   /' "$record"
   want=$(awk -F'\t' '$1 == "canary" {print $2}' "$record")
   got=$(cat "$path/$canary" 2>/dev/null) || die "no canary file in $path"
-  [ "$got" = "$want" ] || die "canary in $path is '$got', the restore recorded '$want'"
+  how=matches
+  if [ "$got" != "$want" ]; then
+    # Every volume backup writes a new canary into each folder (c1-backup-volumes.sh), so one that ran after the restore (the prod
+    # backup-drill stage, or the nightly timer) changes the file, and the restored data is still there. That is accepted only when this
+    # node recorded the canary after the restore (canary-volumes is replaced only after its snapshot succeeded, and is newer than the
+    # restore's record) AND the newest volumes snapshot of this node holds exactly the canary on disk (read from the repository). A
+    # canary nobody recorded, or one the snapshot does not hold, fails as it always did.
+    backups=$BACKUP_STATE/canary-volumes
+    later=$(awk -F'\t' -v p="$path" '$1 == p {print $2}' "$backups" 2>/dev/null || true)
+    [ -n "$later" ] && [ "$got" = "$later" ] && [ "$backups" -nt "$record" ] ||
+      die "canary in $path is '$got', the restore recorded '$want', and no backup of this node recorded it after the restore"
+    held=$(r dump --host "$BACKUP_HOST" --tag volumes latest "$path/$canary" 2>/dev/null) ||
+      die "canary in $path is '$got', not the restore's '$want'; the newest volumes snapshot of $BACKUP_HOST could not be read to confirm it"
+    [ "$held" = "$got" ] || die "canary in $path is '$got', the restore recorded '$want', and the newest volumes snapshot of $BACKUP_HOST holds '$held'"
+    how="matches the one the node's own backup recorded after the restore, and the newest volumes snapshot holds it"
+  fi
   n=0
   while IFS=$'\t' read -r kind folder _; do
     [ "$kind" = folder ] || continue
     [ -d "$path/$folder" ] || die "restored folder $path/$folder is gone"
     n=$((n + 1))
   done < "$record"
-  log "PASS: restore of snapshot $(awk -F'\t' '$1 == "snapshot" {print $2}' "$record") still in place, $n folders, canary matches"
+  log "PASS: restore of snapshot $(awk -F'\t' '$1 == "snapshot" {print $2}' "$record") still in place, $n folders, canary $how"
   exit 0
 fi
 

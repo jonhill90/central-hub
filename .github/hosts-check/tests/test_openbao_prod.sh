@@ -29,6 +29,11 @@
 #  14. secrets-status reads only (kubectl get and logs, never a Secret): it prints the store's Ready condition, the ExternalSecrets,
 #      and for each one not Ready its message and the controller's log lines naming it (at most 20); all Ready prints no log;
 #      a failed read stops it with an error; a tap or another argument runs nothing.
+#  15. jobs-status lists the Jobs with failed pods and each one's last 30 log lines, scrubbed; get and logs only; a tap runs nothing.
+#  16. prune-status lists the resources Argo CD marks requiresPruning per Application with one get; a tap runs nothing.
+#  20. adopt reads only its fixed table of Secrets and gives each value on stdin to put-new; no value printed; a failed adoption or compare fails it.
+#  19. c1-readonly makes the box's read-only kubeconfig again from Secret agent-read/agent-read-token and proves it before it replaces the old one; any failure leaves the old file.
+#  18. targets-status lists the node-exporter pods, the down targets and the backup times by instance, from get calls only; a tap runs nothing.
 # Usage: .github/hosts-check/tests/test_openbao_prod.sh   (needs python3 with PyYAML, ssh-keygen, flock)
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -39,6 +44,7 @@ ok() { echo "ok   $*"; }
 bad() { echo "FAIL $*"; fail=1; }
 
 venv=$t/libexec/ansible-venv/bin
+mkdir -p "$t/libexec"; cp hosts/ansible/roles/agent_box/files/prod-root-vars.py "$t/libexec/prod-root-vars.py"
 mkdir -p "$t/bin" "$venv" "$t/keys/prod" "$t/work/state" "$t/work/central-hub" "$t/run"
 ln -s "$(command -v python3)" "$venv/python3"
 cat > "$t/bin/git" <<'EOF'
@@ -439,5 +445,200 @@ if [[ $a_rc -eq 0 && $a_out == *"store openbao: Ready=False reason=InvalidProvid
       $x_rc -eq 2 && -z $x_calls ]]; then
   ok "14. secrets-status: the store's condition, the ExternalSecrets, and the last 20 controller lines naming each one not Ready; only get and logs, no Secret read; all Ready reads no log; a failed read stops it; a tap runs nothing"
 else bad "14. rc=$a_rc logs=$log_lines writes=$write_calls nonread=$only_read | allready rc=$g_rc logs=$g_logs | fail rc=$f_rc $f_out | tap rc=$x_rc [$x_calls] | out: $a_out"; fi
+
+# 15: jobs-status lists the Jobs with failed pods and each one's last log lines, scrubbed; get and logs only.
+mkdir -p "$t/work/checkouts/openbao-prod/hosts"; cp hosts/diag-apps.py "$t/work/checkouts/openbao-prod/hosts/diag-apps.py"
+rm -rf "$t/kube2"; mkdir -p "$t/kube2"; : > "$t/kcalls"
+cat > "$venv/ansible" <<EOS
+#!/usr/bin/env python3
+import json, os, sys
+a = sys.argv[sys.argv.index("-a") + 1]
+open("$t/kcalls", "a").write(a + "\\n")
+rc, out = 0, ""
+if " logs " in a: out = "setup: login password=hunter2 refused by jellyfin"
+elif " get jobs " in a:
+    mk = lambda ns, n, f, s, owner=True: {"metadata": {"namespace": ns, "name": n, **({"ownerReferences": [{"kind": "CronJob", "name": "jellyfin-setup"}]} if owner else {})}, "status": {"failed": f, "succeeded": s, "startTime": "2026-11-22T02:40:00Z"}}
+    out = json.dumps({"items": [mk("media", "jellyfin-setup-1", 2, 0), mk("monitoring", "ok-1", 0, 1), mk("media", "manual-1", 1, 0, False)]})
+else: rc = 1
+print(json.dumps({"plays": [{"tasks": [{"hosts": {"cp-a": {"rc": rc, "stdout": out, "stderr": ""}}}]}]}))
+EOS
+chmod +x "$venv/ansible"
+settings '{"seal_node":"wk-a","store_host":"bao.invalid"}'
+inventory "${prod_inv[@]}"
+run jobs-status; a_rc=$rc a_out=$out
+a_calls=$(cat "$t/kcalls")
+writes=$(grep -cE ' (apply|delete|create|patch|annotate|edit|replace|exec|cp) |get secret' <<< "$a_calls" || true)
+run jobs-status "$tap"; x_rc=$rc x_calls=$calls
+if [[ $a_rc -eq 0 && $a_out == *"media jellyfin-setup-1 jellyfin-setup failed=2 succeeded=0"* && $a_out == *"media manual-1 - failed=1"* && $a_out != *"ok-1 "* &&
+      $a_out == *"last 30 log lines of media/jellyfin-setup-1 (scrubbed):"* && $a_out == *"login password=<redacted> refused by jellyfin"* && $a_out != *"hunter2"* &&
+      $a_out == *"PASS: openbao-prod: jobs-status: read, nothing changed"* && $writes -eq 0 && $x_rc -eq 2 && -z $x_calls ]]; then
+  ok "15. jobs-status: the failed Jobs (not the good one) with their owner, and each one's last log lines scrubbed; only get and logs; a tap runs nothing"
+else bad "15. rc=$a_rc writes=$writes | tap rc=$x_rc [$x_calls] | $a_out"; fi
+
+# 16: prune-status lists, for every Application, what Argo CD marks requiresPruning; one kc get, nothing written.
+: > "$t/kcalls"
+cat > "$venv/ansible" <<EOS
+#!/usr/bin/env python3
+import json, sys
+a = sys.argv[sys.argv.index("-a") + 1]
+open("$t/kcalls", "a").write(a + "\\n")
+res = lambda g, k, ns, n, p=False: {"group": g, "kind": k, "namespace": ns, "name": n, **({"requiresPruning": True} if p else {})}
+items = [{"metadata": {"name": "gateway"}, "status": {"sync": {"status": "OutOfSync"}, "health": {"status": "Healthy"}, "resources": [
+            res("gateway.networking.k8s.io", "HTTPRoute", "central-hub-app", "central-hub-app", True),
+            res("gateway.networking.k8s.io", "HTTPRoute", "central-hub-app", "central-hub-app-redirect", True),
+            res("gateway.networking.k8s.io", "HTTPRoute", "central-hub-app", "hub")]}},
+         {"metadata": {"name": "jellyfin"}, "status": {"sync": {"status": "Synced"}, "health": {"status": "Healthy"}, "resources": [res("", "Secret", "media", "jellyfin-admin")]}}]
+out = json.dumps({"items": items}) if "get applications" in a else ""
+print(json.dumps({"plays": [{"tasks": [{"hosts": {"cp-a": {"rc": 0 if out else 1, "stdout": out, "stderr": ""}}}]}]}))
+EOS
+chmod +x "$venv/ansible"
+run prune-status; a_rc=$rc a_out=$out
+a_calls=$(cat "$t/kcalls")
+run prune-status "$tap"; x_rc=$rc x_calls=$calls
+if [[ $a_rc -eq 0 && $a_out == *"app gateway: sync=OutOfSync health=Healthy"* &&
+      $a_out == *"prune gateway: gateway.networking.k8s.io/HTTPRoute central-hub-app/central-hub-app"* &&
+      $a_out == *"prune gateway: gateway.networking.k8s.io/HTTPRoute central-hub-app/central-hub-app-redirect"* &&
+      $a_out != *"prune gateway: gateway.networking.k8s.io/HTTPRoute central-hub-app/hub"* && $a_out != *"prune jellyfin"* &&
+      $a_out == *"2 resource(s) marked requiresPruning"* && $a_out == *"PASS: openbao-prod: prune-status: read, nothing changed"* &&
+      $(wc -l <<< "$a_calls") -eq 1 && $a_calls == *"get applications.argoproj.io -o json"* && $x_rc -eq 2 && -z $x_calls ]]; then
+  ok "16. prune-status: lists only the resources Argo CD marks requiresPruning, per Application, with one get; a tap runs nothing"
+else bad "16. rc=$a_rc calls=[$a_calls] | tap rc=$x_rc [$x_calls] | $a_out"; fi
+# 18: targets-status reads the node-exporter pods, what Prometheus says is down, and which instance reports each backup time; get only.
+: > "$t/kcalls"
+cat > "$venv/ansible" <<EOS
+#!/usr/bin/env python3
+import json, sys
+a = sys.argv[sys.argv.index("-a") + 1]
+open("$t/kcalls", "a").write(a + "\\n")
+def res(rows): return json.dumps({"status": "success", "data": {"resultType": "vector", "result": rows}})
+if "get pods" in a:
+    # a pod with restarts: custom-columns keeps one value per column, so the node stays in the last column
+    out = "monitoring kube-prometheus-stack-prometheus-node-exporter-aaaaa true Running cp-a.lab.example\\nmonitoring kube-prometheus-stack-prometheus-node-exporter-bbbbb false Pending wk-a.lab.example\\nmedia jellyfin-x true Running wk-a.lab.example"
+    assert "custom-columns=" in a and "-o wide" not in a, a
+elif "get nodes" in a:
+    node = lambda n, ip, cp: {"metadata": {"name": n, "labels": {"node-role.kubernetes.io/control-plane": ""} if cp else {}}, "status": {"addresses": [{"type": "InternalIP", "address": ip}, {"type": "Hostname", "address": n}], "conditions": [{"type": "Ready", "status": "True"}]}}
+    out = json.dumps({"items": [node("wk-a.lab.example", "10.0.0.2", False), node("cp-a.lab.example", "10.0.0.1", True)]})
+elif "get --raw" in a and "up%3D%3D0" in a: out = res([{"metric": {"job": "node-exporter", "namespace": "monitoring", "pod": "node-exporter-aaaaa", "instance": "10.0.0.1:9100", "node": "cp-a.lab.example"}, "value": [1, "0"]}, {"metric": {"job": "kubelet", "instance": "192.168.9.9:10250"}, "value": [1, "0"]}])
+elif "get --raw" in a: out = res([{"metric": {"kind": "volumes", "instance": "10.0.0.2:9100"}, "value": [1, "1700000000"]}])
+else: out = ""
+print(json.dumps({"plays": [{"tasks": [{"hosts": {"cp-a": {"rc": 0 if out else 1, "stdout": out, "stderr": ""}}}]}]}))
+EOS
+chmod +x "$venv/ansible"
+run targets-status; a_rc=$rc a_out=$out
+a_calls=$(cat "$t/kcalls")
+write_calls=$(grep -cE ' (apply|delete|create|patch|annotate|edit|replace|exec|cp) |get secret|-o yaml' <<< "$a_calls" || true)
+run targets-status "$tap"; x_rc=$rc x_calls=$calls
+if [[ $a_rc -eq 0 && $a_out == *"node-exporter-aaaaa true Running cp-1"* && $a_out == *"node-exporter-bbbbb false Pending wk-1"* && $a_out != *"jellyfin-x"* &&
+      $a_out == *"job=node-exporter namespace=monitoring pod=node-exporter-aaaaa instance=cp-1:9100 node=cp-1 value=0"* && $a_out == *"(2 series)"* &&
+      $a_out == *"job=kubelet instance=<ip>:10250 value=0"* && $a_out == *$'cp-1 Ready\nwk-1 Ready'* &&
+      $a_out == *"kind=volumes instance=wk-1:9100 value=1700000000"* &&
+      $a_out != *"10.0.0."* && $a_out != *"192.168"* && $a_out != *"lab.example"* &&
+      $a_out == *"PASS: openbao-prod: targets-status: read, nothing changed"* && $write_calls -eq 0 &&
+      $(grep -c 'get --raw /api/v1/namespaces/monitoring/services/kube-prometheus-stack-prometheus:9090/proxy/api/v1/query' <<< "$a_calls") -eq 2 &&
+      $x_rc -eq 2 && -z $x_calls ]]; then
+  ok "18. targets-status: the node-exporter pods by node, the down targets and the backup times by instance, from get calls only; a tap runs nothing"
+else bad "18. rc=$a_rc writes=$write_calls calls=[$a_calls] | tap rc=$x_rc [$x_calls] | $a_out"; fi
+
+# 19: c1-readonly makes the box's read-only kubeconfig again from Secret agent-read/agent-read-token, keeps the file's API address, proves the
+# new file (reads nodes, no to listing Secrets and creating Pods) before it replaces the old one, and never prints the token.
+mkdir -p "$t/kube"
+cat > "$venv/ansible" <<EOS
+#!/usr/bin/env python3
+import base64, json, sys
+a = sys.argv[sys.argv.index("-a") + 1]
+open("$t/kcalls", "a").write(a + "\\n")
+key = "token" if "data.token" in a else "ca"
+v = open("$t/kube/RO" + key.upper()).read().rstrip("\\n") if __import__("os").path.exists("$t/kube/RO" + key.upper()) else ""
+print(json.dumps({"plays": [{"tasks": [{"hosts": {"cp-a": {"rc": 0 if v else 1, "stdout": base64.b64encode(v.encode()).decode() if v else "", "stderr": "" if v else "not found"}}}]}]}))
+EOS
+chmod +x "$venv/ansible"
+cat > "$t/bin/kubectl" <<EOS
+#!/bin/bash
+echo "kubectl \$*" >> $t/kcalls
+case "\$*" in
+  *"get nodes"*) printf 'cp-a Ready\nwk-a Ready\n' ;;
+  *"list secrets"*) cat $t/kube/CANI_SECRETS 2>/dev/null || echo no ;;
+  *"create pods"*) echo no ;;
+esac
+EOS
+chmod +x "$t/bin/kubectl"
+ro=$t/keys/c1-readonly.kubeconfig
+mkcfg() { printf 'apiVersion: v1\nkind: Config\nclusters:\n- name: c1\n  cluster:\n    server: https://api.example.invalid:6443\n    certificate-authority-data: T0xE\nusers:\n- name: agent-read\n  user:\n    token: oldtoken\n' > "$ro"; }
+: > "$t/kcalls"
+mkcfg; printf 'newtoken-%s' abc123 > "$t/kube/ROTOKEN"; cp "$t/ca2.pem" "$t/kube/ROCA"
+run c1-readonly; a_rc=$rc a_out=$out; a_file=$(cat "$ro"); a_mode=$(stat -c %a "$ro"); a_calls=$(cat "$t/kcalls")
+want_ca=$(printf "%s" "$(cat "$t/ca2.pem")" | base64 -w0)
+# the proof fails: the new file may list Secrets, so the old one stays
+mkcfg; echo yes > "$t/kube/CANI_SECRETS"
+run c1-readonly; b_rc=$rc b_out=$out; b_file=$(cat "$ro"); b_part=""; [[ -e $ro.part ]] && b_part=left
+rm -f "$t/kube/CANI_SECRETS"
+# no token yet, then two certificates, then no Secret at all: the old file stays each time
+mkcfg; : > "$t/kube/ROTOKEN"; run c1-readonly; c_rc=$rc c_out=$out; c_file=$(cat "$ro")
+printf 'newtoken-%s' abc123 > "$t/kube/ROTOKEN"; cat "$t/ca1.pem" "$t/ca2.pem" > "$t/kube/ROCA"; run c1-readonly; d_rc=$rc d_out=$out; d_file=$(cat "$ro")
+rm -f "$t/kube/ROCA" "$t/kube/ROTOKEN"; run c1-readonly; e_rc=$rc e_out=$out; e_file=$(cat "$ro")
+# no file and no endpoint in the inventory: nothing written
+rm -f "$ro"; printf 'newtoken-%s' abc123 > "$t/kube/ROTOKEN"; cp "$t/ca2.pem" "$t/kube/ROCA"
+run c1-readonly; f_rc=$rc f_out=$out
+run c1-readonly extra; x_rc=$rc x_calls=$calls
+if [[ $a_rc -eq 0 && $a_out == *"PASS: openbao-prod: c1-readonly:"* && $a_out == *"reads 2 nodes"* && $a_out != *newtoken* &&
+      $a_file == *"server: https://api.example.invalid:6443"* && $a_file == *"token: newtoken-abc123"* && $a_file == *"certificate-authority-data: $want_ca"* &&
+      $a_file != *oldtoken* && $a_mode == 600 && ! -e $ro.part && $a_calls != *newtoken* &&
+      $b_rc -ne 0 && $b_out == *"failed its proof"* && $b_out == *"list secrets: yes"* && $b_file == *oldtoken* && -z $b_part &&
+      $c_rc -ne 0 && $c_out == *"could not read Secret agent-read/agent-read-token"* && $c_file == *oldtoken* &&
+      $d_rc -ne 0 && $d_out == *"is not one PEM certificate; nothing written"* && $d_file == *oldtoken* &&
+      $e_rc -ne 0 && $e_file == *oldtoken* &&
+      $f_rc -ne 0 && $f_out == *"no API address"* && ! -e $ro &&
+      $x_rc -eq 2 && -z $x_calls ]]; then
+  ok "19. c1-readonly: the live cluster's token and CA in the old file's address; the old file stays when the proof fails, the token is missing, the CA is not one certificate or the Secret is unreadable; no address, nothing written; the token never printed"
+else bad "19. rc=$a_rc $a_out | proof rc=$b_rc $b_out | token rc=$c_rc $c_out | ca rc=$d_rc $d_out | read rc=$e_rc $e_out | addr rc=$f_rc $f_out | extra rc=$x_rc"; fi
+
+# 20: adopt reads only its fixed table of Secrets, gives each value on stdin to secrets-store-prod put-new, never prints a value, fails when a
+# value cannot be adopted or compare fails, and refuses any argument.
+cat > "$venv/ansible" <<EOS
+#!/usr/bin/env python3
+import base64, json, sys
+a = sys.argv[sys.argv.index("-a") + 1]
+open("$t/kcalls", "a").write(a + "\\n")
+vals = {"jellyfin-admin": "jf-secret-Aa11", "sso-db": "db-secret-Bb22", "sso-initial-admin": "kc-secret-Cc33", "kube-prometheus-stack-grafana": "gr-secret-Dd44", "argocd-initial-admin-secret": "ar-secret-Ee55"}
+name = a.split(" secret ")[1].split()[0] if " secret " in a else ""
+miss = open("$t/kube/MISSING").read().split() if __import__("os").path.exists("$t/kube/MISSING") else []
+ok = name in vals and name not in miss
+if "--ignore-not-found" in a:
+    if __import__("os").path.exists("$t/kube/READFAIL"):
+        res = {"rc": 1, "stdout": "", "stderr": "connection refused"}
+    else:
+        res = {"rc": 0, "stdout": "secret/" + name if ok else "", "stderr": ""}
+else:
+    res = {"rc": 0 if ok else 1, "stdout": base64.b64encode(vals[name].encode()).decode() if ok else "", "stderr": "" if ok else "not found"}
+print(json.dumps({"plays": [{"tasks": [{"hosts": {"cp-a": res}}]}]}))
+EOS
+chmod +x "$venv/ansible"
+cat > "$t/libexec/secrets-store-prod.sh" <<EOS
+#!/bin/bash
+if [[ \$1 == compare ]]; then echo "secrets-store-prod compare" >> $t/ss_calls; [[ -e $t/kube/CMPFAIL ]] && { echo "FAIL: compare: key differs" >&2; exit 1; }; echo "PASS: compare: 19 keys equal in SOPS and OpenBao"; exit 0; fi
+v=\$(cat); echo "secrets-store-prod \$1 \$2 \$3 value=\$v" >> $t/ss_calls
+echo "secrets-store put-new: kv/\$2 key \$3 written to SOPS, then OpenBao"
+EOS
+chmod +x "$t/libexec/secrets-store-prod.sh"
+: > "$t/ss_calls"; : > "$t/kcalls"; rm -f "$t/kube/MISSING" "$t/kube/CMPFAIL"
+run adopt; a_rc=$rc a_out=$out; a_ss=$(cat "$t/ss_calls"); a_k=$(cat "$t/kcalls")
+echo sso-db > "$t/kube/MISSING"; : > "$t/ss_calls"; run adopt; b_rc=$rc b_out=$out; b_ss=$(cat "$t/ss_calls")
+echo argocd-initial-admin-secret > "$t/kube/MISSING"; : > "$t/ss_calls"; run adopt; g_rc=$rc g_out=$out; g_ss=$(cat "$t/ss_calls")
+rm -f "$t/kube/MISSING"; touch "$t/kube/READFAIL"; : > "$t/ss_calls"; run adopt; h_rc=$rc h_out=$out; h_ss=$(cat "$t/ss_calls")
+rm -f "$t/kube/READFAIL"; touch "$t/kube/CMPFAIL"; run adopt; c_rc=$rc c_out=$out
+rm -f "$t/kube/CMPFAIL"; run adopt extra; x_rc=$rc x_calls=$calls
+if [[ $a_rc -eq 0 && $a_out == *"PASS: openbao-prod: adopt: 8 values adopted or already held; compare passed"* &&
+      $a_ss == *"put-new c1/jellyfin-admin password value=jf-secret-Aa11"* && $a_ss == *"put-new c1/identity-db username value=db-secret-Bb22"* &&
+      $a_ss == *"put-new c1/identity-admin password value=kc-secret-Cc33"* && $a_ss == *"put-new c1/grafana-admin username value=gr-secret-Dd44"* &&
+      $a_ss == *"secrets-store-prod put c1/argocd-admin password value=ar-secret-Ee55"* && $(grep -c '^secrets-store-prod put-new' <<< "$a_ss") -eq 7 && $(grep -c '^secrets-store-prod put ' <<< "$a_ss") -eq 1 &&
+      $a_ss == *"secrets-store-prod compare" && $(grep -c ' get secret ' <<< "$a_k") -eq 9 && $(grep -cvE ' get secret (jellyfin-admin|sso-db|sso-initial-admin|kube-prometheus-stack-grafana|argocd-initial-admin-secret) ' <<< "$a_k") -eq 0 &&
+      $a_out != *-secret-* && $b_rc -ne 0 && $b_out == *"FAIL: openbao-prod: adopt: at least one value was not adopted"* && $b_out == *"identity/sso-db key username: not adopted"* &&
+      $b_ss != *"compare" && $b_out != *-secret-* && $c_rc -ne 0 && $c_out == *"compare of SOPS against OpenBao did not pass"* && $c_out != *"PASS: openbao-prod: adopt"* &&
+      $g_rc -eq 0 && $g_out == *"argocd/argocd-initial-admin-secret key password: skipped, not in the cluster; c1/argocd-admin key password stays as it was"* &&
+      $h_rc -ne 0 && $h_out == *"argocd/argocd-initial-admin-secret key password: not adopted (the read of the Secret failed)"* && $h_out != *skipped* && $h_ss != *"c1/argocd-admin"* &&
+      $g_out == *"PASS: openbao-prod: adopt"* && $g_ss != *"c1/argocd-admin"* && $g_out != *-secret-* &&
+      $x_rc -eq 2 && -z $x_calls ]]; then
+  ok "20. adopt: only its fixed table is read; each value goes on stdin to put-new and is never printed; a value that cannot be adopted or a failed compare fails it; Argo CD's copy is written again with put and skipped only when its Secret is really gone (a failed read fails); an argument runs nothing"
+else bad "20. rc=$a_rc $a_out | [$a_ss] | missing rc=$b_rc $b_out | cmp rc=$c_rc $c_out | extra rc=$x_rc"; fi
 
 exit "$fail"

@@ -124,10 +124,32 @@ done
 out=$(OPENBAO_SEAL_KEY_FILE=/k run dev gitops "$t/ok")
 check "dev with a key file: both off and the measurement on" "$out" "k8s_gitops_source_login_probe=false" ""
 check "dev with a key file: the measurement still on" "$out" "k8s_gitops_source_openbao_measure=true" ""
+# Dev's Argo CD follows the commit the run is made from: a checkout's full HEAD goes to the root's branch and to every
+# child's targetRevision; no checkout (or prod) leaves `main` as it was.
+git init -q "$t/gitrepo" && git -C "$t/gitrepo" -c user.name=t -c user.email=t@example.invalid commit -q --allow-empty -m x
+head=$(git -C "$t/gitrepo" rev-parse HEAD)
+out=$(run dev gitops "$t/gitrepo")
+check "dev gitops: the root follows the run's commit" "$out" "-e k8s_gitops_source_branch=$head" ""
+check "dev gitops: the children follow it too" "$out" "-e k8s_gitops_source_target_revision=$head" ""
+out=$(run dev gitops "$t/ok"); check "dev with no checkout leaves main" "$out" "AP " "source_target_revision"
+out=$(FAKE_SECRET=yes run prod gitops "$t/gitrepo"); check "prod gitops leaves main" "$out" "AP " "source_target_revision"
+# `backup` installs the timers only; `backup-drill` is its own stage (so a resume from `checks` can start at it) and runs the first
+# backup and the restore tests, so the times `checks` reads exist. Dev refuses both, with nothing run.
+out=$(run prod backup "$t/ok"); check "prod backup installs the timers only" "$out" "AP playbooks/k8s-backup.yml" "k8s_backup_drill"
+out=$(run prod backup-drill "$t/ok"); check "prod backup-drill runs the drill (the first backup and restore tests)" "$out" "AP playbooks/k8s-backup.yml --tags drill -e k8s_backup_drill=true" "rc=1"
+out=$(run dev backup-drill "$t/ok"); check "dev backup-drill is refused" "$out" "prod only" "AP "
 out=$(run dev openbao-measure "$t/ok"); check "dev without a key file still skips the measurement" "$out" "openbao-measure skipped" "AP "
 out=$(FAKE_SECRET=yes run prod gitops "$t/ok"); check "prod gitops leaves the lab-ca issuer on" "$out" "AP " "lab_ca_issuer"
 check "prod gitops leaves login-probe on" "$out" "AP " "login_probe"
 check "prod gitops leaves jellyfin setup on" "$out" "AP " "jellyfin_setup"
+# Prod's rebuild restores its own backup (rebuild-prod.sh sets RESTORE_HOOK), Jellyfin config and admin password with it, so its
+# fresh admin Secret can't sign in (prod resume 4, 2026-11-22: 401 every tick): a prod run with a restore also turns the setup off.
+out=$(RESTORE_HOOK=true FAKE_SECRET=yes run prod gitops "$t/ok")
+check "prod gitops with a restore turns jellyfin setup off" "$out" "-e k8s_gitops_source_jellyfin_setup=false" ""
+check "prod gitops with a restore leaves login-probe on" "$out" "AP " "login_probe"
+check "prod gitops with a restore leaves the panel check running" "$out" "AP " "panel_check"
+out=$(RESTORE_HOOK=true run prod gitops "$t/ok")
+check "prod's first gitops with a restore turns it off too" "$out" "-e k8s_gitops_source_jellyfin_setup=false" ""
 check "prod gitops leaves the panel check running" "$out" "AP " "panel_check"
 # The default list stays a default: dev appends the stages only when no --only is given, and the measurement
 # only with a key file, after dev-ca (which makes the https listener it goes through).
@@ -137,8 +159,8 @@ appended() { # env, only, key file: the stage list after the block, starting fro
   ENV_NAME=$1 only=$2 OPENBAO_SEAL_KEY_FILE=$3 bash -c 'stages=base; . "$1"; echo "$stages"' _ "$t/append.sh"
 }
 same() { if [ "$2" = "$3" ]; then echo "ok   $1"; else echo "FAIL $1: '$2'"; fail=1; fi; }
-same "a dev run without --only appends dev-ca, identity-keycloak, ssh-ca-proof and panels last" "$(appended dev "" "")" "base dev-ca identity-keycloak ssh-ca-proof panels"
-same "with a key file the measurement goes after dev-ca, the hand-over after it, the apps' secrets, the SSH sign-in proof, then panels last" "$(appended dev "" /k)" "base dev-ca openbao-measure openbao-handover identity-keycloak app-secrets ssh-ca-proof panels"
+same "a dev run without --only appends dev-ca, ui, identity-keycloak, ssh-ca-proof, identity-db and panels last" "$(appended dev "" "")" "base dev-ca ui identity-keycloak ssh-ca-proof identity-db panels"
+same "with a key file ui goes after dev-ca, then the measurement, the hand-over, the apps' secrets, the SSH sign-in proof, identity-db, then panels last" "$(appended dev "" /k)" "base dev-ca ui openbao-measure openbao-handover identity-keycloak app-secrets ssh-ca-proof identity-db panels"
 same "--only appends nothing" "$(appended dev gitops /k)" "base"
 same "prod appends nothing" "$(appended prod "" /k)" "base"
 
@@ -212,4 +234,19 @@ same "the proof's lines reach the short log, unquoted, and only its own stage's"
   "  ssh-ca-proof: ssh-ca: login: dev-admin's Keycloak token gets an OpenBao token: ok
   ssh-ca-proof: opkssh: ssh: the opkssh key logs in as opkproof: ok
   ssh-ca-proof: ssh-ca: PASS (rc 0); opkssh: FAIL (rc 1)"
+# Stages ui and identity-db on dev (item 3 of the 2026-11-22 gate order): dev's ui runs the route tag only (not sso, whose issuer name
+# would be prod's), with the route and https on; another env's ui is as it was; identity-db passes the dev switch on dev only.
+out=$(run dev ui "$t/ok")
+check "dev ui runs the ui tag with the route and https on" "$out" 'AP playbooks/k8s-gitops.yml --tags ui -e {"k8s_gitops_ui_route": true, "k8s_gitops_ui_gateway_https": true}' "sso"
+check "dev ui succeeds" "$out" "rc=0" ""
+out=$(run staging ui "$t/ok")
+check "a non-dev ui is the old command" "$out" "AP playbooks/k8s-gitops.yml --tags ui,sso" "k8s_gitops_ui_route"
+out=$(run dev identity-db "$t/ok")
+check "dev identity-db passes the dev switch" "$out" 'AP playbooks/k8s-identity-restore.yml -e {"k8s_identity_restore_dev": true}' "rc=1"
+out=$(run prod identity-db "$t/ok")
+check "prod identity-db passes no dev switch" "$out" "AP playbooks/k8s-identity-restore.yml" "restore_dev"
+for envname in staging ""; do
+  out=$(run "$envname" identity-db "$t/ok")
+  check "identity-db refuses ENV_NAME='${envname}'" "$out" "rc=1" "AP "
+done
 exit $fail

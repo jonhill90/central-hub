@@ -3,7 +3,7 @@
 # with the box's own prod node key, so no Mac runs it (docs/runbooks/set-up-the-secrets-store.md, "On prod").
 # It runs as user `keys` through sudo, so the session never sees the node key, the seal key or the admin IDs.
 # Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/openbao-prod.sh key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|handover|refresh <tap id>|reset-failed-start <tap id>|drop-box-path <tap id>|admin-firewall-check|admin-firewall <tap id>|secrets-status|log
+#   sudo -n -u keys /usr/local/libexec/agent-box/openbao-prod.sh key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|c1-readonly|adopt|handover|refresh <tap id>|reset-failed-start <tap id>|drop-box-path <tap id>|admin-firewall-check|admin-firewall <tap id>|secrets-status|jobs-status|prune-status|targets-status|log
 # key       makes the box's prod node key once (/etc/agent-keys/prod-node-key, ed25519, never replaced) and prints its
 #           public half. Putting it on prod's nodes gives the agents a root login there, a new access right, so that step
 #           waits for the owner's tap (D-0042 rule 6) and is done once, by a run that already reaches the nodes.
@@ -26,6 +26,18 @@
 #           openbao-store, openbao and the secret-store app's store `openbao`. Argo CD's install is left alone.
 # ca        the CA the box checks prod's store against on its admin path (TLS ends at OpenBao, D-0062): ca.crt of Secret openbao/openbao-tls, a public certificate, written to <keys>/prod/secrets-store-ca.crt
 #           only if it is one PEM certificate. Run it after gitops, and again after a rebuild, which makes a new CA.
+# c1-readonly the box's read-only kubeconfig for c1 (/etc/agent-keys/c1-readonly.kubeconfig, what `c1-read` uses), made again from the
+#           live cluster: the CA and token of Secret agent-read/agent-read-token (app agent-read), the API address the file already
+#           holds or the inventory's k8s_control_plane_endpoint. It replaces the file only after the new one reads the nodes and
+#           answers no to listing Secrets and to creating Pods; otherwise the old file stays. Run it after a rebuild (a new cluster
+#           has a new CA and token); nothing is printed but counts and yes or no.
+# adopt     plan step 8a, for the secrets the cluster made for itself (Jellyfin's admin password, Keycloak's database account and first
+#           admin, Grafana's admin, Argo CD's initial admin): from a fixed table in this script, nothing else, it reads each
+#           Secret's key with the box's admin kubeconfig and gives the value on stdin to `secrets-store-prod put-new`, which
+#           writes SOPS then OpenBao and writes nothing when OpenBao already holds the key. The live value is adopted as it is,
+#           so no password changes. Argo CD's initial admin is the exception: nothing reads its copy and Argo makes a new one at every
+#           install, so that row is written again with `put` each run (a Secret that is really gone is skipped; a read that fails any other way fails the run). It ends by running
+#           `secrets-store-prod compare` (the SHA-256 of each SOPS value against OpenBao's) and passes only if that passes. Only names and results are printed; a value is never printed.
 # handover  playbooks/k8s-openbao-handover.yml with prod's admin AppRole IDs (/etc/agent-keys/prod/openbao-admin-*, made
 #           once by the same rule as secrets-store.sh, never printed).
 # refresh   playbooks/k8s-openbao-refresh.yml, after handover: the store's policies and its admin login's address
@@ -59,6 +71,17 @@
 #           Ready condition (status, reason, message), `get externalsecrets -A -o wide`, and for each ExternalSecret that is
 #           not Ready its condition message and the last 20 lines of the external-secrets controller's log that name it.
 #           Names, conditions and log lines only: no Secret is read and no object is changed. No tap.
+# jobs-status  read-only: why a Job failed. Every Job with failed pods in any namespace (namespace, name, owning CronJob, failed and
+#           succeeded counts, start time), and for each of the first 6 the last 30 log lines of its pods (`kubectl logs job/<name>
+#           --all-containers`), scrubbed of secrets by hosts/diag-apps.py. Reads nothing else and
+#           changes nothing. No tap.
+# prune-status  read-only: what Argo CD would delete if an Application pruned. For every Application in argocd, each resource its
+#           status marks requiresPruning true (in the cluster, no longer in git): application, group, kind, namespace/name, and each
+#           Application's sync status. Reads one list and changes nothing. No tap.
+# targets-status  read-only: which Prometheus targets are down and which node reports each backup time. The node-exporter pods and the nodes
+#           they run on, every series of `up == 0` (job, namespace, pod, instance, service), and every c1_backup_last_success_timestamp_seconds
+#           series (kind, instance), each from Prometheus's own query API through the API server's service proxy (kubectl get --raw). Labels and
+#           numbers only; changes nothing. No tap.
 # log       the newest run's lines: the action, the commit, the tap id, and the PASS, FAIL, SKIP and play-recap lines.
 # Settings (agent_box_openbao_prod, private, in <work>/openbao-prod.json): seal_node (a k8s_nodes host of the prod inventory,
 # its Kubernetes node name), store_host (the store's name as the box reaches it; secrets-store-prod checks its own address
@@ -84,11 +107,11 @@ settings=$work/openbao-prod.json
 export HOME=$work PATH=$libexec/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin
 export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-home
 
-usage() { echo "usage: openbao-prod key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|handover|refresh <tap id>|reset-failed-start <tap id>|drop-box-path <tap id>|admin-firewall-check|admin-firewall <tap id>|secrets-status|log" >&2; exit 2; }
+usage() { echo "usage: openbao-prod key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|c1-readonly|adopt|handover|refresh <tap id>|reset-failed-start <tap id>|drop-box-path <tap id>|admin-firewall-check|admin-firewall <tap id>|secrets-status|jobs-status|prune-status|targets-status|log" >&2; exit 2; }
 action=${1:-}
 tap=''
 case $action in
-  key | check | l2-policy | gitops | ca | handover | admin-firewall-check | secrets-status | log) [[ $# -eq 1 ]] || usage ;;
+  key | check | l2-policy | gitops | ca | c1-readonly | adopt | handover | admin-firewall-check | secrets-status | jobs-status | prune-status | targets-status | log) [[ $# -eq 1 ]] || usage ;;
   seal | seal-copy | refresh | reset-failed-start | drop-box-path | admin-firewall)
     [[ $# -eq 2 ]] || usage
     tap=$2
@@ -135,31 +158,16 @@ rm -rf -- "$inventory"
 install -d -m 700 "$inventory"
 python3 -I -c "$(cat <<'PY'
 import ipaddress, json, os, sys, yaml
-src, dst, key, known, settings, stable = sys.argv[1:7]
-s = json.load(open(settings))
-seal, store, cidr = s.get("seal_node") or "", s.get("store_host") or "", s.get("box_cidr") or ""
+src, dst, key, known, settings, stable, rootvars = sys.argv[1:8]
 def die(m):
     print("openbao-prod: " + m, file=sys.stderr); sys.exit(1)
-if not seal: die("the settings have no seal_node")
-if not store: die("the settings have no store_host")
-if cidr:
-    try: n = ipaddress.ip_network(cidr, strict=False)
-    except ValueError: die("box_cidr must be one address as a /32, not loopback")
-    if n.prefixlen != 32 or n.is_loopback: die("box_cidr must be one address as a /32, not loopback")
-admin = s.get("admin_address") or ""
-if admin:
-    try: a = ipaddress.ip_address(admin)
-    except ValueError: a = None
-    if a is None or a.version != 4 or a.is_loopback: die("admin_address must be one IPv4 address, not loopback")
-    if not cidr: die("admin_address needs box_cidr: only the box's /32 may reach the admin address")
+exec(open(rootvars).read())   # prod-root-vars.py: the root Application's variables, shared with rebuild-prod.sh and c1-ansible.sh
+seal, store, cidr, admin = read_root_settings(settings, die)
 d = yaml.safe_load(open(src))
 DROP = {"ansible_ssh_common_args", "ansible_ssh_extra_args", "ansible_ssh_args", "ansible_ssh_private_key_file",
         "ansible_ssh_host", "ansible_ssh_executable", "ansible_connection", "ansible_ssh_pass", "ansible_password",
         "ansible_private_key_file", "ansible_host_key_checking",
-        "k8s_gitops_source_openbao_address", "k8s_gitops_source_openbao_ca_file", "k8s_gitops_source_openbao_measure",
-        "k8s_gitops_source_openbao_in_cluster", "k8s_gitops_source_openbao_seal_node", "k8s_gitops_source_openbao_box_cidr",
-        "k8s_gitops_source_openbao_store_host", "k8s_gitops_source_openbao_admin_address", "k8s_gitops_source_notebook_runner",
-        "k8s_gitops_source_app_secrets_store", "k8s_gitops_source_openbao_route"}
+        "k8s_gitops_source_app_secrets_store", "k8s_gitops_source_openbao_route"} | ROOT_VARS_DROP
 def walk(n):
     if isinstance(n, dict):
         for k in list(n):
@@ -185,28 +193,21 @@ def hosts(n):
             if k == "hosts" and isinstance(v, dict): names.update(v)
             else: hosts(v)
 hosts(g)
-if seal not in names: die("seal_node is not a k8s_nodes host of the prod inventory")
 v = g.setdefault("vars", {})
 v["ansible_ssh_private_key_file"] = key
 v["ansible_ssh_common_args"] = "-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=" + known
-v["k8s_gitops_source_openbao_in_cluster"] = True
-# The notebook CI runner pod is prod's only (docs/runbooks/run-the-notebook-runner-on-c1.md).
-v["k8s_gitops_source_notebook_runner"] = True
-v["k8s_gitops_source_openbao_seal_node"] = seal
-v["k8s_gitops_source_openbao_store_host"] = store
+# The root's own variables, the same as prod's rebuild and c1-ansible pass (prod-root-vars.py). The stable local-path folders only once
+# rebuild-prod has built prod again: its StorageClass names folders <namespace>/<claim>, and a StorageClass's parameters can't change in
+# place, so every later render keeps that setting.
+set_root_vars(v, names, seal, store, cidr, admin, die, stable=os.path.exists(stable))
 # The apps read their secrets through store `openbao` (plan step 8a, D-0058 rule 8), once `secrets-store-prod put-apps`
 # and `compare` have passed (set-up-the-secrets-store.md, "Moving them"). Prod has the store on, so this is always valid here.
 v["k8s_gitops_source_app_secrets_store"] = "openbao"
 # Names for the store's web UI and API on Gateway apps (templates/route.yaml of openbao-store).
 v["k8s_gitops_source_openbao_route"] = True
-if cidr: v["k8s_gitops_source_openbao_box_cidr"] = cidr
-if admin: v["k8s_gitops_source_openbao_admin_address"] = admin
-# Once rebuild-prod has built prod again, its local-path StorageClass names folders <namespace>/<claim>; a
-# StorageClass's parameters can't change in place, so every later render keeps that setting.
-if os.path.exists(stable): v["k8s_gitops_source_local_path_stable_folders"] = True
 yaml.safe_dump(d, open(dst, "w"), default_flow_style=False)
 PY
-)" "$inv_src" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$settings" "$work/state/prod-stable-folders" || exit 1
+)" "$inv_src" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$settings" "$work/state/prod-stable-folders" "$libexec/prod-root-vars.py" || exit 1
 chmod 600 "$inventory/hosts.yml"
 
 # Every host: plain ssh to ansible_host with the box's key and nothing else; no host labelled another env than prod.
@@ -392,6 +393,102 @@ for i in d.get("items", []):
     done <<< "$ess"
     echo "PASS: openbao-prod: secrets-status: read, nothing changed"
     ;;
+  jobs-status)
+    # Read-only (kc get and logs only). The pod logs go through hosts/diag-apps.py scrub, so a secret in a log line is masked.
+    jobs=$(kc get jobs -A -o json | python3 -I -c '
+import json, sys
+for j in json.load(sys.stdin)["items"]:
+    s = j.get("status") or {}
+    if not s.get("failed", 0):
+        continue
+    m = j["metadata"]
+    o = [x["name"] for x in m.get("ownerReferences") or [] if x.get("kind") == "CronJob"]
+    print(m.get("namespace", ""), m["name"], o[0] if o else "-", "failed=%s" % s.get("failed", 0), "succeeded=%s" % s.get("succeeded", 0), s.get("startTime", ""))
+') || { echo "openbao-prod: could not read the Jobs" >&2; exit 1; }
+    echo "openbao-prod: Jobs with failed pods (namespace, job, cronjob, failed, succeeded, start):"
+    echo "${jobs:-none}"
+    n=0
+    while read -r jns jname _; do
+      [[ -n $jname ]] || continue
+      n=$((n + 1)); [[ $n -le 6 ]] || break
+      echo "openbao-prod: last 30 log lines of $jns/$jname (scrubbed):"
+      { kc -n "$jns" logs "job/$jname" --tail=30 --all-containers=true 2>&1 || true; } | python3 -I "$repo/hosts/diag-apps.py" scrub | cut -c1-400
+    done <<< "$jobs"
+    echo "PASS: openbao-prod: jobs-status: read, nothing changed"
+    ;;
+  prune-status)
+    # Read-only (one kc get). Argo CD's own word on each resource, the same status field drop-box-path reads.
+    apps=$(kc -n argocd get applications.argoproj.io -o json) || { echo "openbao-prod: could not read the Applications" >&2; exit 1; }
+    python3 -I -c '
+import json, sys
+items = json.load(sys.stdin).get("items", [])
+n = 0
+for a in sorted(items, key=lambda a: a["metadata"]["name"]):
+    st = a.get("status") or {}
+    print("app %s: sync=%s health=%s" % (a["metadata"]["name"], (st.get("sync") or {}).get("status", "?"), (st.get("health") or {}).get("status", "?")))
+    for r in st.get("resources") or []:
+        if r.get("requiresPruning") is True:
+            n += 1
+            print("prune %s: %s/%s %s/%s" % (a["metadata"]["name"], r.get("group", "") or "core", r.get("kind", ""), r.get("namespace", "") or "-", r.get("name", "")))
+print("openbao-prod: %d resource(s) marked requiresPruning" % n)
+' <<< "$apps" || { echo "openbao-prod: the Applications have no readable status" >&2; exit 1; }
+    echo "PASS: openbao-prod: prune-status: read, nothing changed"
+    ;;
+  targets-status)
+    # Read-only (kc get only). Prometheus is asked through the API server's service proxy, so nothing is exposed or port-forwarded.
+    prom=/api/v1/namespaces/monitoring/services/kube-prometheus-stack-prometheus:9090/proxy/api/v1/query
+    # Node names and addresses are not printed: each node is cp-1, cp-2, wk-1 ... (control planes, then workers, by name), its instance
+    # address is that alias with its port, and any other IPv4 address in the output is masked.
+    nodes_json=$(kc get nodes -o json) || { echo "openbao-prod: could not read the nodes" >&2; exit 1; }
+    amap=$(python3 -I -c '
+import json, sys
+items = json.load(sys.stdin)["items"]
+def role(n): return "cp" if "node-role.kubernetes.io/control-plane" in (n["metadata"].get("labels") or {}) else "wk"
+count, mp, rows = {}, {}, []
+for n in sorted(items, key=lambda n: (role(n) != "cp", n["metadata"]["name"])):
+    r = role(n); count[r] = count.get(r, 0) + 1; alias = "%s-%d" % (r, count[r])
+    mp[n["metadata"]["name"]] = alias
+    for a in n["status"].get("addresses", []):
+        if a.get("type") == "InternalIP": mp[a["address"]] = alias
+    ready = [c["status"] for c in n["status"].get("conditions", []) if c.get("type") == "Ready"]
+    rows.append([alias, "Ready" if ready == ["True"] else "NotReady"])
+print(json.dumps({"map": mp, "rows": rows}))' <<< "$nodes_json") || { echo "openbao-prod: could not read the nodes" >&2; exit 1; }
+    mask() { AMAP="$amap" python3 -I -c '
+import json, os, re, sys
+mp = json.loads(os.environ["AMAP"])["map"]
+text = sys.stdin.read()
+for k in sorted(mp, key=len, reverse=True):
+    text = re.sub(r"(?<![\w.-])" + re.escape(k) + r"(?![\w-]|\.\d)", mp[k], text)
+sys.stdout.write(re.sub(r"(?<![\d.])\d{1,3}(\.\d{1,3}){3}(?![\d.]*\d)", "<ip>", text))'; }
+    echo "openbao-prod: node-exporter pods (namespace, name, ready, phase, node):"
+    # custom-columns, not -o wide: a RESTARTS value such as "2 (3h ago)" holds spaces and would shift the columns.
+    pods=$(kc get pods -A -o custom-columns=NS:.metadata.namespace,NAME:.metadata.name,READY:.status.containerStatuses[0].ready,PHASE:.status.phase,NODE:.spec.nodeName --no-headers) ||
+      { echo "openbao-prod: could not read the pods" >&2; exit 1; }
+    awk '$2 ~ /node-exporter/ {print $1, $2, $3, $4, $5}' <<< "$pods" | mask
+    echo "openbao-prod: nodes:"
+    AMAP="$amap" python3 -I -c 'import json, os
+for r in json.loads(os.environ["AMAP"])["rows"]: print(*r)'
+    q() { # <label> <query>: the series Prometheus returns, as one line of labels each
+      local out
+      out=$(kc get --raw "$prom?query=$2") || { echo "openbao-prod: could not query Prometheus ($1)" >&2; exit 1; }
+      python3 -I -c '
+import json, sys
+r = json.load(sys.stdin)
+if r.get("status") != "success":
+    print("query failed:", str(r.get("error", ""))[:200]); sys.exit(0)
+series = r["data"]["result"]
+for x in sorted(series, key=lambda x: sorted(x["metric"].items())):
+    m = x["metric"]
+    print(" ".join("%s=%s" % (k, m[k]) for k in ("kind", "job", "namespace", "pod", "service", "instance", "node") if k in m), "value=" + str(x["value"][1]))
+print("(%d series)" % len(series))
+' <<< "$out" | mask
+    }
+    echo "openbao-prod: targets that are down (up == 0):"
+    q down 'up%3D%3D0'
+    echo "openbao-prod: backup times by kind and instance (c1_backup_last_success_timestamp_seconds):"
+    q backup 'c1_backup_last_success_timestamp_seconds'
+    echo "PASS: openbao-prod: targets-status: read, nothing changed"
+    ;;
   ca)
     mkdir -p "$store_keys"
     # kc's arguments reach Ansible's command module as one string, which it splits as a shell would (shlex), so the
@@ -416,6 +513,104 @@ print(json.dumps({"argv": ["kubectl", "--kubeconfig", "/etc/kubernetes/admin.con
       { echo "openbao-prod: the CA file is written, but ConfigMap openbao/openbao-ca-bundle was not applied" >&2; exit 1; }
     echo "openbao-prod: ca: ConfigMap openbao/openbao-ca-bundle applied (the same certificate)"
     echo "PASS: openbao-prod: ca: the store's CA written to $store_keys/secrets-store-ca.crt ($(openssl x509 -noout -subject -enddate <<< "$pem" | tr '\n' ' '))"
+    ;;
+  c1-readonly)
+    ro=$keys/c1-readonly.kubeconfig
+    # The API's own name: the one the file holds now (a rebuild changes the CA and the token, not the name), else the inventory's.
+    server=$(sed -nE 's#^[[:space:]]*server:[[:space:]]*(https://[A-Za-z0-9.-]+(:[0-9]+)?)[[:space:]]*$#\1#p' "$ro" 2>/dev/null | head -n 1 || true)
+    if [[ -z $server ]]; then
+      ep=$(ansible-inventory -i "$inventory/" --list | python3 -I -c '
+import json, sys
+hv = json.load(sys.stdin).get("_meta", {}).get("hostvars", {})
+print(next((str(v["k8s_control_plane_endpoint"]) for v in hv.values() if v.get("k8s_control_plane_endpoint")), ""), end="")') || ep=''
+      [[ $ep =~ ^[A-Za-z0-9.-]+$ ]] && server=https://$ep:6443
+    fi
+    [[ -n $server ]] || { echo "openbao-prod: no API address: $ro holds none and the inventory has no k8s_control_plane_endpoint; nothing written" >&2; exit 1; }
+    # Secret agent-read/agent-read-token is the one app agent-read makes (docs/runbooks/give-agents-read-access-to-c1.md): its CA and token
+    # are the live cluster's. Each is read by its one key and goes to Python on stdin, never to a command line or the log.
+    ro_token=$(kc -n agent-read get secret agent-read-token -o "'jsonpath={.data.token}'") ||
+      { echo "openbao-prod: could not read Secret agent-read/agent-read-token (is app agent-read Synced?); $ro left as it was" >&2; exit 1; }
+    ro_ca=$(kc -n agent-read get secret agent-read-token -o "'jsonpath={.data.ca\.crt}'") ||
+      { echo "openbao-prod: could not read ca.crt of Secret agent-read/agent-read-token; $ro left as it was" >&2; exit 1; }
+    python3 -I -c '
+import base64, binascii, subprocess, sys
+server, out = sys.argv[1:3]
+tok_b64, ca_b64 = sys.stdin.read().split("\n")[:2]
+def die(m):
+    print("openbao-prod: " + m, file=sys.stderr); sys.exit(1)
+try:
+    token = base64.b64decode(tok_b64, validate=True).decode()
+    ca = base64.b64decode(ca_b64, validate=True).decode()
+except (binascii.Error, UnicodeDecodeError):
+    die("Secret agent-read/agent-read-token does not hold base64 text; nothing written")
+if not token or any(c.isspace() for c in token):
+    die("Secret agent-read/agent-read-token has no token yet (Kubernetes fills it in a moment after it is made); nothing written")
+if ca.count("-----BEGIN ") != 1 or ca.count("-----BEGIN CERTIFICATE-----") != 1 or \
+   subprocess.run(["openssl", "x509", "-noout"], input=ca.encode(), capture_output=True).returncode != 0:
+    die("ca.crt of Secret agent-read/agent-read-token is not one PEM certificate; nothing written")
+cfg = "apiVersion: v1\nkind: Config\nclusters:\n- name: c1\n  cluster:\n    server: %s\n    certificate-authority-data: %s\n" % (server, ca_b64)
+cfg += "users:\n- name: agent-read\n  user:\n    token: %s\ncontexts:\n- name: c1\n  context: {cluster: c1, user: agent-read}\ncurrent-context: c1\n" % token
+open(out, "w").write(cfg)' "$server" "$ro.part" <<< "$ro_token"$'\n'"$ro_ca" || { rm -f -- "$ro.part"; exit 1; }
+    chmod 600 "$ro.part"
+    # Proof before it replaces the old file: it reads the nodes, and it can neither list Secrets nor create Pods. Only a count and yes or no print.
+    k="kubectl --kubeconfig $ro.part --request-timeout=30s"
+    nodes=$($k get nodes --no-headers 2>/dev/null | grep -c . || true)
+    can_secrets=$($k auth can-i list secrets -A 2>/dev/null || true)
+    can_pods=$($k auth can-i create pods -n default 2>/dev/null || true)
+    if [[ $nodes -lt 1 || $can_secrets != no || $can_pods != no ]]; then
+      rm -f -- "$ro.part"
+      echo "openbao-prod: c1-readonly: the new kubeconfig failed its proof (nodes read: $nodes, list secrets: ${can_secrets:-no answer}, create pods: ${can_pods:-no answer}); $ro left as it was" >&2
+      exit 1
+    fi
+    mv -- "$ro.part" "$ro"
+    echo "PASS: openbao-prod: c1-readonly: $ro made from the live cluster's agent-read token and CA (reads $nodes nodes; list secrets: no; create pods: no)"
+    ;;
+  adopt)
+    # The fixed table: <namespace> <Secret> <key of the Secret> <OpenBao path> <OpenBao key>. Nothing else is read, whatever the arguments.
+    idname=$(ansible-inventory -i "$inventory/" --list | python3 -I -c '
+import json, sys
+hv = json.load(sys.stdin).get("_meta", {}).get("hostvars", {})
+n = next((str(v["k8s_identity_name"]) for v in hv.values() if v.get("k8s_identity_name")), "sso")
+print(n if n.replace("-", "").isalnum() and n == n.lower() else "sso", end="")') || idname=sso
+    table=(
+      "media jellyfin-admin password c1/jellyfin-admin password"
+      "identity $idname-db username c1/identity-db username"
+      "identity $idname-db password c1/identity-db password"
+      "identity $idname-initial-admin username c1/identity-admin username"
+      "identity $idname-initial-admin password c1/identity-admin password"
+      "monitoring kube-prometheus-stack-grafana admin-user c1/grafana-admin username"
+      "monitoring kube-prometheus-stack-grafana admin-password c1/grafana-admin password"
+      "argocd argocd-initial-admin-secret password c1/argocd-admin password latest"
+    )
+    failed=0
+    for row in "${table[@]}"; do
+      read -r a_ns a_secret a_key a_path a_pkey a_mode <<< "$row"
+      # Most rows keep the first value (put-new). A row marked `latest` (Argo CD's initial admin: Argo makes a new one at every install,
+      # and nothing in the cluster reads the copy) is written again with `put`, so the copy follows the live Secret; a Secret the owner
+      # has deleted (Argo CD's own advice once the password is changed) is skipped, and the copy stays as it was.
+      cmd=put-new
+      [[ ${a_mode:-} != latest ]] || cmd=put
+      # --ignore-not-found makes a Secret that is really gone answer with nothing and success; any other failed read (the API, the
+      # node, Ansible) fails this row, so a broken read is never taken for a deleted Secret.
+      if [[ ${a_mode:-} == latest ]]; then
+        if ! present=$(kc -n "$a_ns" get secret "$a_secret" --ignore-not-found -o name 2>/dev/null); then
+          echo "openbao-prod: adopt: $a_ns/$a_secret key $a_key: not adopted (the read of the Secret failed)" >&2; failed=1; continue
+        fi
+        if [[ -z $present ]]; then
+          echo "openbao-prod: adopt: $a_ns/$a_secret key $a_key: skipped, not in the cluster; $a_path key $a_pkey stays as it was"
+          continue
+        fi
+      fi
+      # base64 -d turns the Secret's value back; it goes straight to the command's stdin, never an argument, a variable or the log.
+      if res=$(kc -n "$a_ns" get secret "$a_secret" -o "'jsonpath={.data.$a_key}'" 2>/dev/null | base64 -d | "$libexec/secrets-store-prod.sh" "$cmd" "$a_path" "$a_pkey" 2>&1); then
+        echo "openbao-prod: adopt: $a_ns/$a_secret key $a_key -> $a_path key $a_pkey: ${res##*: }"
+      else
+        echo "openbao-prod: adopt: $a_ns/$a_secret key $a_key: not adopted (${res##*: })" >&2; failed=1
+      fi
+    done
+    [[ $failed -eq 0 ]] || { echo "FAIL: openbao-prod: adopt: at least one value was not adopted (above); the others stay" >&2; exit 1; }
+    "$libexec/secrets-store-prod.sh" compare || { echo "FAIL: openbao-prod: adopt: compare of SOPS against OpenBao did not pass" >&2; exit 1; }
+    echo "PASS: openbao-prod: adopt: ${#table[@]} values adopted or already held; compare passed (SOPS and OpenBao hashes equal)"
     ;;
   handover)
     mkdir -p "$store_keys"

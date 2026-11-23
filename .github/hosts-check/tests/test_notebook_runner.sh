@@ -36,9 +36,12 @@ check("the app is made only when notebookRunner is true", app is not None and ap
 check("notebookRunner is false in git", rv.get("notebookRunner") is False)
 sys.exit(1 if fails else 0)
 PY
-for w in openbao-prod rebuild-prod; do
-  grep -q 'v\["k8s_gitops_source_notebook_runner"\] = True' "$root/hosts/ansible/roles/agent_box/files/$w.sh" \
-    && ok "$w sets the switch for prod" || bad "$w does not set the switch"
+# The switch is set in prod-root-vars.py, which all three wrappers that build prod's root exec.
+grep -q 'v\["k8s_gitops_source_notebook_runner"\] = True' "$root/hosts/ansible/roles/agent_box/files/prod-root-vars.py" \
+  && ok "prod-root-vars.py sets the switch for prod" || bad "prod-root-vars.py does not set the switch"
+for w in openbao-prod rebuild-prod c1-ansible; do
+  grep -q 'prod-root-vars.py' "$root/hosts/ansible/roles/agent_box/files/$w.sh" \
+    && ok "$w gets the switch from prod-root-vars.py" || bad "$w does not use prod-root-vars.py"
 done
 if grep -q 'notebook_runner' "$root/hosts/ansible/roles/agent_box/files/rebuild.sh" "$root/hosts/rebuild-k8s.sh"; then bad "the dev rebuild names the switch"; else ok "the dev rebuild never sets the switch"; fi
 grep -q '{% if k8s_gitops_source_notebook_runner | bool %}' "$root/hosts/ansible/roles/k8s_gitops/templates/source-argocd.yaml.j2" \

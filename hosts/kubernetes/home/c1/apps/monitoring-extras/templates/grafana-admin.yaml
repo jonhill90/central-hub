@@ -1,0 +1,24 @@
+{{- if eq .Values.grafanaAdmin.store "openbao" }}
+# Grafana's admin account (plan step 8a), from OpenBao: c1/grafana-admin keys username and password, the values `openbao-prod adopt`
+# copied from the running Grafana's Secret, so the password Grafana already has is the one it is given. kube-prometheus-stack is told
+# to read this Secret (grafana.admin.existingSecret) by the root chart when appSecretsStore is openbao.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: grafana-admin
+  namespace: {{ .Release.Namespace }}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: grafana-admin
+    creationPolicy: Owner
+  # Store openbao reads key c1/<name>: policy eso-c1 reads kv/data/c1/* only (apps/openbao-store/policies/eso-c1.hcl).
+  data:
+    - secretKey: username
+      remoteRef: {key: c1/grafana-admin, property: username}
+    - secretKey: password
+      remoteRef: {key: c1/grafana-admin, property: password}
+{{- end }}

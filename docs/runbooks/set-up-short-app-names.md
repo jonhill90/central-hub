@@ -14,7 +14,7 @@ superseded-by:
 
 # Give lab apps short names under the zone
 
-STD-0001 rule 5 lets each prod app have a short alias, `<app>.<zone>`, next to its service name `<app>.apps.c1.prod.<zone>`. Rule 7 says an app builds its links with the name people use. This runbook turns the short names on for the apps on c1 (`grafana`, `argocd`, `sso`, `jellyfin`, `ntfy`, and `central-hub-app`).
+STD-0001 rule 5 lets each prod app have a short alias, `<app>.<zone>`, next to its service name `<app>.apps.c1.prod.<zone>`. Rule 7 says an app builds its links with the name people use. This runbook turns the short names on for the apps on c1 (`grafana`, `argocd`, `sso`, `jellyfin`, `ntfy`, and `hub`, the Central Hub web app).
 
 ```mermaid
 flowchart LR
@@ -27,7 +27,7 @@ flowchart LR
 
 Each short name is its own DNS entry, in Unbound and in the tailnet's split DNS, so every other name in the zone still resolves publicly. On the Gateway one pair of listeners takes `*.<zone>`, and each app's route adds its short name. The certificate gets a second wildcard, `*.<zone>`, so no app name reaches Certificate Transparency logs with a public issuer.
 
-An app whose short name needs no private value gets its Unbound override from the role's own list, `opnsense_lab_short_app_names` (`roles/opnsense_lab/defaults/main.yml`, today `central-hub-app`, `openbao` and `vault`), pointing at `k8s_gateway_address`; it needs no line in the private inventory. The firewall pipeline on the agent box runs it from `main` (`opnsense-prod.sh check`, then a reviewer's pass and `apply-recorded`, D-0063), and the box's own check of the name is `dig` or `getent hosts <app>.<zone>`. The tailnet split-DNS entry is the same change: `central-hub-app` is in `app_split_dns_names` (`hosts/terraform/home/tailnet/variables.tf`), added to whatever `split_dns_names` a private `home.tfvars` sets, and applied on the agent box by `tailnet-stack.sh plan`, then the reviewer's pass and the standing go, then `apply-recorded` ([run-the-tailnet-stack-as-a-pipeline-job.md](run-the-tailnet-stack-as-a-pipeline-job.md)).
+An app whose short name needs no private value gets its Unbound override from the role's own list, `opnsense_lab_short_app_names` (`roles/opnsense_lab/defaults/main.yml`, today `hub`, `openbao` and `vault`), pointing at `k8s_gateway_address`; it needs no line in the private inventory. The firewall pipeline on the agent box runs it from `main` (`opnsense-prod.sh check`, then a reviewer's pass and `apply-recorded`, D-0063), and the box's own check of the name is `dig` or `getent hosts <app>.<zone>`. The tailnet split-DNS entry is the same change: `hub` is in `app_split_dns_names` (`hosts/terraform/home/tailnet/variables.tf`), added to whatever `split_dns_names` a private `home.tfvars` sets, and applied on the agent box by `tailnet-stack.sh plan`, then the reviewer's pass and the standing go, then `apply-recorded` ([run-the-tailnet-stack-as-a-pipeline-job.md](run-the-tailnet-stack-as-a-pipeline-job.md)).
 
 Every part has its own switch, all on by default: `k8s_gateway_short_names`, `k8s_certs_short_names`, `k8s_app_route_short_names`, `k8s_identity_short_names`, `k8s_gitops_ui_short_names`, `k8s_observability_short_names`, and `shortNames` in the `gateway`, `jellyfin` and `alerts` charts.
 
@@ -51,15 +51,16 @@ Read from `main` at `8bca3cd` on 2026-11-18, not run again here:
 
 ## Proven runs, 2026-11-20
 
-A second kind of run, from the agent box: the sixth short name, `central-hub-app`, with no step on the owner's Mac.
+A second kind of run, from the agent box: the sixth short name, then called `central-hub-app` and since 2026-11-21 `hub`, with no step on the owner's Mac.
 
 | Part | What ran | Result |
 |---|---|---|
 | Unbound override (#773) | `opnsense-prod.sh check`, then the reviewer's pass, the standing go and `apply-recorded` | check 282cc9b547f0: 1 changed, 10 skipped, 47 tasks; applied at 09:27 to 09:29 UTC, no rollback |
-| Resolve and open the page | from the box, `getent hosts central-hub-app.<zone>`, then `curl https://central-hub-app.<zone>/` | the Gateway's address; `200`, certificate verified against the lab CA, page title `Central Hub`; `/api/v1/catalog` `200` |
+| Resolve and open the page | from the box, `getent hosts central-hub-app.<zone>`, then `curl https://central-hub-app.<zone>/` (the name before the rename to `hub`) | the Gateway's address; `200`, certificate verified against the lab CA, page title `Central Hub`; `/api/v1/catalog` `200` |
 | Tailnet split DNS (#785, #788) | `tailnet-stack.sh plan`, the reviewer's pass, the standing go and `apply-recorded` | plan 755385b91b0c: 1 to add; applied at 10:30 UTC; a fresh plan shows 0 to add |
+| Rename to `hub` (#856), applied 2026-11-22 on commit 67d83032 | `opnsense-prod.sh apply-recorded 9fcdf8be6849` and `tailnet-stack.sh apply-recorded 80344700d834`, each on the owner's own go | the tailnet re-plan showed 0 to add, 0 to change, 0 to destroy; from the box, `hub.<zone>` resolved and answered `200` (reported by the orchestrator thread's run) |
 
-Not proven: that a tailnet device resolves the new name through split DNS. The box and the agent cloud session do not use split DNS (a query for `grafana.<zone>` to `100.100.100.100` from the cloud session also returned NXDOMAIN), so the check is the owner's Mac or phone opening `https://central-hub-app.<zone>/`.
+The old name's override is removed by the role's list `opnsense_lab_short_app_names_retired` (`central-hub-app`), so a rename does not leave the old name answering; add a renamed app's old name there. Not proven: that a tailnet device resolves the new name through split DNS (now `hub.<zone>`). The box and the agent cloud session do not use split DNS (a query for `grafana.<zone>` to `100.100.100.100` from the cloud session also returned NXDOMAIN), so the check is the owner's Mac or phone opening `https://hub.<zone>/`.
 
 ## Before you start
 

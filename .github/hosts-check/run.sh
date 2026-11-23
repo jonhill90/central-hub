@@ -111,6 +111,8 @@ check_ansible() {
   suite bash "$here/tests/test_box_apply_baseline.sh"
   suite python3 -I "$here/check-loop-labels.py" hosts/ansible/roles/agent_box/tasks
   suite bash "$here/tests/test_loop_labels.sh"
+  suite bash "$here/tests/test_node_ports.sh"
+  suite bash "$here/tests/test_restore_check_log.sh"
   suite bash "$here/tests/test_check_realm_otp.sh"
   suite bash "$here/tests/test_proxmox_sso.sh"
   suite bash "$here/tests/test_proxmox_signin_check.sh"
@@ -123,6 +125,7 @@ check_ansible() {
   suite bash "$here/tests/test_prod_lab_root.sh"
   suite bash "$here/tests/test_agent_browser.sh"
   suite bash "$here/tests/test_argocd_signin_check.sh"
+  suite bash "$here/tests/test_grafana_signin_check.sh"
   suite bash "$here/tests/test_proxmox_host_workflow.sh"
   suite bash "$here/tests/test_inventory_wrapper.sh"
   suite bash "$here/tests/test_inventory_wiring.sh"
@@ -148,6 +151,7 @@ check_ansible() {
   suite bash "$here/tests/test_jellyfin_plugin_name.sh"
   suite bash "$here/tests/test_jellyfin_login_button.sh"
   suite bash "$here/tests/test_client_json_check.sh"
+  suite bash "$here/tests/test_ensure_client_reason.sh"
   suite bash "$here/tests/test_sudoers_session_args.sh"
   # A pipeline job's check run changes nothing (D-0041 rule 4): the playbooks the box's host jobs run.
   suite python3 "$here/check-check-mode.py" . playbooks/proxmox-proxy.yml playbooks/proxmox-memory.yml playbooks/proxmox-connector.yml playbooks/proxmox-connector-route.yml playbooks/proxmox-ksm.yml playbooks/proxmox-ksm-off.yml playbooks/proxmox-restic-box.yml
@@ -393,8 +397,7 @@ check_manifests() {
   fi
   # A cluster without ClusterIssuer lab-ca and with names that are not its own (dev: labCaIssuer, loginProbe
   # and jellyfinSetup false and panelCheckSuspended true, from k8s_gitops_source_lab_ca_issuer, _login_probe and _jellyfin_setup): the root passes
-  # jellyfin sso.labRoot.certificate and setup.enabled false and makes no login-probe, and jellyfin then makes no Certificate on lab-ca and no setup CronJob or admin
-  # Secret. c1, which leaves all three true, renders none of these changes, and Ansible passes them only when false (cases.txt).
+  # jellyfin sso.labRoot.certificate and setup.enabled false and makes no login-probe, and jellyfin then makes no Certificate on lab-ca, and a setup CronJob that is suspended, with its admin Secret objects still rendered (the Application does not prune, so a CronJob an earlier render made would keep failing; c1 renders it with suspend false). c1, which leaves all three true, renders none of these changes, and Ansible passes them only when false (cases.txt).
   helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 \
     --set labCaIssuer=false --set loginProbe=false --set jellyfinSetup=false --set panelCheckSuspended=true > "$work/rendered/root-c1-dev-no-lab-ca.yaml"
   helm template monitoring-extras hosts/kubernetes/home/c1/apps/monitoring-extras --namespace monitoring \
@@ -409,7 +412,10 @@ check_manifests() {
     grep -q 'panelCheck.suspend' "$work/rendered/root-c1.yaml" ||
     ! grep -qE '^  suspend: true$' "$work/rendered/app-c1-monitoring-extras-dev-suspended.yaml" ||
     ! grep -qE '^  suspend: false$' "$work/rendered/app-c1-monitoring-extras.yaml" ||
-    grep -qE 'kind: CronJob|kind: ExternalSecret' "$work/rendered/app-c1-jellyfin-no-lab-ca.yaml" ||
+    ! grep -q 'kind: ExternalSecret' "$work/rendered/app-c1-jellyfin-no-lab-ca.yaml" ||
+    ! grep -q 'kind: CronJob' "$work/rendered/app-c1-jellyfin-no-lab-ca.yaml" ||
+    ! grep -qE '^  suspend: true$' "$work/rendered/app-c1-jellyfin-no-lab-ca.yaml" ||
+    ! grep -qE '^  suspend: false$' "$work/rendered/app-c1-jellyfin.yaml" ||
     grep -q 'setup.enabled' "$work/rendered/root-c1.yaml" ||
     ! grep -q 'kind: CronJob' "$work/rendered/app-c1-jellyfin.yaml" ||
     grep -q 'sso.labRoot.certificate' "$work/rendered/root-c1.yaml" ||
@@ -422,7 +428,8 @@ check_manifests() {
     ! grep -q 'name: loginProbe' "$work/rendered/gitops-source-argocd-dev.yaml" ||
     ! grep -q 'name: jellyfinSetup' "$work/rendered/gitops-source-argocd-dev.yaml" ||
     ! grep -q 'name: panelCheckSuspended' "$work/rendered/gitops-source-argocd-dev.yaml" ||
-    grep -qE 'labCaIssuer|loginProbe|jellyfinSetup|panelCheckSuspended' "$work/rendered/gitops-source-argocd.yaml"; then
+    ! grep -A1 'name: targetRevision' "$work/rendered/gitops-source-argocd-dev.yaml" | grep -q '0123456789abcdef0123456789abcdef01234567' ||
+    grep -qE 'labCaIssuer|loginProbe|jellyfinSetup|panelCheckSuspended|name: targetRevision' "$work/rendered/gitops-source-argocd.yaml"; then
     echo "manifests: k8s_gitops should pass labCaIssuer, loginProbe and jellyfinSetup only when they are false, and panelCheckSuspended only when true" >&2
     return 1
   fi
@@ -443,6 +450,40 @@ check_manifests() {
     "$work/rendered/app-c1-share-pod-openbao.yaml" | grep -c 'remoteRef: {key: c1/')
   if [ "$keys" != 6 ]; then
     echo "manifests: with store openbao, expected 6 remoteRef keys under c1/, found $keys" >&2
+    return 1
+  fi
+  # Jellyfin's admin password (plan step 8a): with adminSecret.store openbao an ExternalSecret reads c1/jellyfin-admin key password through
+  # store openbao and the in-cluster generator is still rendered (the Application does not prune); with it unset the generator and its
+  # CreatedOnce ExternalSecret are all there is. The root passes the store from appSecretsStore.
+  helm template jellyfin hosts/kubernetes/home/c1/apps/jellyfin --namespace media --set zone=example.com \
+    --set adminSecret.store=openbao > "$work/rendered/app-c1-jellyfin-admin-openbao.yaml"
+  helm template jellyfin hosts/kubernetes/home/c1/apps/jellyfin --namespace media --set zone=example.com \
+    > "$work/rendered/app-c1-jellyfin-admin-generator.yaml"
+  if ! grep -q 'remoteRef: {key: c1/jellyfin-admin, property: password}' "$work/rendered/app-c1-jellyfin-admin-openbao.yaml" ||
+    grep -q 'refreshPolicy: CreatedOnce' "$work/rendered/app-c1-jellyfin-admin-openbao.yaml" ||
+    ! grep -q 'kind: Password' "$work/rendered/app-c1-jellyfin-admin-openbao.yaml" ||
+    grep -q 'remoteRef: {key: c1/jellyfin-admin' "$work/rendered/app-c1-jellyfin-admin-generator.yaml" ||
+    ! grep -q 'refreshPolicy: CreatedOnce' "$work/rendered/app-c1-jellyfin-admin-generator.yaml"; then
+    echo "manifests: jellyfin's admin Secret should read c1/jellyfin-admin with store openbao (generator still rendered), and be the generator's otherwise" >&2
+    return 1
+  fi
+  helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 \
+    --set openbaoInCluster=true --set openbaoSealNode=node-1 --set appSecretsStore=openbao > "$work/rendered/root-c1-jellyfin-store.yaml"
+  if ! grep -A40 '^  name: jellyfin$' "$work/rendered/root-c1-jellyfin-store.yaml" | grep -q 'adminSecret.store'; then
+    echo "manifests: the root should pass adminSecret.store to jellyfin when appSecretsStore is set" >&2
+    return 1
+  fi
+  # Grafana's admin account (plan step 8a): with appSecretsStore openbao the root passes grafana.admin.existingSecret, userKey and passwordKey
+  # to kube-prometheus-stack and grafanaAdmin.store to monitoring-extras, whose ExternalSecret grafana-admin then reads c1/grafana-admin;
+  # a root with no store passes none of them and the chart renders no such ExternalSecret.
+  helm template monitoring-extras hosts/kubernetes/home/c1/apps/monitoring-extras --namespace monitoring \
+    --set grafanaAdmin.store=openbao > "$work/rendered/app-c1-monitoring-extras-grafana-admin.yaml"
+  if [ "$(grep -c 'grafana.admin.existingSecret' "$work/rendered/root-c1-jellyfin-store.yaml")" != 1 ] ||
+    ! grep -q 'grafana.admin.passwordKey' "$work/rendered/root-c1-jellyfin-store.yaml" ||
+    ! grep -q 'grafanaAdmin.store' "$work/rendered/root-c1-jellyfin-store.yaml" ||
+    grep -q 'grafana.admin.existingSecret' "$work/rendered/root-c1-openbao.yaml" ||
+    [ "$(grep -c 'remoteRef: {key: c1/grafana-admin' "$work/rendered/app-c1-monitoring-extras-grafana-admin.yaml")" != 2 ]; then
+    echo "manifests: with appSecretsStore openbao the root should pass grafana.admin.* and grafanaAdmin.store, and monitoring-extras should read c1/grafana-admin; without it none of that" >&2
     return 1
   fi
   # The keys those charts read, the names dev's secret-source file holds and the runbook's list agree.
@@ -501,6 +542,7 @@ check_backup() {
   # The c1 backup and restore-test scripts end to end, against a real etcd and restic repository, and
   # the agent box's off-box OPNsense copy against a local restic repository.
   suite bash "$here/tests/test_backup.sh"
+  suite bash "$here/tests/test_ios_trust_profile.sh"
   suite bash "$here/tests/test_restore_pv.sh"
   suite bash "$here/tests/test_restore_hold.sh"
   suite bash "$here/tests/test_restore_skip_env.sh"
@@ -530,7 +572,10 @@ check_backup() {
   suite bash "$here/tests/test_rebuild_prod.sh"
   suite bash "$here/tests/test_wait_apps.sh"
   suite bash "$here/tests/test_rebuild_certs_order.sh"
-  suite bash "$here/tests/test_rebuild_snapshot_jobs.sh"
+  suite bash "$here/tests/test_rebuild_cronjob_jobs.sh"
+  suite bash "$here/tests/test_rebuild_argocd_signin.sh"
+  suite bash "$here/tests/test_prod_root_vars.sh"
+  suite bash "$here/tests/test_root_gateway_prune.sh"
   suite bash "$here/tests/test_openbao_handover.sh"
   suite bash "$here/tests/test_openbao_refresh.sh"
   suite bash "$here/tests/test_openbao_measure.sh"

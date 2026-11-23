@@ -181,6 +181,12 @@
         or 'ensure CRDs are installed' in k8s_certs_diff.stderr)
       check_mode: false
 
+    # Shown so a check run says what would change (the usages and the key are in it); the diff holds no secret.
+    - name: issue | What would change
+      ansible.builtin.debug:
+        msg: "{{ k8s_certs_diff.stdout_lines | default([]) | select('match', '^[+-] ') | list }}"
+      when: k8s_certs_diff.rc != 0
+
     - name: issue | Apply the issuers and the certificate
       ansible.builtin.command: kubectl apply -f /root/central-hub/certs.yaml
       when: k8s_certs_diff.rc != 0

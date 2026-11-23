@@ -281,38 +281,102 @@ l2_report() {
   return "$rc"
 }
 
-# The OpenBao snapshot CronJob ticks at minute 17 of every hour (openbao-store values). A tick that lands while the store is
-# still coming up fails, and its failed Job keeps Error pods that the pod check below counts (dev run 10, 2026-11-21: two Error
-# pods of the 23:17 tick, apps running 23:16 to 23:22; the other dev runs' apps windows missed minute 17). Such a Job says
-# nothing about the finished cluster, so when one exists (also one that failed once and then succeeded: with backoffLimit 1 and
-# restartPolicy Never its first pod stays in Error) the snapshot Job is run once now: it must complete, and only then
-# are the earlier failed Jobs removed. A snapshot Job that fails with the store up still fails the run.
-settle_snapshot_jobs() {
-  local failed j
-  failed=$(kc -n openbao get jobs -o json | python3 -I -c '
+# A CronJob's tick that lands while the cluster is still coming up fails, and its failed Job keeps Error pods that the pod check
+# below counts. Seen on dev run 10 (2026-11-21, the OpenBao snapshot tick at minute 17: two Error pods of the 23:17 tick) and
+# on prod's resume 4 (2026-11-22: jellyfin-setup and panel-check ticks during bring-up). A failed Job (status.failed above 0; with
+# restartPolicy Never a Job that failed once and then succeeded keeps its first pod in Error, too) says nothing about the finished
+# cluster when something later answers it, so for every CronJob in every namespace:
+#   - a failed Job followed by a newer clean Complete Job of the same CronJob is settled: the failed Job is deleted;
+#   - a failed Job of a SUSPENDED CronJob (dev's panel-check; Jellyfin's setup where the config is restored) is deleted with no rerun:
+#     nothing will tick again, and a suspended CronJob is how a render says "off" while the Application does not prune;
+#   - with no such newer Job, one Job is made from the CronJob now (`kubectl create job --from=cronjob/<name>`, the documented
+#     way to run a CronJob once by hand) and must complete within 300 s: only then are the failed Jobs deleted. A Job that does
+#     not complete with the cluster up fails the run, and the last 30 log lines of its pod, scrubbed, go into the output.
+# Deletes are foreground, so kubectl waits until the Jobs' pods are gone before the pod check lists them.
+settle_cronjob_jobs() {
+  local plan kind ns cj names j chk cjfile waited res
+  cjfile=$(mktemp)
+  kc get cronjobs -A -o json > "$cjfile" || { rm -f "$cjfile"; echo "could not read the CronJobs"; return 1; }
+  plan=$(kc get jobs -A -o json | python3 -I -c '
 import json, sys
+susp = {(c["metadata"].get("namespace", ""), c["metadata"]["name"]): bool((c.get("spec") or {}).get("suspend")) for c in json.load(open(sys.argv[1]))["items"]}
+by = {}
 for j in json.load(sys.stdin)["items"]:
-    if any(o.get("kind") == "CronJob" and o.get("name") == "openbao-snapshot" for o in j["metadata"].get("ownerReferences") or []):
-        s = j.get("status") or {}
-        if s.get("failed", 0): print(j["metadata"]["name"])
-') || { echo "could not read the Jobs of the openbao namespace"; return 1; }
-  [ -n "$failed" ] || return 0
-  echo "failed snapshot Job(s) from the bring-up: $(echo $failed); running the snapshot Job once now"
-  kc -n openbao delete job openbao-snapshot-rebuild-check --ignore-not-found --cascade=foreground > /dev/null || true
-  kc -n openbao create job openbao-snapshot-rebuild-check --from=cronjob/openbao-snapshot > /dev/null \
-    || { echo "could not start the snapshot Job"; return 1; }
-  kc -n openbao wait --for=condition=complete job/openbao-snapshot-rebuild-check --timeout=300s > /dev/null \
-    || { echo "the snapshot Job does not complete with the store up"; return 1; }
-  # Foreground, so kubectl waits until the Jobs' pods are gone: a background delete leaves them listed for the pod check next.
-  for j in $failed; do kc -n openbao delete job "$j" --cascade=foreground > /dev/null; done
-  kc -n openbao delete job openbao-snapshot-rebuild-check --cascade=foreground > /dev/null
+    m = j["metadata"]
+    for o in m.get("ownerReferences") or []:
+        if o.get("kind") == "CronJob":
+            by.setdefault((m.get("namespace", ""), o["name"]), []).append(j)
+st = lambda j: j.get("status") or {}
+for (ns, cj), js in sorted(by.items()):
+    js.sort(key=lambda j: j["metadata"].get("creationTimestamp", ""))
+    bad = [i for i, j in enumerate(js) if st(j).get("failed", 0)]
+    if not bad:
+        continue
+    clean_later = any(st(j).get("succeeded", 0) and not st(j).get("failed", 0) for j in js[bad[-1] + 1:])
+    kind = "settle" if clean_later else "rerun"
+    if susp.get((ns, cj)):
+        kind = "suspended"
+    print(kind, ns, cj, *[js[i]["metadata"]["name"] for i in bad])
+' "$cjfile") || { rm -f "$cjfile"; echo "could not read the Jobs"; return 1; }
+  rm -f "$cjfile"
+  [ -n "$plan" ] || return 0
+  while read -r -u 3 kind ns cj names; do
+    [ -n "$kind" ] || continue
+    if [ "$kind" = settle ] || [ "$kind" = suspended ]; then
+      if [ "$kind" = suspended ]; then
+        echo "failed Job(s) of CronJob $ns/$cj, which is suspended (no new ticks, nothing to rerun): $names; removing them"
+      else
+        echo "failed Job(s) of CronJob $ns/$cj, answered by a newer Job that completed: $names; removing them"
+      fi
+      for j in $names; do kc -n "$ns" delete job "$j" --cascade=foreground > /dev/null; done
+      continue
+    fi
+    chk="${cj:0:45}-rebuild-check"
+    echo "failed Job(s) of CronJob $ns/$cj from the bring-up: $names; running one Job from the CronJob now"
+    kc -n "$ns" delete job "$chk" --ignore-not-found --cascade=foreground > /dev/null || true
+    # The Job gets no owner: `create job --from` makes the CronJob its owner, and the CronJob controller then counts it in the history
+    # limit (failedJobsHistoryLimit) and deleted this one when the CronJob's own tick failed too (prod resume 6, 2026-11-22: "SawCompletedJob
+    # ... Deleted job panel-check-rebuild-check", so the log read got NotFound). kc is an Ansible ad-hoc command on the node, which has no
+    # stdin, so the owner comes off with a patch whose argument carries its own single quotes: kc joins its words with spaces and the
+    # node splits them again, keeping what is inside the quotes as one word.
+    kc -n "$ns" create job "$chk" --from="cronjob/$cj" > /dev/null || { echo "could not start a Job from CronJob $ns/$cj"; return 1; }
+    kc -n "$ns" patch job "$chk" --type=json -p "'"'[{"op":"remove","path":"/metadata/ownerReferences"}]'"'" > /dev/null ||
+      { echo "could not take the owner off Job $ns/$chk"; return 1; }
+    # Done when it succeeded or failed (backoffLimit 0 fails in seconds, so a wait for completion alone sat out its whole timeout).
+    waited=0 res=''
+    while [ "$waited" -lt 300 ]; do
+      res=$(kc -n "$ns" get "job/$chk" -o 'jsonpath={.status.succeeded}/{.status.failed}' 2>/dev/null) || res=''
+      case $res in 1/* | [1-9]*/*) res=ok; break ;; */[1-9]*) res=failed; break ;; esac
+      sleep "${SETTLE_POLL:-5}"; waited=$((waited + ${SETTLE_POLL:-5}))
+    done
+    if [ "$res" != ok ]; then
+      echo "CronJob $ns/$cj: its Job does not complete with the cluster up; last 30 log lines of its pod:"
+      kc -n "$ns" logs "job/$chk" --tail=30 --all-containers=true 2>&1 | python3 -I "$repo/hosts/diag-apps.py" scrub || true
+      return 1
+    fi
+    for j in $names; do kc -n "$ns" delete job "$j" --cascade=foreground > /dev/null; done
+    kc -n "$ns" delete job "$chk" --cascade=foreground > /dev/null
+  done 3<<< "$plan"  # fd 3: a kc inside the loop must not read the plan from stdin
+}
+
+# Argo CD's argocd-cm holds oidc.config with the provider name `Lab sign-in` (k8s_gitops_sso_name, tag sso). Read-only: one ConfigMap,
+# no Secret. Prod only, where the sign-in is on.
+argocd_signin_listed() {
+  kc -n argocd get configmap argocd-cm -o json | python3 -I -c '
+import json, sys
+cm = json.load(sys.stdin).get("data") or {}
+if "name: Lab sign-in" not in (cm.get("oidc.config") or ""):
+    print("argocd-cm has no oidc.config naming Lab sign-in: Argo CD would not offer the Keycloak sign-in"); sys.exit(1)
+print("argocd-cm lists the Lab sign-in provider")
+'
 }
 
 checks() {
   local notready pods
   notready=$(kc get nodes --no-headers | awk '$2 != "Ready"')
   [ -z "$notready" ] || { echo "nodes not Ready: $notready"; return 1; }
-  settle_snapshot_jobs || return 1
+  settle_cronjob_jobs || return 1
+  if [ "$ENV_NAME" = prod ]; then argocd_signin_listed || return 1; fi
   pods=$(kc get pods -A --no-headers | awk '$4 != "Running" && $4 != "Completed"')
   [ -z "$pods" ] || { echo "pods not Running or Completed:"; echo "$pods"; return 1; }
   wait_apps
@@ -685,13 +749,28 @@ run_stage() {
   if [ "$ENV_NAME" = dev ] && [ -n "${OPENBAO_SEAL_KEY_FILE:-}" ]; then rootvars=(-e k8s_gitops_source_openbao_measure=true); fi
   # Dev, on every render of the root Application too: no ClusterIssuer lab-ca (no `certs` stage; dev-ca comes after
   # `checks`), so jellyfin's Certificate on it would hold `apps`; and no login-probe, whose names are prod's
-  # (k8s_gitops defaults, k8s_gitops_source_lab_ca_issuer and _login_probe); and no Jellyfin setup CronJob, because
-  # `restore` puts prod's Jellyfin config, with prod's admin password, in place before the apps start (k8s_gitops_source_jellyfin_setup); and a suspended panel-check CronJob, whose
+  # (k8s_gitops defaults, k8s_gitops_source_lab_ca_issuer and _login_probe); and a suspended panel-check CronJob, whose
   # Keycloak panel has no data before the `identity-keycloak` stage; the OpenBao panels and Jellyfin's request rate
   # also printed no data in the run that failed, cause not measured (k8s_gitops_source_panel_check_suspended).
   if [ "$ENV_NAME" = dev ]; then
-    rootvars+=(-e k8s_gitops_source_lab_ca_issuer=false -e k8s_gitops_source_login_probe=false -e k8s_gitops_source_jellyfin_setup=false -e k8s_gitops_source_panel_check_suspended=true)
+    rootvars+=(-e k8s_gitops_source_lab_ca_issuer=false -e k8s_gitops_source_login_probe=false -e k8s_gitops_source_panel_check_suspended=true)
   fi
+  # Dev's Argo CD follows the commit the run is made from, not `main`: the root Application reads it
+  # (k8s_gitops_source_branch) and passes it to every child (k8s_gitops_source_target_revision). Only a full
+  # 40-character commit that the checkout reports; anything else leaves `main`, as before.
+  if [ "$ENV_NAME" = dev ]; then
+    local run_commit
+    run_commit=$(git -C "$repo" rev-parse HEAD 2>/dev/null || true)
+    if [[ $run_commit =~ ^[0-9a-f]{40}$ ]]; then
+      rootvars+=(-e "k8s_gitops_source_branch=$run_commit" -e "k8s_gitops_source_target_revision=$run_commit")
+    fi
+  fi
+  # No Jellyfin setup CronJob on any run that restores a Jellyfin config (dev always; prod, whose rebuild restores its own
+  # backup): `restore` puts the config, with its admin password, in place before the apps start, and the setup Job's admin
+  # Secret is made fresh in the new cluster (External Secrets' Password generator, refreshPolicy CreatedOnce), so it can't sign
+  # in to that config: every tick printed "wizard already completed", then a 401, and failed `checks` (prod resume 4,
+  # 2026-11-22; dev run 10). k8s_gitops_source_jellyfin_setup.
+  if [ "$ENV_NAME" = dev ] || [ -n "${RESTORE_HOOK:-}" ]; then rootvars+=(-e k8s_gitops_source_jellyfin_setup=false); fi
   case $1 in
     preflight)
       [ "$ENV_NAME" = dev ] || { echo "the memory preflight runs on dev only"; return 1; }
@@ -776,8 +855,13 @@ run_stage() {
     # Prod rebuilt from the agent box only, after identity: prod's Keycloak database back from its dump in the
     # snapshot the restore stage used, so accounts and their one-time-code devices come back as they were.
     identity-db)
-      [ "$ENV_NAME" = prod ] || { echo "the Keycloak database is put back on prod only"; return 1; }
-      ap playbooks/k8s-identity-restore.yml ;;
+      # Dev, after ssh-ca-proof (which needs this run's test users): the same play prod runs, from the snapshot the restore stage used.
+      # It replaces dev's Keycloak database with that dump, so dev's own users are gone afterwards.
+      case "$ENV_NAME" in
+        prod) ap playbooks/k8s-identity-restore.yml ;;
+        dev) ap playbooks/k8s-identity-restore.yml -e '{"k8s_identity_restore_dev": true}' ;;
+        *) echo "the Keycloak database is put back on prod and dev only"; return 1 ;;
+      esac ;;
     # Dev only, and added to a dev run after `checks` (below): a throwaway in-cluster CA and the Gateway's
     # certificate from it, so dev has HTTPS with no prod secret (no Cloudflare token, no lab CA key).
     dev-ca)
@@ -858,11 +942,29 @@ run_stage() {
       fi
       if [ -n "${APP_SECRETS_CACERT:-}" ]; then store_ca "$APP_SECRETS_CACERT" || return 1; fi
       hook "$APP_SECRETS_HOOK" ;;
-    ui) ap playbooks/k8s-gitops.yml --tags ui,sso ;;
+    # Prod: right after the ui and sso tags, Argo CD's own ConfigMap must list the provider the sso tag writes (name Lab sign-in), so a
+    # run that passed while the keys were not there, or that something removes later, shows at once (checks asks again).
+    # Dev, added after dev-ca (the route needs the Gateway's https listener and the apps-tls Secret, which only dev-ca makes on dev): the
+    # Argo CD routes and the role's proof, which on dev goes to this cluster's own Gateway address (k8s_lab_dns_points_here is false there,
+    # so the names still resolve to prod's). Tag ui only: the sso tag points Argo CD at Keycloak by name, which on dev would be prod's.
+    ui)
+      if [ "$ENV_NAME" = dev ]; then
+        ap playbooks/k8s-gitops.yml --tags ui -e '{"k8s_gitops_ui_route": true, "k8s_gitops_ui_gateway_https": true}'
+      else
+        ap playbooks/k8s-gitops.yml --tags ui,sso && { [ "$ENV_NAME" != prod ] || argocd_signin_listed; }
+      fi ;;
     backup)
       # Backup timers write to the env's restic repository; a dev run must never reach prod's.
       [ "$ENV_NAME" = prod ] || { echo "backup timers run on prod only"; return 1; }
       ap playbooks/k8s-backup.yml ;;
+    backup-drill)
+      # The first backup and restore tests, so the nodes write the times the `checks` stage reads
+      # (c1_backup_last_success_timestamp_seconds, from node_exporter's textfile folder). `backup` only installs the timers, whose first
+      # runs come at 02:10, 02:25 and Sunday 04:30 (a new timer has no earlier run to catch up on), so without this the backup panels and
+      # C1BackupNotRecorded failed `checks` on prod resume 5 (2026-11-22). Its own stage, so a resume of a run whose `backup` already
+      # passed starts here. It runs the services the timers run, one node at a time.
+      [ "$ENV_NAME" = prod ] || { echo "the backup drill runs on prod only"; return 1; }
+      ap playbooks/k8s-backup.yml --tags drill -e k8s_backup_drill=true ;;
     restore)
       if [ -z "${RESTORE_HOOK:-}" ]; then
         # Dev proves the rebuild with prod's data in it; a skipped restore proves nothing.
@@ -905,8 +1007,8 @@ stages=${STAGES:-$default_stages}
 # and the admin hand-over after it; the apps' secrets go into SOPS and OpenBao after identity-keycloak. The
 # read-only `panels` stage is last on every full dev run, so its reads come before the end-of-run teardown.
 if [ "$ENV_NAME" = dev ] && [ -z "$only" ]; then
-  if [ -n "${OPENBAO_SEAL_KEY_FILE:-}" ]; then stages="$stages dev-ca openbao-measure openbao-handover identity-keycloak app-secrets ssh-ca-proof panels"
-  else stages="$stages dev-ca identity-keycloak ssh-ca-proof panels"; fi
+  if [ -n "${OPENBAO_SEAL_KEY_FILE:-}" ]; then stages="$stages dev-ca ui openbao-measure openbao-handover identity-keycloak app-secrets ssh-ca-proof identity-db panels"
+  else stages="$stages dev-ca ui identity-keycloak ssh-ca-proof identity-db panels"; fi
 fi
 # A dev run starts with the memory preflight, after a teardown has freed its VMs and before it makes new ones.
 if [ "$ENV_NAME" = dev ] && [ -z "$only" ]; then stages="preflight $stages"; fi
@@ -951,6 +1053,34 @@ node_journal_diag() {
       python3 -I "$repo/hosts/diag-apps.py" scrub
   } 2>&1 | cut -c1-300 | head -n 500 | sed 's/^/diag: /' | tee -a "$log" >> "$raw" || true
 }
+# Why an application is not Synced and Healthy: its message, its conditions and each resource that is not, then the
+# last 30 log lines of each pod in Error; both are scrubbed of secrets (hosts/diag-apps.py). Read-only, prints `==` sections.
+diag_why_not_ready() {
+    echo "== applications not Synced and Healthy: messages and resources"
+    kc -n argocd get applications.argoproj.io -o json | python3 -I "$repo/hosts/diag-apps.py" apps
+    echo "== last 30 log lines of each pod in Error (at most 6 pods)"
+    kc get pods -A --no-headers | awk '$4 ~ /^(Error|CrashLoopBackOff|OOMKilled|CreateContainerError|RunContainerError|Init:Error|Init:CrashLoopBackOff)$/ {print $1, $2}' | head -n 6 |
+      while read -r pns pod; do
+        echo "-- $pns/$pod"
+        kc -n "$pns" logs "$pod" --tail=30 --all-containers=true 2>&1 | python3 -I "$repo/hosts/diag-apps.py" scrub
+      done
+}
+# A failed prod run: the read-only part of runner_capture_diag, into the short log (lines prefixed `diag:`): the Argo CD
+# applications, the pods not running, the newest events, why each application is not Synced and Healthy, and the last log lines
+# of each pod in Error, all scrubbed. Never fatal, and it changes nothing. Dev reads more, before its teardown (below).
+prod_capture_diag() {
+  echo "diag: the run failed, so prod's cluster is read (read-only)" | tee -a "$log"
+  {
+    echo "== argocd applications (name, sync, health)"
+    kc -n argocd get applications.argoproj.io --no-headers -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status
+    echo "== pods not Running or Completed, all namespaces"
+    kc get pods -A --no-headers | awk '$4 != "Running" && $4 != "Completed"'
+    echo "== newest events, all namespaces"
+    kc get events -A --sort-by=.lastTimestamp --no-headers | tail -n 25
+    diag_why_not_ready
+  } 2>&1 | cut -c1-300 | head -n 500 | sed 's/^/diag: /' | tee -a "$log" >> "$raw" || true
+  return 0
+}
 # A failed ephemeral-dev run: read the cluster before it is torn down (what `rebuild diag` shows: the Argo CD
 # applications and why each is not Synced and Healthy, the pods not running, the last log lines of each pod in Error,
 # the newest events), into the short log, each line prefixed `diag:`. Never fatal.
@@ -969,16 +1099,7 @@ runner_capture_diag() {
     kc get pods -A --no-headers | awk '$4 != "Running" && $4 != "Completed"'
     echo "== newest events, all namespaces"
     kc get events -A --sort-by=.lastTimestamp --no-headers | tail -n 25
-    # Why an application is not Synced and Healthy: its message, its conditions and each resource that is not, then the
-    # last 30 log lines of each pod in Error; both are scrubbed of secrets (hosts/diag-apps.py).
-    echo "== applications not Synced and Healthy: messages and resources"
-    kc -n argocd get applications.argoproj.io -o json | python3 -I "$repo/hosts/diag-apps.py" apps
-    echo "== last 30 log lines of each pod in Error (at most 6 pods)"
-    kc get pods -A --no-headers | awk '$4 ~ /^(Error|CrashLoopBackOff|OOMKilled|CreateContainerError|RunContainerError|Init:Error|Init:CrashLoopBackOff)$/ {print $1, $2}' | head -n 6 |
-      while read -r pns pod; do
-        echo "-- $pns/$pod"
-        kc -n "$pns" logs "$pod" --tail=30 --all-containers=true 2>&1 | python3 -I "$repo/hosts/diag-apps.py" scrub
-      done
+    diag_why_not_ready
   } 2>&1 | cut -c1-300 | head -n 260 | sed 's/^/diag: /' | tee -a "$log" >> "$raw" || true
   node_journal_diag || true
   return 0
@@ -1108,6 +1229,7 @@ for s in $stages; do
     stage_failure_lines "$s"
     echo "rebuild: stage $s failed; last lines of $raw:" >&2
     tail -n 20 "$raw" >&2
+    if [ "$ENV_NAME" = prod ]; then prod_capture_diag || true; fi
     runner_run_teardown failed || true
     exit "$rc"
   fi

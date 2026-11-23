@@ -15,6 +15,7 @@
 #   8. A path outside c1/, a bad key name and an empty value are refused before anything is written.
 #   9. With SECRETS_STORE_RESOLVE set (dev: the wrapper points every call at dev's Gateway), every curl call carries
 #      --resolve with that value; without it (every run above), none does.
+#  11. put-new writes a key OpenBao lacks (SOPS, then OpenBao) and nothing when OpenBao already holds it.
 #  10. A failed sign-in names its cause and nothing private: no HTTP answer gives curl's exit code and its name; a
 #      refusal gives the HTTP code and OpenBao's text, with the secret ID as <id>, a source address (IPv4 or IPv6) only
 #      as the box's /32, another address, or an address while SECRETS_STORE_BOX_CIDR is empty, and a tailnet name as
@@ -273,9 +274,24 @@ if [[ $r10a -ne 0 && $o10a == *"the admin AppRole did not sign in (no HTTP answe
   ok "10. a failed sign-in names its cause (curl exit and name, or HTTP code and OpenBao's text) with the ID and address masked; every login has a connect timeout"
 else bad "10. $r10a/$r10b/$r10c/$r10d/$r10e/$r10f/$r10g/$r10h logins=$logins timed=$timed | $o10a | $o10b | $o10c | $o10d | $o10e | $o10f | $o10g | $o10h"; fi
 
+# 11: put-new writes a key OpenBao lacks (SOPS first, then OpenBao) and writes nothing when OpenBao already holds it
+kv put-new c1/adopt/one password < <(printf '%s' 'adopted-value-Qm41z')
+a_rc=$rc a_out=$out
+kv put-new c1/adopt/one password < <(printf '%s' 'other-value-Rn52y')
+b_rc=$rc b_out=$out
+kv put-new c1/adopt/one user < <(printf '%s' 'adopted-user-Sp63x')
+c_rc=$rc
+if [[ $a_rc -eq 0 && $a_out == *"put-new: kv/c1/adopt/one key password written to SOPS, then OpenBao"* &&
+      $(sops_val c1/adopt/one password) == 'adopted-value-Qm41z' && $(bao_val c1/adopt/one password) == 'adopted-value-Qm41z' &&
+      $b_rc -eq 0 && $b_out == *"is in OpenBao already; kept, nothing written"* &&
+      $(sops_val c1/adopt/one password) == 'adopted-value-Qm41z' && $(bao_val c1/adopt/one password) == 'adopted-value-Qm41z' &&
+      $c_rc -eq 0 && $(bao_val c1/adopt/one user) == 'adopted-user-Sp63x' && $(sops_val c1/adopt/one user) == 'adopted-user-Sp63x' ]]; then
+  ok "11. put-new writes a key OpenBao lacks, SOPS then OpenBao; a key OpenBao holds is kept, nothing written, and a second key at the path is added"
+else bad "11. new rc=$a_rc $a_out | again rc=$b_rc $b_out | second rc=$c_rc"; fi
+
 # 4 (over every run above)
 leak=0
-for s in "$v1" "$v2" first-value second-value Wv93m fifth-value tenth-value tok-secret-1 "$rid" "$sid" changed-in-bao only-in-bao 192.0.2.77 fd7a:115c:a1e0::5 box.example.ts.net; do
+for s in "$v1" "$v2" adopted-value-Qm41z other-value-Rn52y adopted-user-Sp63x first-value second-value Wv93m fifth-value tenth-value tok-secret-1 "$rid" "$sid" changed-in-bao only-in-bao 192.0.2.77 fd7a:115c:a1e0::5 box.example.ts.net; do
   if grep -qF -- "$s" "$t/args"; then echo "     in an argument: $s"; leak=1; fi
   if [[ $all == *"$s"* ]]; then echo "     in the output: $s"; leak=1; fi
 done

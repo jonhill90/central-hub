@@ -10,12 +10,24 @@
 #  11. clients runs the identity playbook with tags secrets,clients, the values file, no realm replace and the one fixed client; it
 #      never runs the operator, database or keycloak tags; apply is its own verb and needs a clearance id.
 #  12. backup-status runs its read-only playbook with no tags, no extra variables and no values file, on the box's inventory copy.
+#  15. certs runs the certs playbook with tag issue only, no values file and no extra variables; the inventory's three controller
+#      paths (Cloudflare token, lab CA chain and key) are remapped to <keys>/prod; it stops while one of the three files is missing,
+#      and when the inventory has issuing or the lab CA off (the role would then delete the issuers); apply needs a clearance id.
+#  16. The k8s_certs role's argument spec renders every default, even under tag issue. Run for real (ansible-playbook, tag that matches no
+#      task, connection local) against the inventory `check certs` builds, it passes: on the box it stopped at groups['proxmox'] | first
+#      (k8s_certs_smoke_client), a group the box's inventory copy drops. A failed play also makes the wrapper return non-zero.
+#  17. node-ports runs its one-task playbook with no tags and no extra variables; its output shows nodes as cp-N and wk-N and masks every
+#      address, in the screen and in the log; the playbook and the task file it includes hold no Helm, kubectl, command, shell or delete task.
+#  18. identity-admin-check runs its read-only playbook with no tags, no extra variables and no values file; apply is refused with no
+#      run; the playbook asks for no Secret data (custom-columns over metadata only), has no write verb, and runs its one SELECT in a
+#      read-only transaction.
 #   5. log prints the run's own lines.
 #   9. users runs the identity playbook with tags secrets,users, the values file, no realm replace and one fixed user; apply is its
 #      own verb; it never runs the keycloak tag.
 #   8. observability runs its playbook with its fixed tags and no extra variables.
-#   7. gateway and gitops run their own playbook with fixed tags and no extra variables or values file; certs and the install tag are not
-#      names; apply needs a clearance id for them too.
+#   7. gateway runs its own playbook with a fixed tag and no extra variables; gitops with fixed tags and only k8s_gitops_source_jellyfin_setup=false
+#      (prod restores its own Jellyfin config), and its CA file for the sign-in is remapped to the box's copy; no values file; the install tag is not
+#      a name; apply needs a clearance id for them too.
 #  10. The Proxmox web names (proxmox_cert_names on the proxmox group's hosts or vars) reach the box's copy as a literal
 #      k8s_identity_proxmox_hosts on k8s_nodes, so the identity render has the proxmox client; the group's logins and keys
 #      still do not, and with no names no such variable is written.
@@ -31,13 +43,14 @@ ok() { echo "ok   $*"; }
 bad() { echo "FAIL $*"; fail=1; }
 
 venv=$t/libexec/ansible-venv/bin
+mkdir -p "$t/libexec"; cp hosts/ansible/roles/agent_box/files/prod-root-vars.py "$t/libexec/prod-root-vars.py"
 mkdir -p "$t/bin" "$venv" "$t/keys/prod" "$t/work/state" "$t/work/central-hub" "$t/run"
 ln -s "$(command -v python3)" "$venv/python3"
 cat > "$t/bin/git" <<'S'
 #!/bin/bash
 case "$*" in
   *"remote get-url"*) echo https://example.invalid/central-hub.git ;;
-  clone*) mkdir -p "${@: -1}/.git" "${@: -1}/hosts/ansible/playbooks"; for pb in identity gateway gitops observability certs backup-status backup-restore-test backup restore-inspect; do : > "${@: -1}/hosts/ansible/playbooks/k8s-$pb.yml"; done ;;
+  clone*) mkdir -p "${@: -1}/.git" "${@: -1}/hosts/ansible/playbooks"; for pb in identity-admin-check identity gateway gitops observability certs backup-status backup-restore-test backup restore-inspect node-ports; do : > "${@: -1}/hosts/ansible/playbooks/k8s-$pb.yml"; done ;;
   *rev-parse*) echo abc1234 ;;
 esac
 exit 0
@@ -68,6 +81,7 @@ prod_inv=("all:" "  children:" "    proxmox:" "      hosts:" "        pve-a: {an
           "      children:" "        k8s_control_plane:" "          hosts:" "            cp-a: {ansible_host: 192.0.2.10}")
 inventory "${prod_inv[@]}"
 echo node-key > "$t/keys/prod-node-key"
+echo '{"seal_node": "cp-a", "store_host": "bao.invalid", "box_cidr": "192.0.2.50/32", "admin_address": "192.0.2.60"}' > "$t/work/openbao-prod.json"
 clr=cmsg_01X43rfNYp4H1dL1V2dkfkwNaaaaaaaaaaaaaaaaaaaaaa
 
 r1=""
@@ -79,7 +93,7 @@ if [[ $r1 == "2:none 2:none 2:none 2:none 2:none 2:none 2:none 2:none " ]]; then
 
 run list; l=$out
 run check identity
-if [[ $l == $'backup-check\nbackup-restore-test\nbackup-status\nclients\ngateway\ngitops\nidentity\nidentity-values\nobservability\nrestore-inspect\nusers' && $rc -ne 0 && $out == *"identity.env is missing"* && -z $calls ]]; then ok "2. list; a missing values file stops the run"; else bad "2. $l $rc $out"; fi
+if [[ $l == $'backup-check\nbackup-restore-test\nbackup-status\ncerts\nclients\ngateway\ngitops\nidentity\nidentity-admin-check\nidentity-values\nnode-ports\nobservability\nrestore-inspect\nusers' && $rc -ne 0 && $out == *"identity.env is missing"* && -z $calls ]]; then ok "2. list; a missing values file stops the run"; else bad "2. $l $rc $out"; fi
 
 echo "X=1" > "$t/keys/prod/identity.env"
 ens='{"k8s_identity_ensure_clients":["proxmox"]}'
@@ -117,17 +131,40 @@ run check gitops; g2=$calls
 run apply gateway "$clr"; g3=$calls; g3rc=$rc
 run apply gitops "$clr"; g4=$calls; g4o=$out
 if [[ $g1 == *"playbooks/k8s-gateway.yml --tags gateway --check --diff" && $g1 != *" -e "* &&
-      $g2 == *"playbooks/k8s-gitops.yml --tags source,ui,sso --check --diff" && $g2 != *" -e "* &&
+      $g2 == *"playbooks/k8s-gitops.yml -e k8s_gitops_source_jellyfin_setup=false --tags source,ui,sso --check --diff" &&
       $g3rc -eq 0 && $g3 == *"playbooks/k8s-gateway.yml --tags gateway" && $g3 != *--check* &&
-      $g4 == *"playbooks/k8s-gitops.yml --tags source,ui,sso" && $g4 != *--check* && $g4o == *"clearance $clr"* ]]; then
-  ok "7a. gateway and gitops: own playbook, fixed tags, no extra variables, apply is its own verb"
+      $g4 == *"playbooks/k8s-gitops.yml -e k8s_gitops_source_jellyfin_setup=false --tags source,ui,sso" && $g4 != *--check* && $g4o == *"clearance $clr"* ]]; then
+  ok "7a. gateway: own playbook, fixed tag, no extra variables; gitops: fixed tags and only jellyfin setup off (prod restores its own Jellyfin config); apply is its own verb"
 else bad "7a. [$g1] [$g2] [$g3] [$g4]"; fi
+# 7c: the sign-in's CA file names a path on the controller; the box's copy is <keys>/prod/lab-ca/root.crt (rebuild-prod.sh maps it the same way).
+inventory "all:" "  children:" "    k8s_nodes:" "      vars:" "        k8s_gitops_sso: true" "        k8s_gitops_sso_root_ca_file: ~/.config/central-hub/lab-ca/root.crt" "      children:" "        k8s_control_plane:" "          hosts:" "            cp-a: {ansible_host: 192.0.2.10}"
+run check gitops; seen=$(cat "$t/seen-inventory.yml" 2>/dev/null)
+if [[ $rc -eq 0 && $seen == *"k8s_gitops_sso_root_ca_file: $t/keys/prod/lab-ca/root.crt"* && $seen != *".config/central-hub"* && $seen == *"k8s_gitops_sso: true"* ]]; then
+  ok "7c. the sign-in's CA file is remapped to the box's copy under <keys>/prod/lab-ca; the sso switch is kept as the inventory has it"
+else bad "7c. $rc [$calls] $out | $seen"; fi
+# 7d: the root Application's variables come from the box's store settings, the same as prod's rebuild passes them (prod-root-vars.py): without
+# them `check gitops` plans to drop the admin address, the notebook runner and the stable local-path folders. A value the Mac's inventory
+# holds for them is replaced; `gitops` without the settings stops; another name without them still runs.
+inventory "${prod_inv[@]}" "        k8s_gitops_source_notebook_runner: false" "        k8s_gitops_source_openbao_admin_address: 10.9.9.9"
+run check gitops; seen=$(cat "$t/seen-inventory.yml" 2>/dev/null)
+mv "$t/work/openbao-prod.json" "$t/work/openbao-prod.json.off"
+run check gitops; nr=$rc no=$out
+run check gateway; gr=$rc
+mv "$t/work/openbao-prod.json.off" "$t/work/openbao-prod.json"
+if [[ $seen == *"k8s_gitops_source_openbao_in_cluster: true"* && $seen == *"k8s_gitops_source_notebook_runner: true"* &&
+      $seen == *"k8s_gitops_source_openbao_seal_node: cp-a"* && $seen == *"k8s_gitops_source_openbao_store_host: bao.invalid"* &&
+      $seen == *"k8s_gitops_source_openbao_box_cidr: 192.0.2.50/32"* && $seen == *"k8s_gitops_source_openbao_admin_address: 192.0.2.60"* &&
+      $seen == *"k8s_gitops_source_local_path_stable_folders: true"* && $seen != *"10.9.9.9"* &&
+      $nr -ne 0 && $no == *"settings"*"are missing"* && $gr -eq 0 ]]; then
+  ok "7d. gitops: the root's variables (store, seal node, box address, admin address, notebook runner, stable folders) are the box's own, as in prod's rebuild; no settings stops gitops only"
+else bad "7d. $rc | $nr $no | $gr | $seen"; fi
+inventory "${prod_inv[@]}"
 r7=""
-for args in "check certs" "check k8s-certs" "apply certs $clr" "check gitops-install" "apply gateway" "apply gitops badid"; do
+for args in "check k8s-certs" "apply certs" "check gitops-install" "apply gateway" "apply gitops badid" "apply certs notanid"; do
   # shellcheck disable=SC2086
   run $args; r7+="$rc:${calls:-none} "
 done
-if [[ $r7 == "2:none 2:none 2:none 2:none 2:none 2:none " ]]; then ok "7b. certs and install are not names; apply needs a clearance id"; else bad "7b. $r7"; fi
+if [[ $r7 == "2:none 2:none 2:none 2:none 2:none 2:none " ]]; then ok "7b. k8s-certs and install are not names; apply needs a clearance id"; else bad "7b. $r7"; fi
 run check backup-status; b1=$calls; b1rc=$rc
 if [[ $b1rc -eq 0 && $b1 == *"playbooks/k8s-backup-status.yml --check --diff" && $b1 != *" -e "* && $b1 != *--tags* ]]; then
   ok "12. backup-status: its own playbook, no tags, no extra variables"
@@ -165,6 +202,16 @@ if [[ $bc1rc -eq 0 && $bc1 == *"playbooks/k8s-backup.yml"* && $bc1 == *"-e k8s_b
       $(grep -c 'cat /etc/central-hub/backup-ssh/id_ed25519\|\.pub' "$SSH_LOG") -eq 0 ]]; then
   ok "14. backup-check: the backup playbook in check mode with the box's own env file and the seed folder; apply is refused"
 else bad "14. $bc1rc [$bc1] $bc2rc [$bc2]"; fi
+run check identity-admin-check; ia1=$calls; ia1rc=$rc
+run apply identity-admin-check "$clr"; ia2rc=$rc ia2=$calls
+pbf=hosts/ansible/playbooks/k8s-identity-admin-check.yml
+if [[ $ia1rc -eq 0 && $ia1 == *"playbooks/k8s-identity-admin-check.yml --check --diff" && $ia1 != *"--tags"* && $ia1 != *" -e "* &&
+      $ia2rc -eq 2 && -z $ia2 && $(grep -c "custom-columns=NAME:.metadata.name,CREATED:.metadata.creationTimestamp" $pbf) -eq 2 &&
+      $(grep -c "'get', 'secret'" $pbf) -eq 1 && $(grep -c "'get'\|'exec'" $pbf) -eq 3 &&
+      $(grep -c -E "'(apply|create|delete|patch|replace|edit|annotate|label|rollout|scale|set|cp)'|-o', *'(yaml|json)'|jsonpath|\.data" $pbf) -eq 0 &&
+      $(grep -c "PGOPTIONS=.*default_transaction_read_only=on" $pbf) -eq 1 && $(grep -c -i -E "password|credential|secret_data|salt|hash" <(sed -n '/admin_check_sql/,/ORDER BY/p' $pbf)) -eq 0 ]]; then
+  ok "18. identity-admin-check: read-only playbook, check only, metadata-only reads, one SELECT in a read-only transaction; apply refused"
+else bad "18. $ia1rc [$ia1] $ia2rc [$ia2]"; fi
 run check observability; o1=$calls
 run apply observability "$clr"; o2=$calls; o2rc=$rc; o2o=$out
 if [[ $o1 == *"playbooks/k8s-observability.yml --tags metrics_server,metrics,logs,route,proof --check --diff" && $o1 != *" -e "* &&
@@ -208,4 +255,66 @@ else bad "11. [$c1] [$c2] $c3rc"; fi
 rm -f "$t/keys/prod/identity.env"
 run check users
 if [[ $rc -ne 0 && $out == *"identity.env is missing"* && -z $calls ]]; then ok "9b. users stops while the values file is missing"; else bad "9b. $rc $out"; fi
+# 15: certs
+certs_inv=("all:" "  children:" "    k8s_nodes:" "      vars:" "        k8s_certs_issue: true" "        k8s_certs_lab_ca: true" "        k8s_certs_zone: example.test" "        k8s_certs_acme_email: ops@example.test" "        k8s_certs_gateway_address: 192.0.2.5"
+           "        k8s_certs_cloudflare_token_file: ~/.config/central-hub/cf.txt" "        k8s_certs_lab_ca_cert_file: ~/.config/central-hub/lab-ca/chain.crt"
+           "        k8s_certs_lab_ca_key_file: ~/.config/central-hub/lab-ca/key" "      children:" "        k8s_control_plane:" "          hosts:" "            cp-a: {ansible_host: 192.0.2.10}")
+inventory "${certs_inv[@]}"
+run check certs; k1rc=$rc k1o=$out
+mkdir -p "$t/keys/prod/lab-ca"; echo t > "$t/keys/prod/cloudflare-dns01-token.txt"; echo c > "$t/keys/prod/lab-ca/c1-intermediate-chain.crt"; echo k > "$t/keys/prod/lab-ca/c1-intermediate.key"
+run check certs; k2rc=$rc k2=$calls seen=$(cat "$t/seen-inventory.yml" 2>/dev/null)
+run apply certs "$clr"; k3rc=$rc k3=$calls
+run apply certs; k4rc=$rc
+inventory "${certs_inv[@]/k8s_certs_issue: true/k8s_certs_issue: false}"
+run check certs; k5rc=$rc k5=$calls k5o=$out
+if [[ $k1rc -ne 0 && $k1o == *"is missing"* &&
+      $k2rc -eq 0 && $k2 == *"playbooks/k8s-certs.yml --tags issue --check --diff" && $k2 != *" -e "* &&
+      $seen == *"k8s_certs_cloudflare_token_file: $t/keys/prod/cloudflare-dns01-token.txt"* && $seen == *"k8s_certs_lab_ca_cert_file: $t/keys/prod/lab-ca/c1-intermediate-chain.crt"* &&
+      $seen == *"k8s_certs_lab_ca_key_file: $t/keys/prod/lab-ca/c1-intermediate.key"* && $seen != *".config/central-hub"* &&
+      $k3rc -eq 0 && $k3 == *"playbooks/k8s-certs.yml --tags issue" && $k3 != *--check* && $k4rc -eq 2 &&
+      $k5rc -ne 0 && -z $k5 && $k5o == *"never does"* ]]; then
+  ok "15. certs: tag issue only, the three files remapped to the box's copies, stops on a missing file or issuing off, apply needs a clearance id"
+else bad "15. $k1rc [$k1o] $k2rc [$k2] $k3rc [$k3] $k4rc $k5rc [$k5o]"; fi
+
+# 16: the role's argument spec against the inventory the wrapper builds (real ansible-playbook, no stub), and the wrapper's return code on a failed play
+inventory "${certs_inv[@]}"
+run check certs
+cp "$t/seen-inventory.yml" "$t/arg-inv.yml"; mkdir -p "$t/arg-inv"; cp "$t/arg-inv.yml" "$t/arg-inv/hosts.yml"
+printf '%s\n' "- hosts: k8s_control_plane[0]" "  gather_facts: false" "  connection: local" "  roles: [k8s_certs]" > "$t/arg-play.yml"
+argout=$(cd hosts/ansible && ANSIBLE_ROLES_PATH=roles ANSIBLE_HOME="$t/ahome" ansible-playbook -i "$t/arg-inv/" "$t/arg-play.yml" --tags no-such-tag 2>&1); argrc=$?
+cat > "$venv/ansible-playbook" <<S
+#!/bin/bash
+echo "FAILED stub"; exit 2
+S
+run check certs; failrc=$rc
+if [[ $argrc -eq 0 && $argout == *"failed=0"* && $failrc -ne 0 ]]; then
+  ok "16. the k8s_certs argument spec passes against the wrapper's inventory (real ansible); a failed play makes the wrapper return non-zero"
+else bad "16. $argrc [${argout: -600}] failrc=$failrc"; fi
+# 17: node-ports
+np_inv=("all:" "  children:" "    k8s_nodes:" "      children:" "        k8s_control_plane:" "          hosts:" "            cp-zz.lab.example: {ansible_host: 192.0.2.10}"
+        "        k8s_workers:" "          hosts:" "            wk-aa.lab.example: {ansible_host: 192.0.2.11}")
+inventory "${np_inv[@]}"
+echo '{"seal_node": "cp-zz.lab.example", "store_host": "bao.invalid"}' > "$t/work/openbao-prod.json"
+cat > "$venv/ansible-playbook" <<S
+#!/bin/bash
+echo "playbook \$*" >> $t/calls
+echo "changed: [cp-zz.lab.example] => (item=9100/tcp)"
+echo "ok: [wk-aa.lab.example] => (item=9100/tcp)"
+echo "fatal: [198.51.100.7]: UNREACHABLE (192.0.2.10 and 192.0.2.110)"
+S
+run check node-ports; n1rc=$rc n1=$calls n1o=$out; n1log=$(cat "$t/work/c1-ansible/logs/"run-*.log)
+run apply node-ports "$clr"; n2rc=$rc n2=$calls
+run apply node-ports; n3rc=$rc
+pb=hosts/ansible/playbooks/k8s-node-ports.yml; tf=hosts/ansible/roles/k8s_node/tasks/ports.yml
+if [[ $n1rc -eq 0 && $n1 == *"playbooks/k8s-node-ports.yml --check --diff" && $n1 != *" -e "* && $n1 != *--tags* &&
+      $n1o == *"changed: [cp-1] => (item=9100/tcp)"* && $n1o == *"ok: [wk-1] => (item=9100/tcp)"* && $n1o == *"fatal: [<ip>]: UNREACHABLE (cp-1 and <ip>)"* &&
+      $n1o != *"192.0.2."* && $n1o != *"198.51"* && $n1o != *"lab.example"* && $n1log != *"192.0.2."* && $n1log != *"lab.example"* &&
+      $n2rc -eq 0 && $n2 == *"playbooks/k8s-node-ports.yml" && $n2 != *--check* && $n3rc -eq 2 ]]; then
+  ok "17. node-ports: its own playbook, no tags or variables; cp-N and wk-N for the nodes, other addresses masked, in the screen and the log; apply needs a clearance id"
+else bad "17. $n1rc [$n1] [$n1o] [$n1log] $n2rc [$n2] $n3rc"; fi
+code=$(grep -hv '^ *#' "$pb" "$tf")
+if ! grep -qiE 'helm|kubectl|ansible.builtin.(command|shell|raw|script)|delete|state: absent' <<< "$code" && grep -q "ansible.posix.firewalld" "$tf" &&
+   [[ $(grep -c "^    - name:\|^  - name:" "$pb") -eq 1 ]]; then
+  ok "17b. the node-ports playbook and its task file hold no Helm, kubectl, command, shell or delete task: one include of the firewalld task file"
+else bad "17b. the node-ports play holds more than the firewalld task"; fi
 exit "$fail"

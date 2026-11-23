@@ -1,5 +1,7 @@
-{{- if .Values.setup.enabled }}
 {{- $s := .Values.setup }}
+# With setup.enabled false (a cluster that restores Jellyfin's config, so the admin Secret here can't sign in to it) the CronJob
+# is still rendered, suspended, and the Secret is not: the Application does not prune, so a CronJob that an earlier render made
+# would keep running and failing; suspended, it stops, and a later prune can remove it.
 # Runs Jellyfin's first-run wizard and settings through its startup API, then writes the SSO provider, every
 # 10 minutes (a CronJob, not an Argo CD PostSync hook). A hook runs only when a sync does, so it would not run
 # again when the lab root Secret appears or the plugin loads later, which leaves the provider unwritten
@@ -13,6 +15,7 @@ metadata:
   namespace: {{ .Release.Namespace }}
 spec:
   schedule: {{ $s.schedule | quote }}
+  suspend: {{ not $s.enabled }}
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 300
   successfulJobsHistoryLimit: 1
@@ -89,4 +92,3 @@ spec:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true
                 capabilities: {drop: [ALL]}
-{{- end }}

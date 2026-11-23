@@ -11,7 +11,7 @@ k8s_gitops source-argocd.yaml.j2 gitops-source-argocd-openbao-measure.yaml {"k8s
 k8s_gitops source-argocd.yaml.j2 gitops-source-argocd-app-secrets-openbao.yaml {"k8s_gitops_engine":"argocd","k8s_gitops_source_openbao_in_cluster":true,"k8s_gitops_source_openbao_seal_node":"node-1","k8s_gitops_source_app_secrets_store":"openbao"}
 k8s_gitops source-argocd.yaml.j2 gitops-source-argocd-openbao-store-host.yaml {"k8s_gitops_engine":"argocd","k8s_gitops_source_openbao_in_cluster":true,"k8s_gitops_source_openbao_seal_node":"node-1","k8s_gitops_source_openbao_store_host":"bao.example.com"}
 k8s_gitops source-argocd.yaml.j2 gitops-source-argocd-openbao-admin.yaml {"k8s_gitops_engine":"argocd","k8s_gitops_source_openbao_in_cluster":true,"k8s_gitops_source_openbao_seal_node":"node-1","k8s_gitops_source_openbao_box_cidr":"192.0.2.30/32","k8s_gitops_source_openbao_admin_address":"192.0.2.40"}
-k8s_gitops source-argocd.yaml.j2 gitops-source-argocd-dev.yaml {"k8s_gitops_engine":"argocd","k8s_gitops_source_lab_ca_issuer":false,"k8s_gitops_source_login_probe":false,"k8s_gitops_source_jellyfin_setup":false,"k8s_gitops_source_panel_check_suspended":true}
+k8s_gitops source-argocd.yaml.j2 gitops-source-argocd-dev.yaml {"k8s_gitops_engine":"argocd","k8s_gitops_source_lab_ca_issuer":false,"k8s_gitops_source_login_probe":false,"k8s_gitops_source_jellyfin_setup":false,"k8s_gitops_source_panel_check_suspended":true,"k8s_gitops_source_target_revision":"0123456789abcdef0123456789abcdef01234567"}
 k8s_gitops source-flux.yaml.j2 gitops-source-flux.yaml {"k8s_gitops_engine":"flux"}
 k8s_gitops argocd-ui-route.yaml.j2 gitops-ui-route.yaml {"k8s_gitops_engine":"argocd"}
 k8s_gitops argocd-ui-route.yaml.j2 gitops-ui-route-no-redirect.yaml {"k8s_gitops_engine":"argocd","k8s_gitops_ui_https_redirect":false}
@@ -21,6 +21,7 @@ k8s_identity namespace.yaml.j2 identity-namespace.yaml {}
 k8s_identity database.yaml.j2 identity-database.yaml {"k8s_identity_db_node":"node-1"}
 k8s_identity database.yaml.j2 identity-database-local-path.yaml {"k8s_identity_db_storage":"local-path"}
 k8s_identity keycloak.yaml.j2 identity-keycloak.yaml {}
+k8s_identity keycloak.yaml.j2 identity-keycloak-bootstrap-admin.yaml {"k8s_identity_secrets_store":"openbao"}
 k8s_identity keycloak.yaml.j2 identity-keycloak-theme.yaml {"k8s_identity_theme_dir":"/x/lab","k8s_identity_theme_files":[{"key":"f1-theme.properties","path":"login/theme.properties","b64":"cGFyZW50PWtleWNsb2FrLnYy"},{"key":"f2-styles.css","path":"login/resources/css/styles.css","b64":"LyogdGVzdCAqLw=="}]}
 k8s_identity theme.yaml.j2 identity-theme.yaml {"k8s_identity_theme_files":[{"key":"f1-theme.properties","path":"login/theme.properties","b64":"cGFyZW50PWtleWNsb2FrLnYy"},{"key":"f2-styles.css","path":"login/resources/css/styles.css","b64":"LyogdGVzdCAqLw=="}]}
 k8s_identity realm.yaml.j2 identity-realm.yaml {}

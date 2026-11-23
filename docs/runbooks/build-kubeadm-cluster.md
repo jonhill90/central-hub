@@ -176,13 +176,13 @@ nmcli con mod "$C" ipv4.dns-search "" ipv6.dns-search "" && nmcli con up "$C"   
 And pods must reach the host: without the trusted pod range, firewalld blocked pod-to-host traffic and CoreDNS never became Ready (measured trap, PROOF-RUN-1.md).
 
 ```bash
-for p in 6443/tcp 2379-2380/tcp 10250/tcp 10256/tcp 10257/tcp 10259/tcp 8472/udp 4240/tcp; do
+for p in 6443/tcp 2379-2380/tcp 10250/tcp 10256/tcp 10257/tcp 10259/tcp 8472/udp 4240/tcp 9100/tcp; do
   firewall-cmd --permanent --zone=tailnet --add-port=$p; done
 firewall-cmd --permanent --zone=trusted --add-source=10.240.0.0/16   # pods must reach the API and host; without it CoreDNS never gets Ready
 firewall-cmd --reload
 ```
 
-- the ports: 6443 the API server; 2379-2380 etcd; 10250 the kubelet; 10256 kube-proxy; 10257 the controller-manager; 10259 the scheduler (ports page). 10256 is kube-proxy's health check (source: <https://kubernetes.io/docs/reference/command-line-tools-reference/kube-proxy/>). **Cilium-specific:** 8472/udp carries pod traffic between nodes, wrapped in VXLAN (Cilium's default mode, and this node's, measured); 4240/tcp is Cilium's health check between nodes (source: <https://docs.cilium.io/en/v1.20/operations/system_requirements/>). Another CNI needs its own ports here.
+- the ports: 6443 the API server; 2379-2380 etcd; 10250 the kubelet; 10256 kube-proxy; 10257 the controller-manager; 10259 the scheduler (ports page). 10256 is kube-proxy's health check (source: <https://kubernetes.io/docs/reference/command-line-tools-reference/kube-proxy/>). **Cilium-specific:** 8472/udp carries pod traffic between nodes, wrapped in VXLAN (Cilium's default mode, and this node's, measured); 4240/tcp is Cilium's health check between nodes (source: <https://docs.cilium.io/en/v1.20/operations/system_requirements/>). 9100/tcp is node-exporter, which Prometheus (on one node) scrapes on every node's own address; without it the other nodes are down targets with no backup times. Another CNI needs its own ports here.
 - ※ `10.240.0.0/16` is the pod range. You will give the same range to kubeadm in [step 8](#8-init) and to Cilium in [step 9](#9-cilium-1204). It and the Service range `10.96.0.0/16` are cluster 1's ranges in [STD-0002](../standards/0002-ip-address-plan.md). The proof runs used `10.244.0.0/16` and `10.96.0.0/12`.
 - note: trusting the whole pod range is broad. Narrowing it is a hardening item.
 - page: <https://kubernetes.io/docs/reference/networking/ports-and-protocols/>

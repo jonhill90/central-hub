@@ -1183,6 +1183,15 @@
   when: not (agent_box_rebuild_auto | bool) and agent_box_rebuild_auto_timer.stat.exists | default(false)
   tags: [wrappers]
 
+- name: Prod's root-Application variables, shared by rebuild-prod.sh and c1-ansible.sh, root's
+  ansible.builtin.copy:
+    src: prod-root-vars.py
+    dest: "{{ agent_box_libexec_dir }}/prod-root-vars.py"
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [wrappers]
+
 - name: The merge sweep's verdict script, root's (D-0042 rule 2)
   ansible.builtin.copy:
     src: pr-merge-verdict.py
