@@ -5,8 +5,8 @@
 #   pr-merge check OWNER/REPO PR_NUMBER HEAD_SHA   read the PR and print its verdict; changes nothing.
 #   pr-merge merge OWNER/REPO PR_NUMBER HEAD_SHA   the same, then squash-merge pinned to HEAD_SHA (no sudo line gives it to a session).
 #   pr-merge lane  OWNER/REPO PR_NUMBER            print the PR body's Author-Lane label (pass-record uses it).
-#   pr-merge sweep                                 what the systemd timer runs: for each open PR whose head holds the reviewer's
-#                                                  recorded pass (pass-record), the same checks, then merge. Skips everything while
+#   pr-merge sweep                                 what the systemd timer runs: for each open, non-draft PR, the same checks, then
+#                                                  merge (a guarded path also needs the reviewer's recorded pass). Skips everything while
 #                                                  the halt flag is set. It is not GitHub's auto-merge.
 # The verdict is decided by pr-merge-verdict.py from files this script fetches: the checks, a clean merge, the ledger of passes,
 # and the fold-in checks for a status change. It never enables auto-merge,
@@ -246,7 +246,7 @@ print(m.group(1) if m else "")') || exit 1
       gh "$base/pulls?state=open&per_page=100" > "$tmp/open.json" || { echo "pr-merge sweep: $r skipped (could not list PRs)"; continue; }
       # Oldest first (GitHub lists the newest first, so a stream of new PRs would starve an older one that is green).
       while read -r n h; do
-        [[ -f $passes/$name/$h.jsonl ]] || continue          # no ledger for this head: nothing to do, quietly
+        # Every open PR is judged: one that changes no guarded path needs no recorded pass (pr-merge-verdict.py).
         # A merge makes GitHub work out every other open PR's mergeability again, and until it has, it reports mergeable=null
         # (shown as None): ask again, a few seconds apart, so one run can merge every green PR, one at a time, each judged
         # after the one before it.

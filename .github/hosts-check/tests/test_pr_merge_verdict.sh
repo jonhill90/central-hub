@@ -18,12 +18,12 @@ def ledger(path, roles, head=H, pr=PR, full=FULL, refs=None):
         for r in roles:
             f.write(json.dumps({"role": r, "repo": full, "pr": pr, "head": head, "relay_ref": (refs or {}).get(r, "cmsg_ABCDEFGHIJ"), "relay_time": "2026-11-14T13:00:00Z", "recorder": "orchestrator", "box_time": "2026-11-14T13:00:01Z"}) + "\n")
 
-def fx(files, removed=(), roles=ROLES, pr_over=None, checks=None, base_status=None, head_text=None, base_text=None, cmp_head=None, approved=None, approved_roles=ROLES, raw_ledger=None, refs=None):
+def fx(files, removed=(), roles=ROLES, full=FULL, patches=None, pr_over=None, checks=None, base_status=None, head_text=None, base_text=None, cmp_head=None, approved=None, approved_roles=ROLES, raw_ledger=None, refs=None):
     d = tempfile.mkdtemp(dir=tmp)
-    pr = {"state": "open", "draft": False, "base": {"ref": "main", "sha": "c" * 40}, "head": {"sha": H}, "mergeable": True, "mergeable_state": "clean"}
+    pr = {"state": "open", "draft": False, "base": {"ref": "main", "sha": "c" * 40}, "head": {"sha": H, "repo": {"full_name": full}}, "mergeable": True, "mergeable_state": "clean"}
     pr.update(pr_over or {})
     json.dump(pr, open(d + "/pr.json", "w"))
-    json.dump([{"filename": f, "status": "removed" if f in removed else "modified"} for f in files], open(d + "/files.json", "w"))
+    json.dump([dict({"filename": f, "status": "removed" if f in removed else "modified"}, **({} if (patches or {}).get(f, "x") is None else {"patch": (patches or {}).get(f, "@@ -1 +1 @@\n+a plain line")})) for f in files], open(d + "/files.json", "w"))
     json.dump(checks or {"total_count": 1, "check_runs": [{"name": "docs", "status": "completed", "conclusion": "success"}]}, open(d + "/checks.json", "w"))
     json.dump({}, open(d + "/status.json", "w"))
     if raw_ledger is not None:
@@ -68,8 +68,35 @@ def check(name, got, want, mutant=None, d=None):
 DOC = ["docs/runbooks/x.md"]
 d = fx(DOC, roles=["reviewer"]);                            check("the reviewer's pass alone on a green PR is GREEN", run(d), "GREEN")
 d = fx(DOC);                                               check("a ledger that still holds the councils' lines is GREEN too", run(d), "GREEN")
-d = fx(DOC, roles=ROLES[1:]);                              check("councils without the reviewer is not green", run(d), "NOT GREEN: ledger lacks reviewer", mutate('missing = [r for r in ROLES if r not in roles]', 'missing = []'), d)
-d = fx(DOC, roles=None);                                   check("no ledger is not green", run(d), "NOT GREEN: no ledger")
+G = [".github/workflows/x.yml"]
+d = fx(G, roles=ROLES[1:]);                                check("councils without the reviewer is not green on a guarded path", run(d), "NOT GREEN: ledger lacks reviewer", mutate('missing = [r for r in ROLES if r not in roles]', 'missing = []'), d)
+d = fx(G, roles=None);                                     check("no ledger is not green on a guarded path", run(d), "NOT GREEN: no ledger")
+# The owner's order of 2026-11-23 00:52 UTC: a green PR that changes no guarded path merges with no reviewer round.
+d = fx(DOC, roles=None);                                   check("no ledger on an unguarded green PR is GREEN", run(d), "GREEN", mutate('    if hit:\n        notes.append("NOTE: guarded', '    if True:\n        notes.append("NOTE: guarded'), d)
+d = fx(["src/app.css"], roles=None, full="jonhill90/central-hub-app"); r = subprocess.run([sys.executable, "-I", SRC, "jonhill90/central-hub-app", str(PR), H, d], capture_output=True, text=True).stdout.strip().splitlines()[-1]
+check("a style change in the app repo with no ledger is GREEN", r, "GREEN")
+d = fx([".github/workflows/x.yml"], roles=None, full="jonhill90/agent-notebook"); r = subprocess.run([sys.executable, "-I", SRC, "jonhill90/agent-notebook", str(PR), H, d], capture_output=True, text=True).stdout.strip().splitlines()[-1]
+check("a workflow change in another repo still needs the reviewer's pass", r, "NOT GREEN: no ledger")
+d = fx(["AGENTS.md"], roles=None);                         check("a change to the agents' rules still needs the reviewer's pass", run(d), "NOT GREEN: no ledger")
+for gp in ("hosts/opnsense/rules.yml", "hosts/tailnet/policy.hujson", "k8s/apps/x/secret.sops.yaml", "hosts/ansible/roles/openbao/tasks/main.yml", "hosts/wrappers/mac/x.sh"):
+    d = fx([gp], roles=None);                              check("%s still needs the reviewer's pass" % gp, run(d), "NOT GREEN: no ledger")
+d = fx(DOC, roles=None, full="someone/fork");               check("a green PR from a fork with no ledger is not green", run(d), "NOT GREEN: no ledger", mutate('    if ((pr.get("head")', '    if False and ((pr.get("head")'), d)
+# A secret or password in a changed line guards a file of any name (as in #925's app.yaml and #929's identity role).
+APP = "hosts/kubernetes/home/c1/apps/central-hub-app/templates/app.yaml"
+d = fx([APP], roles=None, patches={APP: "@@ -1 +1,3 @@\n env:\n+  - name: X\n+    valueFrom: {secretKeyRef: {name: s, key: k}}"}); check("an added secretKeyRef line needs the reviewer's pass", run(d), "NOT GREEN: no ledger", mutate('    return any(l[:1] in "+-"', '    return False and any(l[:1] in "+-"'), d)
+for line in ("+kind: ExternalSecret", "+kind: Secret", "-  password: x"):
+    d = fx([APP], roles=None, patches={APP: "@@ -1 +1 @@\n" + line}); check("a changed line %r needs the reviewer's pass" % line, run(d), "NOT GREEN: no ledger")
+d = fx([APP], roles=None, patches={APP: "@@ -1 +1 @@\n-  replicas: 1\n+  replicas: 2"}); check("a plain manifest change merges on green", run(d), "GREEN")
+d = fx([APP], roles=None, patches={APP: "@@ -1 +1 @@\n kind: Secret\n-  replicas: 1\n+  replicas: 2"}); check("an unchanged context line about a Secret does not guard", run(d), "GREEN")
+d = fx([APP], roles=None, patches={APP: None});          check("a file with changes and no patch needs the reviewer's pass", run(d), "NOT GREEN: no ledger")
+for gp in ("hosts/ansible/roles/k8s_identity/files/ensure-user.sh", "hosts/ansible/roles/k8s_identity/templates/realm.yaml.j2"):
+    d = fx([gp], roles=None, patches={gp: "@@ -1 +1 @@\n+x"}); check("%s needs the reviewer's pass" % gp, run(d), "NOT GREEN: no ledger")
+for ev in ("docs/evidence/allowed.sha256", "docs/evidence/shot.png"):
+    d = fx([ev], roles=None, full="jonhill90/central-hub-app"); r = subprocess.run([sys.executable, "-I", SRC, "jonhill90/central-hub-app", str(PR), H, d], capture_output=True, text=True).stdout.strip().splitlines()[-1]
+    check("central-hub-app %s needs the reviewer's pass" % ev, r, "NOT GREEN: no ledger")
+d = fx(DOC, raw_ledger="not json\n");                     check("a broken ledger still refuses on an unguarded PR", run(d), "NOT GREEN: ledger line 1 is not JSON")
+d = fx(["k8s/apps/central-hub-app/deployment.yaml"], roles=None, checks={"total_count": 1, "check_runs": [{"name": "docs", "status": "completed", "conclusion": "failure"}]})
+check("an unguarded PR with a failed check is not green", run(d), "NOT GREEN: check docs: failure")
 d = fx(DOC, raw_ledger='{"role": "reviewer"');             check("a partial ledger line is not green", run(d), "NOT GREEN: ledger ends mid-line")
 d = fx(DOC, raw_ledger='not json\n');                      check("a ledger line that is not JSON is not green", run(d), "NOT GREEN: ledger line 1 is not JSON")
 d = fx(DOC, raw_ledger='{"role": "boss", "repo": "%s", "pr": 7, "head": "%s", "relay_ref": "r", "relay_time": "t", "recorder": "x", "box_time": "t"}\n' % (FULL, H)); check("an unknown role is not green", run(d), "NOT GREEN: ledger line 1 has an unknown role")
@@ -90,11 +117,12 @@ d = fx(["hosts/ansible/roles/proxmox_proxy/tasks/main.yml"]);  check("the host j
 for f in ["docs/decisions/0042-let-the-reviewer.md", "docs/decisions/0034-x.md", "hosts/ansible/roles/agent_box/files/pr-merge.sh", "hosts/ansible/roles/agent_box/files/pr-merge-verdict.py", "hosts/ansible/roles/agent_box/files/pass-record.sh", "hosts/ansible/roles/agent_box/defaults/main.yml"]:
     d = fx([f], head_text={f: "---\nid: D-0042\nstatus: proposed\nsupersedes: []\n---\n"}, base_text={f: "---\nid: D-0042\nstatus: proposed\nsupersedes: []\n---\nold\n"}); check("%s merges on the reviewer's pass with no owner tap" % f.split("/")[-1], run(d), "GREEN")
 d = fx(["docs/decisions/0099-x.md"], head_text={"docs/decisions/0099-x.md": "---\nid: D-0099\nstatus: proposed\nsupersedes: [D-0042]\n---\nThis amends rule 2 of D-0042.\n"}); check("a record that supersedes or amends D-0042 merges on the reviewer's pass", run(d), "GREEN")
-d = fx(["hosts/ansible/roles/agent_box/files/pr-merge.sh"], roles=ROLES[1:]); check("a guard file still needs the reviewer's pass", run(d), "NOT GREEN: ledger lacks reviewer")
-d = fx(DOC); r = subprocess.run([sys.executable, "-I", SRC, FULL, str(PR), H, d], capture_output=True, text=True).stdout
+d = fx(["hosts/ansible/roles/agent_box/files/pr-merge.sh"], roles=None); check("a box-role file merges on green (box-apply's digest pass guards its install)", run(d), "GREEN")
+d = fx(["hosts/ansible/roles/proxmox_proxy/tasks/main.yml"], roles=ROLES[1:]); check("the host job's role still needs the reviewer's pass", run(d), "NOT GREEN: ledger lacks reviewer")
+d = fx(G); r = subprocess.run([sys.executable, "-I", SRC, FULL, str(PR), H, d], capture_output=True, text=True).stdout
 check("every run prints the verdict v2 marker", r, "NOTE: verdict v2")
-check("a GREEN prints the role it needs and found", r.replace("NOTE: verdict v2\n", "", 1), "LEDGER: reviewer")
-d = fx(DOC, roles=ROLES[1:]); r = subprocess.run([sys.executable, "-I", SRC, FULL, str(PR), H, d], capture_output=True, text=True).stdout
+check("a GREEN prints the role it needs and found", ([l for l in r.splitlines() if l.startswith("LEDGER")] or ["none"])[0], "LEDGER: reviewer")
+d = fx(G, roles=ROLES[1:]); r = subprocess.run([sys.executable, "-I", SRC, FULL, str(PR), H, d], capture_output=True, text=True).stdout
 check("a NOT GREEN prints no LEDGER line", "x" + ("bad" if "LEDGER:" in r else "ok"), "xok")
 check("a NOT GREEN still prints the verdict v2 marker", r, "NOTE: verdict v2")
 # Fold-in (D-0042 rule 3).

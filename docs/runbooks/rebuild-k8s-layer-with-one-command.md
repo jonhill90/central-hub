@@ -2,7 +2,7 @@
 title: Rebuild one cluster's Kubernetes layer with one command
 status: tested
 kind: automated
-trigger: on request; to rehearse a rebuild on dev; after a lost cluster on prod
+trigger: on a schedule, to prove the lab comes back; when the rebuild code itself changes; after a lost cluster on prod. Never to ship a fix (AGENTS.md rule 7)
 runner: an agent lane, through the owner's Mac; on dev and prod also the agent box's `rebuild` and `rebuild-prod` wrappers
 outcome: the env's node VMs, the cluster, on dev a read-only copy of prod's newest volume backup in place, Argo CD with its root app and every app Synced and Healthy, certificates, sign-in and the Argo CD UI, all from this repository, with one log line per stage
 needs: the controller from set-up-lab-controller.md; the lab network and Proxmox host as they are; the iac@pve!apply token file; an allow rule for hosts/rebuild-k8s.sh on the Mac
@@ -13,6 +13,8 @@ superseded-by:
 ---
 
 # Rebuild one cluster's Kubernetes layer with one command
+
+> **Not for shipping a change.** A merged app or manifest change goes live through Argo CD, which follows `main`; a role change goes live with `c1-ansible apply <name>` for that stage. This runbook is the periodic proof that the lab can come back from code (AGENTS.md rule 7).
 
 **Status:** tested. `hosts/rebuild-k8s.sh` was written from the code on `main` on 2026-11-09. It was proven on dev from the agent box with two clean `rebuild rebuild` runs in a row on 2026-11-13 (see Proven runs). Prod has not been rebuilt with it. D-0012 also expects an automated runbook to link a `tested` manual one: [Rebuild the home lab from scratch](rebuild-home-lab-from-scratch.md) is still `draft`, so that link is not yet to a `tested` runbook.
 
