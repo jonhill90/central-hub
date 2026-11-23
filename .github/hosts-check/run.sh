@@ -421,7 +421,7 @@ PY
   # and jellyfinSetup false and panelCheckSuspended true, from k8s_gitops_source_lab_ca_issuer, _login_probe and _jellyfin_setup): the root passes
   # jellyfin sso.labRoot.certificate and setup.enabled false and makes no login-probe, and jellyfin then makes no Certificate on lab-ca, and a setup CronJob that is suspended, with its admin Secret objects still rendered (the Application does not prune, so a CronJob an earlier render made would keep failing; c1 renders it with suspend false). c1, which leaves all three true, renders none of these changes, and Ansible passes them only when false (cases.txt).
   helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 \
-    --set labCaIssuer=false --set loginProbe=false --set jellyfinSetup=false --set panelCheckSuspended=true > "$work/rendered/root-c1-dev-no-lab-ca.yaml"
+    --set labCaIssuer=false --set loginProbe=false --set jellyfinSetup=false --set hubFeed=false --set panelCheckSuspended=true > "$work/rendered/root-c1-dev-no-lab-ca.yaml"
   helm template monitoring-extras hosts/kubernetes/home/c1/apps/monitoring-extras --namespace monitoring \
     --set panelCheck.suspend=true > "$work/rendered/app-c1-monitoring-extras-dev-suspended.yaml"
   helm template jellyfin hosts/kubernetes/home/c1/apps/jellyfin --namespace media --set zone=example.com \
@@ -449,10 +449,13 @@ PY
   if ! grep -q 'name: labCaIssuer' "$work/rendered/gitops-source-argocd-dev.yaml" ||
     ! grep -q 'name: loginProbe' "$work/rendered/gitops-source-argocd-dev.yaml" ||
     ! grep -q 'name: jellyfinSetup' "$work/rendered/gitops-source-argocd-dev.yaml" ||
+    ! grep -q 'name: hubFeed' "$work/rendered/gitops-source-argocd-dev.yaml" ||
+    ! grep -q 'name: "feed.enabled"' "$work/rendered/root-c1-dev-no-lab-ca.yaml" ||
+    grep -q 'feed.enabled' "$work/rendered/root-c1.yaml" ||
     ! grep -q 'name: panelCheckSuspended' "$work/rendered/gitops-source-argocd-dev.yaml" ||
     ! grep -A1 'name: targetRevision' "$work/rendered/gitops-source-argocd-dev.yaml" | grep -q '0123456789abcdef0123456789abcdef01234567' ||
-    grep -qE 'labCaIssuer|loginProbe|jellyfinSetup|panelCheckSuspended|name: targetRevision' "$work/rendered/gitops-source-argocd.yaml"; then
-    echo "manifests: k8s_gitops should pass labCaIssuer, loginProbe and jellyfinSetup only when they are false, and panelCheckSuspended only when true" >&2
+    grep -qE 'labCaIssuer|loginProbe|jellyfinSetup|hubFeed|panelCheckSuspended|name: targetRevision' "$work/rendered/gitops-source-argocd.yaml"; then
+    echo "manifests: k8s_gitops should pass labCaIssuer, loginProbe, jellyfinSetup and hubFeed only when they are false, and panelCheckSuspended only when true" >&2
     return 1
   fi
   # The apps' secrets read from OpenBao (appSecretsStore openbao, D-0058 rule 8): the root with it on,
