@@ -6,17 +6,18 @@
 set -eu
 CID="$BASE/"
 # Trades an auth code for a token and completes the remaining onboarding steps, so the owner lands on the dashboard.
-# A step that is already done answers with an error, which is fine; the owner can still finish any step in the UI.
+# Only steps the status read shows as not done are called, and a refused step prints a note (curl -f), so a failure is visible.
+pending() { case $steps in *"\"step\": \"$1\", \"done\": false"* | *"\"step\":\"$1\",\"done\":false"*) return 0 ;; esac; return 1; }
 finish() {
   tok=$(printf 'grant_type=authorization_code&code=%s&client_id=%s' "$1" "$CID" \
     | curl -fsS --max-time 20 -X POST -d @- "$BASE/auth/token" | sed -n 's/.*"access_token": *"\([^"]*\)".*/\1/p')
   [ -n "$tok" ] || { echo "note: no token to finish onboarding steps; the owner can finish them in the UI"; return 0; }
   for step in core_config analytics; do
-    curl -sS --max-time 30 -X POST -H "Authorization: Bearer $tok" -H 'Content-Type: application/json' -d '{}' \
+    ! pending "$step" || curl -fsS --max-time 30 -X POST -H "Authorization: Bearer $tok" -H 'Content-Type: application/json' -d '{}' \
       "$BASE/api/onboarding/$step" >/dev/null || echo "note: onboarding step $step did not complete"
   done
-  printf '{"client_id":"%s","redirect_uri":"%s"}' "$CID" "$CID" \
-    | curl -sS --max-time 30 -X POST -H "Authorization: Bearer $tok" -H 'Content-Type: application/json' -d @- \
+  ! pending integration || printf '{"client_id":"%s","redirect_uri":"%s"}' "$CID" "$CID" \
+    | curl -fsS --max-time 30 -X POST -H "Authorization: Bearer $tok" -H 'Content-Type: application/json' -d @- \
       "$BASE/api/onboarding/integration" >/dev/null || echo "note: onboarding step integration did not complete"
 }
 steps=$(curl -fsS --max-time 20 "$BASE/api/onboarding") || { echo "FAIL: onboarding endpoint did not answer"; exit 1; }
@@ -34,7 +35,8 @@ case $steps in
     case $res in
       *'"type": "create_entry"'* | *'"type":"create_entry"'*)
         code=$(printf '%s' "$res" | sed -n 's/.*"result": *"\([^"]*\)".*/\1/p')
-        [ -z "$code" ] || finish "$code"
+        # A login code makes a stored refresh token, so only swap it when a step is still open (not on every 5-minute run).
+        case $steps in *'"done": false'* | *'"done":false'*) [ -z "$code" ] || finish "$code" ;; esac
         echo "PASS: onboarding user step already done, and the Secret's owner password is accepted"; exit 0 ;;
     esac
     echo "FAIL: onboarding is done but the Secret's owner password is refused; the owner was not made by this Job"; exit 1 ;;
