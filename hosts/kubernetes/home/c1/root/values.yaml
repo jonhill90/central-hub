@@ -63,6 +63,10 @@ loginProbe: true
 # dev, and prod's own rebuild (it restores its backup). The restored Jellyfin config already holds prod's admin user and password, which the setup Job's own
 # Secret, made fresh in that cluster, can't match, so every run signed in with a 401 and failed `checks`.
 jellyfinSetup: true
+# Whether the Central Hub app gets its feed (the notebook sync and the two ExternalSecrets that read kv c1/hub-feed). true, as on c1.
+# Ansible sets it to false only for dev (k8s_gitops_source_hub_feed): only prod's agent-box timer writes c1/hub-feed, so on dev the
+# ExternalSecrets would never become Ready, Argo CD would show central-hub-app Degraded and the `apps` stage's wait would fail.
+hubFeed: true
 # Whether monitoring-extras' panel-check CronJob is suspended. false, as on c1. Ansible sets it to true only for dev
 # (k8s_gitops_source_panel_check_suspended): there a tick inside the run failed the Job and `checks`, because seven panels
 # printed no data. Keycloak's has none before the `identity-keycloak` stage (after `apps`); the five OpenBao ones and
@@ -227,6 +231,9 @@ apps:
   central-hub-app:
     namespace: central-hub-app
     local: true
+    # No feed on a cluster the box's timer does not write for (dev, hubFeed false): its ExternalSecrets would never be Ready.
+    switchOffParameters:
+      feed.enabled: hubFeed
     autoSync: true
     prune: false
   # Logs (spec step 3): two releases in namespace logging, as k8s_observability installed them.

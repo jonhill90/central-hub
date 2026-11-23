@@ -14,7 +14,7 @@ accepted-evidence:
   approved-at: 2026-11-19T01:28:41Z
   approved-commit: d77f01807fda247cd8f4b8ca694dc6ebef8add65
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwN5rbceJLXfh5UkZLgTQpStz
-  approval-names: "the owner's own words \"Accept, yes, yes\" in the project thread \"Coordinate the project in my place\", answering the orchestrator's list of 2026-11-19T01:18Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNQg5itTEnJsbydSHVvSzvaj), whose item 1 was \"Accept D-0061, so your 07:40 standing go covers firewall, access and secrets steps\" with the pick \"Accept\"; his first word answers item 1. The record is D-0061 as proposed in #519 (d77f018, on main and unchanged since), apart from these acceptance fields"
+  approval-names: "the owner's typed acceptance in the orchestrator thread, answering the orchestrator's list of 2026-11-19T01:18Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNQg5itTEnJsbydSHVvSzvaj), whose item 1 was \"Accept D-0061, so your 07:40 standing go covers firewall, access and secrets steps\" with the pick \"Accept\"; his first word answers item 1. The record is D-0061 as proposed in #519 (d77f018, on main and unchanged since), apart from these acceptance fields"
   check: "the orchestrator read the owner's message and the list it answers by id in the project thread; this PR changes only this record's status, date and accepted-evidence and its index row, the only change an owner acceptance may carry through the merge sweep (merge runbook, owner card tap); the sentences for D-0042 rule 6 and AGENTS.md rule 1 that More Information names follow in their own PR on top"
   merged: "PR #658 squash-merged at head 4523c39 as 93570cb, whose commit time is 2026-11-19T01:52:45Z (GitHub's merged_at for the PR is 01:52:46Z); the follow-up PR that adds this line changes nothing else in this record (D-0001)"
 revisit-when: the owner withdraws or narrows the standing go; a step taken under it does something the owner says it should not have; or the agents get GitHub identities of their own (D-0030) and GitHub can require the owner's approval itself
@@ -24,15 +24,15 @@ revisit-when: the owner withdraws or narrows the standing go; a step taken under
 
 ## Context and Problem Statement
 
-D-0042 rule 6 keeps some steps for the owner: firewall and tailnet applies, deletes, secrets, access rights and money. Since D-0034 rule 9, his go for one of them is his typed words naming the step and the commit, or his tap on a card option the agents did not recommend. In practice, that meant asking him to type lines such as "Accept #512 at 882d697".
+D-0042 rule 6 keeps some steps for the owner: firewall and tailnet applies, deletes, secrets, access rights and money. Since D-0034 rule 9, his go for one of them is his typed words naming the step and the commit, or his tap on a card option the agents did not recommend. In practice, that meant asking him to type a typed acceptance naming the PR and its head.
 
-On 2026-11-18 the orchestrator asked the owner to type several such lines. He answered in the project thread "Coordinate the project in my place":
+On 2026-11-18 the orchestrator asked the owner to type several such lines. He answered in the orchestrator thread:
 
-- 07:40:44 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNFcHLPyEs7Kus4RCG73RKe6): "any other lines. Like i accept everyint but you lifting my creds and buy [...] and like dont wipe my mac or install virus or leak my data".
-- 07:40:57 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNGkWQaRP1PcetVDtg9g7ZZZ): "dont run rm -rf ~".
-- 07:41:01 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwN8YtLJBAkzt1i6tykNmWLTf): "you know normal [...]". The agents read this as the usual limits.
-- 07:41:29 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwN6a639VYLJZA5t7LB8SD6tZ): he asked why he had to type "Accept #512 at" a commit id.
-- 07:45:23 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwN21gcct7pZfawWtAx2DAxFu): "stop making me type so much".
+- 07:40:44 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNFcHLPyEs7Kus4RCG73RKe6): he accepts everything except the agents taking his credentials or buying anything, and asked that they not wipe his computer, install malware or leak his data.
+- 07:40:57 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNGkWQaRP1PcetVDtg9g7ZZZ): he asked that agents not run a recursive delete of his home folder.
+- 07:41:01 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwN8YtLJBAkzt1i6tykNmWLTf): he added that the usual limits apply. The agents read this as the usual limits.
+- 07:41:29 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwN6a639VYLJZA5t7LB8SD6tZ): he asked why he had to type a commit id in his acceptance.
+- 07:45:23 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwN21gcct7pZfawWtAx2DAxFu): he asked to be made to type less.
 
 The 07:40:44 UTC line names no step and no commit, so under D-0034 rule 9 it is not his go for any one step. The orchestrator still acted on it as his go for four steps. This record says how that line counts.
 

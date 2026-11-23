@@ -91,6 +91,10 @@ spec:
         - name: jellyfinSetup
           value: "false"
 {% endif %}
+{% if not (k8s_gitops_source_hub_feed | bool) %}
+        - name: hubFeed
+          value: "false"
+{% endif %}
 {% if k8s_gitops_source_local_path_stable_folders | bool %}
         - name: localPathStableFolders
           value: "true"

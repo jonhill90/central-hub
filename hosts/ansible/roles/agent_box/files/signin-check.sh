@@ -8,12 +8,16 @@
 #       checkout of main, and prints only their numbered lines. A password, seed, code, state or token is never printed.
 #       The exit is 0 only when every check that ran passed.
 # log   the newest run's lines.
-# The browser step prints one line per app (hub, Jellyfin, Grafana, Argo CD, Proxmox, Keycloak, OpenBao, ntfy, OPNsense): passed, failed,
-# or "no Keycloak sign-in yet", and saves one screenshot per app to /var/tmp/signin-check-shots/<run>/ (world-readable, so a session
-# can copy them; a form's typed text is cleared before each shot, and a password is never on a page). The newest run's folder is
-# /var/tmp/signin-check-shots/latest. Optional signin-check.json names for it: hub_base, openbao_base, ntfy_base, opnsense_base (each
+# The browser step prints one line per app (hub, Jellyfin, Grafana, Argo CD, Proxmox, Mealie, Keycloak, OpenBao, ntfy, OPNsense): passed,
+# failed, or "no Keycloak sign-in yet", and saves one screenshot per app to /var/tmp/signin-check-shots/<run>/, readable by the keys user
+# only (a page can show what a session must not read, e.g. an app's stock first-login password); only the newest 5 runs are kept.
+#   shot <n-app.png>  writes one screenshot of the newest run to stdout (a session saves it with `> file.png`), after the same check as
+#                     the run's lines: the name is digits, a dash, letters and `.png`, nothing else. The session that copies a shot out
+#                     must look at it first (a Mealie shot taken before its default admin is gone shows that password).
+# Optional signin-check.json names for the browser step: hub_base, mealie_base, openbao_base, ntfy_base, opnsense_base (each
 # defaults to the Argo CD name with its argocd label swapped for hub, openbao, ntfy or opnsense), and pve_base (defaults the same way);
-# mealie_base defaults to mealie.apps.c1.prod.<zone>, the name the chart's route serves (the short name mealie.<zone> has no DNS yet).
+# mealie_base defaults to the short name mealie.<zone>, not the route name: Mealie's own base URL is the short name, so the
+# callback lands there, and a sign-in begun on another host loses its state cookie (seen 2026-11-23 03:21 UTC).
 # The test user is an access right the owner's go creates (docs/runbooks/move-jellyfin-to-argo-cd.md); with no such user in
 # signin-check.json the wrapper stops before any request. It makes nothing in Keycloak, Jellyfin, Argo CD or Proxmox.
 # signin-check.json (JSON, written by the controller and copied by its prod-files run): base, realm, user, expect_admin; jellyfin_base
@@ -33,10 +37,19 @@ shots_root=/var/tmp/signin-check-shots
 values=$keys/prod/identity.env
 export HOME=$work PATH=/usr/local/bin:/usr/bin:/bin
 
-usage() { echo "usage: signin-check run|log" >&2; exit 2; }
-[[ $# -eq 1 ]] || usage
-action=$1
-case $action in run | log) ;; *) usage ;; esac
+usage() { echo "usage: signin-check run|log|shot <n-app.png>" >&2; exit 2; }
+action=${1:-}
+case $action in
+  run | log) [[ $# -eq 1 ]] || usage ;;
+  shot) [[ $# -eq 2 && $2 =~ ^[0-9]+-[a-z]+\.png$ ]] || usage ;;
+  *) usage ;;
+esac
+
+if [[ $action == shot ]]; then
+  [[ -L $shots_root/latest && -f $shots_root/latest/$2 ]] || { echo "signin-check: no such screenshot in the newest run" >&2; exit 1; }
+  cat -- "$shots_root/latest/$2"
+  exit 0
+fi
 
 if [[ $action == log ]]; then
   newest=$(find "$logs" -maxdepth 1 -name 'run-*.log' 2>/dev/null | sort | tail -n 1)
@@ -102,7 +115,7 @@ if c.get("pve_base"):
 def swap(label):
     return c.get(label + "_base") or re.sub(r"^(https?://)argocd\.", r"\1" + label + ".", c["argocd_base"], count=1)
 files["browser"] = dict(common, jellyfin_base=c["jellyfin_base"], argocd_base=c["argocd_base"], grafana_base=graf, pve_base=swap("pve"),
-                        hub_base=swap("hub"), mealie_base=c.get("mealie_base") or re.sub(r"^(https?://)argocd\.", r"\1mealie.apps.c1.prod.", c["argocd_base"], count=1), openbao_base=swap("openbao"), ntfy_base=swap("ntfy"), opnsense_base=swap("opnsense"))
+                        hub_base=swap("hub"), mealie_base=swap("mealie"), openbao_base=swap("openbao"), ntfy_base=swap("ntfy"), opnsense_base=swap("opnsense"))
 for name, body in files.items():
     fd = os.open(os.path.join(tmp, name + ".json"), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w") as f:
@@ -123,12 +136,15 @@ rc=0
     echo "== $name"
     if [[ $name == browser ]]; then
       shots=$shots_root/$(date -u +%Y%m%dT%H%M%SZ)
-      mkdir -m 755 "$shots_root" 2>/dev/null || true
+      mkdir "$shots_root" 2>/dev/null || true
+      chmod 700 "$shots_root"
       mkdir "$shots" 2>/dev/null || true
-      chmod 755 "$shots"
+      chmod 700 "$shots"
       out=$(PLAYWRIGHT_BROWSERS_PATH=$browser_browsers "$browser_python" -I "$s" "$tmp/$name.json" "$shots" 2>&1) && sc=0 || sc=$?
-      chmod 644 "$shots"/*.png 2>/dev/null || true
+      chmod 600 "$shots"/*.png 2>/dev/null || true
       ln -sfn "$shots" "$shots_root/latest"
+      # Keep the newest 5 runs; older folders are removed with their files (the folders are named by UTC time, so the sort is by age).
+      find "$shots_root" -mindepth 1 -maxdepth 1 -type d -name '20*Z' | sort | head -n -5 | while read -r old; do rm -rf -- "$old"; done
       echo "screenshots: $shots"
     else
       out=$(python3 -I "$s" "$tmp/$name.json" 2>&1) && sc=0 || sc=$?
