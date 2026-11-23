@@ -26,7 +26,7 @@ revisit-when: a second tracker is synced into the notebook; the Activation gate 
 
 D-0020 numbered every row of the one-page backlog `BL-NNNN`. On 2026-11-08 the backlog was split into the notebook's task kind, `01-notes/01t-tasks/`, one note per task, and the backlog became a state (every task not `done`), not a list (ORGANIZE 1.22). The prefix still says "backlog", so a done task reads as a backlog item.
 
-On 2026-11-09 at 01:18 UTC the owner said the `BL` label "doesn't make any sense", asked for another way to represent tasks, and asked for it to be future-proof, because third-party trackers such as Linear or GitHub issues might sync their tasks into the notebook.
+On 2026-11-09 at 01:18 UTC the owner said the `BL` label was not meaningful, asked for another way to represent tasks, and asked for it to be future-proof, because third-party trackers such as Linear or GitHub issues might sync their tasks into the notebook.
 
 Evidence: [../evidence/0032-number-tasks-task-nnnn-and-keep-tracker-keys-as-references.md](../evidence/0032-number-tasks-task-nnnn-and-keep-tracker-keys-as-references.md).
 
