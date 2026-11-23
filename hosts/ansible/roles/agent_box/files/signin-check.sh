@@ -12,7 +12,8 @@
 # or "no Keycloak sign-in yet", and saves one screenshot per app to /var/tmp/signin-check-shots/<run>/ (world-readable, so a session
 # can copy them; a form's typed text is cleared before each shot, and a password is never on a page). The newest run's folder is
 # /var/tmp/signin-check-shots/latest. Optional signin-check.json names for it: hub_base, openbao_base, ntfy_base, opnsense_base (each
-# defaults to the Argo CD name with its argocd label swapped for hub, openbao, ntfy or opnsense), and pve_base (defaults the same way).
+# defaults to the Argo CD name with its argocd label swapped for hub, openbao, ntfy or opnsense), and pve_base (defaults the same way);
+# mealie_base defaults to mealie.apps.c1.prod.<zone>, the name the chart's route serves (the short name mealie.<zone> has no DNS yet).
 # The test user is an access right the owner's go creates (docs/runbooks/move-jellyfin-to-argo-cd.md); with no such user in
 # signin-check.json the wrapper stops before any request. It makes nothing in Keycloak, Jellyfin, Argo CD or Proxmox.
 # signin-check.json (JSON, written by the controller and copied by its prod-files run): base, realm, user, expect_admin; jellyfin_base
@@ -101,7 +102,7 @@ if c.get("pve_base"):
 def swap(label):
     return c.get(label + "_base") or re.sub(r"^(https?://)argocd\.", r"\1" + label + ".", c["argocd_base"], count=1)
 files["browser"] = dict(common, jellyfin_base=c["jellyfin_base"], argocd_base=c["argocd_base"], grafana_base=graf, pve_base=swap("pve"),
-                        hub_base=swap("hub"), openbao_base=swap("openbao"), ntfy_base=swap("ntfy"), opnsense_base=swap("opnsense"))
+                        hub_base=swap("hub"), mealie_base=c.get("mealie_base") or re.sub(r"^(https?://)argocd\.", r"\1mealie.apps.c1.prod.", c["argocd_base"], count=1), openbao_base=swap("openbao"), ntfy_base=swap("ntfy"), opnsense_base=swap("opnsense"))
 for name, body in files.items():
     fd = os.open(os.path.join(tmp, name + ".json"), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w") as f:

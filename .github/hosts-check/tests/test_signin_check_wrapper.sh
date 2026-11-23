@@ -45,7 +45,7 @@ name = "browser" if "hub_base" in body else "jellyfin" if "jellyfin_base" in bod
 open(os.environ["STUB_CALLS"], "a").write("%s mode=%o password=%s seed=%s user=%s\n" % (
     name, mode, body.get("password") == "pw-secret-value", body.get("seed") == "SEEDSECRETVALUE", body.get("user")))
 if name == "browser":
-    open(os.environ["STUB_CALLS"], "a").write("browser-urls %s\n" % " ".join(body[k] for k in ("hub_base", "openbao_base", "ntfy_base", "opnsense_base", "pve_base")))
+    open(os.environ["STUB_CALLS"], "a").write("browser-urls %s\n" % " ".join(body[k] for k in ("hub_base", "openbao_base", "ntfy_base", "opnsense_base", "pve_base", "mealie_base")))
     open(os.path.join(sys.argv[2], "1-hub.png"), "w").write("png")
 mode_file = os.environ["STUB_FAIL"]
 fails = open(mode_file).read().split() if os.path.exists(mode_file) else []
@@ -88,7 +88,7 @@ if [[ $rc -eq 0 && $out == *"signin-check: PASS"* && $(grep -c ' mode=600 passwo
   ok "4a. four checks and the browser step ran on private files holding the password and seed, and the run passed"
 else bad "4a. rc=$rc $out / $calls"; fi
 [[ -z $(find "$t/work/state" -maxdepth 1 -name 'signin-check.*' -type d) ]] && ok "4b. no temporary folder is left behind" || bad "4b. a temporary folder stayed"
-[[ $calls == *"browser-urls https://hub.example.invalid https://openbao.example.invalid https://ntfy.example.invalid https://opnsense.example.invalid https://pve.example.invalid"* ]] && ok "4d. the browser file names the hub, OpenBao, ntfy, OPNsense and Proxmox by swapping the Argo CD name's label" || bad "4d. $calls"
+[[ $calls == *"browser-urls https://hub.example.invalid https://openbao.example.invalid https://ntfy.example.invalid https://opnsense.example.invalid https://pve.example.invalid https://mealie.apps.c1.prod.example.invalid"* ]] && ok "4d. the browser file names the hub, OpenBao, ntfy, OPNsense and Proxmox by swapping the Argo CD name's label" || bad "4d. $calls"
 latest=$(readlink "$t/shots/latest"); [[ -f $latest/1-hub.png && $(stat -c %a "$latest") == 755 && $(stat -c %a "$latest/1-hub.png") == 644 && $out == *"screenshots: $t/shots/"* ]] && ok "4e. the shots folder is world-readable and latest points at it" || bad "4e. $latest $out"
 [[ $out == *"== jellyfin"* && $out == *"== argocd"* && $out == *"== proxmox"* && $out == *"== grafana"* && $out == *"1 step 1: HTTP 200 ok"* ]] && ok "4c. the checks' own lines are printed" || bad "4c. $out"
 cp "$t/out" "$t/out-pass"
