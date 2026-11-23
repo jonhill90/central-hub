@@ -4,7 +4,7 @@ status: draft
 kind: manual
 trigger: each time a PR's head has CI green, the reviewer's clearance (D-0042)
 runner: the orchestrator session records the passes over ssh; the box's timer merges
-outcome: the PR is squash-merged at the head that was passed, and the PR carries a comment listing the recorded passes and the merge commit
+outcome: the PR is squash-merged at its green head (a guarded PR at the head that was passed), and the PR carries a comment listing any recorded passes and the merge commit
 needs: the box's limit install of the merge machinery (D-0042 rule 4, the agents' pass of its digest, no owner card), the box's runner and App key (set-up-the-agent-box.md)
 private-values: []
 files: [hosts/ansible/roles/agent_box/files/pr-merge.sh, hosts/ansible/roles/agent_box/files/pr-merge-verdict.py, hosts/ansible/roles/agent_box/files/pass-record.sh, hosts/ansible/roles/agent_box/templates/pr-merge-sweep.service.j2, hosts/ansible/roles/agent_box/files/runner-job-started.sh]
@@ -22,7 +22,7 @@ A cloud session cannot start a GitHub workflow here (the GitHub integration answ
 
 1. CI is green on the PR's head. The sweep checks it again itself: open, not a draft, base `main`, a clean merge, every check on the head completed and passed or skipped (a run does not count once a newer run of the same Actions job on that head has passed), at least one ran, fewer than 3000 files (the most GitHub lists for a PR; a server not yet updated by the tapped apply still stops at 100).
    If the sweep says GitHub does not report a clean merge (`state=blocked`) on a green PR, read the rest of its line: it names each commit of the PR that GitHub does not verify, because `main` requires signed commits and GitHub counts the PR's own commits (measured 2026-11-18: the blocked PRs each held an unverified commit; a PR far behind `main` with all commits verified was `clean`). Updating the branch does not fix that and replaces the head, so the recorded pass no longer matches. Re-make the head as verified commits and record a new pass. Before the box installs the change, the line says only `blocked`; list the commits with `GET /repos/OWNER/REPO/pulls/N/commits` and read each `commit.verification`.
-2. You have read, in the project's chat, the reviewer's clearance of that exact head. A pass for an older head does not count: the ledger is a file per head.
+2. Only for a guarded PR (AGENTS.md rule 2, D-0065): you have read, in the project's chat, the reviewer's clearance of that exact head. A pass for an older head does not count: the ledger is a file per head. A plain PR needs nothing here, and the next two sections do not apply to it.
 
 ## Record the passes
 

@@ -35,7 +35,7 @@ trustedProxies: [10.240.0.0/16]
 # first-run screen first the owner, so the setup Job below closes that screen from inside the cluster first. Turn the
 # route on, in its own pull request, only after the newest setup Job's log says PASS (runbook, "Open the route").
 route:
-  enabled: false
+  enabled: true
 
 # First-run setup (templates/setup-*.yaml, files/setup.sh).
 setup:
