@@ -46,7 +46,6 @@ Mealie makes a first account on first start, with an e-mail and password the pro
 - A CronJob runs the same script every 10 minutes, for the case that the pod's volume is replaced by an empty one while the route stands; its newest Job log must say PASS.
 - The account is kept: sign-in goes through Keycloak, and its generated password is in OpenBao (`c1/mealie-admin`), not anywhere in git.
 
-
 ## If it fails
 
 - **The sync stops at the guard (wave 1):** `c1-read logs -n mealie job/mealie-admin-guard`. "did not answer" is the pod not starting; "FAIL the generated password is refused" means the account holds a password this chart did not set (the volume was used before): fix it in Mealie as admin, or delete the volume's data on a fresh app.
