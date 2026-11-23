@@ -33,7 +33,7 @@ argument_specs:
       k8s_gitops_source_hub_feed:
         type: bool
         default: true
-        description: "Give the Central Hub app its feed (notebook sync and the c1/hub-feed ExternalSecrets); false passes hubFeed false to the root chart (dev, where nothing writes c1/hub-feed)."
+        description: "Give the Central Hub app its feed; false passes hubFeed false to the root chart (dev, where nothing writes c1/hub-feed)."
       k8s_gitops_source_panel_check_suspended:
         type: bool
         default: false
