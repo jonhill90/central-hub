@@ -1,0 +1,12 @@
+# Managed by the agent_box role (central-hub hosts/ansible). Puts the Central Hub app's read-only notebook token and a
+# Proxmox snapshot into prod's store. Runs as the keys user, the same as the wrapper does through sudo.
+[Unit]
+Description=Central Hub app feed: notebook token and Proxmox snapshot into prod's store
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User={{ agent_box_keys_user }}
+Group={{ agent_box_keys_user }}
+ExecStart={{ agent_box_libexec_dir }}/ci-runner.sh hub-feed

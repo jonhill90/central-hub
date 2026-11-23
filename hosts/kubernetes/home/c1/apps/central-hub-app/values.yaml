@@ -33,6 +33,19 @@ auth:
   identityNamespace: identity
   identityPort: 8080
 
+# What the app shows beyond its own catalog: the agents' notebook and a Proxmox snapshot. Both are private, so the chart renders
+# them only with auth.mode oidc (nothing private is served while sign-in is off; the app refuses too, spec 0010 rule 9).
+# The agent box puts a one-hour read-only notebook token and the snapshot in the store at c1/hub-feed every 30 minutes
+# (ci-runner.sh hub-feed, hub-feed.timer); an init container clones the notebook with the token and a sidecar pulls it again
+# every syncSeconds. The app container never gets the token: it mounts only proxmox.json.
+feed:
+  enabled: true
+  store: openbao
+  key: c1/hub-feed
+  notebookRepo: https://github.com/jonhill90/agent-notebook.git
+  syncSeconds: 300
+  notebookSize: 1Gi
+
 resources:
   build:
     requests: {cpu: 250m, memory: 512Mi}
