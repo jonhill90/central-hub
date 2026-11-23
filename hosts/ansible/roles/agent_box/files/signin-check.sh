@@ -14,7 +14,7 @@
 #   shot <n-app.png>  writes one screenshot of the newest run to stdout (a session saves it with `> file.png`), after the same check as
 #                     the run's lines: the name is digits, a dash, letters and `.png`, nothing else. The session that copies a shot out
 #                     must look at it first (a Mealie shot taken before its default admin is gone shows that password).
-# Optional signin-check.json names for the browser step: hub_base, mealie_base, openbao_base, ntfy_base, opnsense_base (each
+# Optional signin-check.json names for the browser step: hub_base, mealie_base, homeassistant_base, openbao_base, ntfy_base, opnsense_base (each
 # defaults to the Argo CD name with its argocd label swapped for hub, openbao, ntfy or opnsense), and pve_base (defaults the same way);
 # mealie_base defaults to the short name mealie.<zone>, not the route name: Mealie's own base URL is the short name, so the
 # callback lands there, and a sign-in begun on another host loses its state cookie (seen 2026-11-23 03:21 UTC).
@@ -25,6 +25,7 @@
 # verify, admin_group, viewer_group (optional, as the scripts take them).
 set -euo pipefail
 umask 077
+cd / # the caller's folder (a session's home) is not readable by this user, and find fails when it cannot return there
 
 keys=/etc/agent-keys
 work=/var/lib/agent-box
@@ -115,7 +116,7 @@ if c.get("pve_base"):
 def swap(label):
     return c.get(label + "_base") or re.sub(r"^(https?://)argocd\.", r"\1" + label + ".", c["argocd_base"], count=1)
 files["browser"] = dict(common, jellyfin_base=c["jellyfin_base"], argocd_base=c["argocd_base"], grafana_base=graf, pve_base=swap("pve"),
-                        hub_base=swap("hub"), mealie_base=swap("mealie"), openbao_base=swap("openbao"), ntfy_base=swap("ntfy"), opnsense_base=swap("opnsense"))
+                        hub_base=swap("hub"), mealie_base=swap("mealie"), homeassistant_base=swap("homeassistant"), openbao_base=swap("openbao"), ntfy_base=swap("ntfy"), opnsense_base=swap("opnsense"))
 for name, body in files.items():
     fd = os.open(os.path.join(tmp, name + ".json"), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w") as f:
@@ -144,7 +145,7 @@ rc=0
       chmod 600 "$shots"/*.png 2>/dev/null || true
       ln -sfn "$shots" "$shots_root/latest"
       # Keep the newest 5 runs; older folders are removed with their files (the folders are named by UTC time, so the sort is by age).
-      find "$shots_root" -mindepth 1 -maxdepth 1 -type d -name '20*Z' | sort | head -n -5 | while read -r old; do rm -rf -- "$old"; done
+      { find "$shots_root" -mindepth 1 -maxdepth 1 -type d -name '20*Z' | sort | head -n -5 | while read -r old; do rm -rf -- "$old"; done; } || true
       echo "screenshots: $shots"
     else
       out=$(python3 -I "$s" "$tmp/$name.json" 2>&1) && sc=0 || sc=$?
