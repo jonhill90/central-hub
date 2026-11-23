@@ -242,6 +242,8 @@ A secret written to `kv/c1/*` in the page has no SOPS copy (D-0058 rule 8): `sec
 
 `put-short c1/<path> <key>` is `put` without the SOPS copy: the value goes to OpenBao only, and `compare` and `reseed` ignore a path the SOPS file does not hold. It is for a value that lives about an hour and is made again by a timer, so a copy would only be a stale token in the daily bundle. Today only the hub feed (`c1/hub-feed`, `ci-runner.sh hub-feed`) uses it. It still waits for a rebuild hold, but not for `sops_copies`.
 
+`forget c1/<path>` removes a path from the SOPS file only and leaves OpenBao as it is. Run it once for a path that `put` copied before it moved to `put-short` (the hub feed's `c1/hub-feed`, written by the first `hub-feed` runs), because `compare` would name the old copy as a difference. It waits for `sops_copies` and a rebuild hold, and prints nothing but the path. Run it as `sudo -n -u keys /usr/local/libexec/agent-box/secrets-store-prod.sh forget c1/hub-feed`, then `compare`.
+
 ## The box's calls to the store
 
 The agent box's `secrets-store` wrapper calls the store inside the dev cluster, run as user `keys`: `status`, `recovery`, `snapshot`, `restore`, `restore-rebuilt [raft-<time>.snap]`, `clear-hold`, `put c1/<path> <key>` (the value on stdin), `put-apps`, `compare` and `reseed`, plus the hourly off-box copy and the weekly compare. The store VM's actions (`plan`, `apply`, `destroy`, `configure`) are gone from the wrapper and from its sudo line (D-0058: no store VM was ever built).
