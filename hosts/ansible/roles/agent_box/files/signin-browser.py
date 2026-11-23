@@ -10,7 +10,7 @@ Ten apps (Mealie added once it had a Keycloak client), each printed as "<n> <app
   passed                    the browser signed in through Keycloak and the app answered as that user (Jellyfin: a stored access token; Grafana
                             /api/user; Argo CD userinfo; Proxmox /access/permissions; Keycloak: the account console's own page).
   failed                    the app should sign in through Keycloak and did not, or its address did not load at all.
-  no Keycloak sign-in yet   the app has no Keycloak sign-in today (the hub, OpenBao, ntfy; OPNsense with its own login). It is still opened and
+  no Keycloak sign-in yet   the app has no Keycloak sign-in today (OpenBao, ntfy; OPNsense with its own login). It is still opened and
                             photographed, and the line says what the address answered (an HTTP 404 is said, not hidden).
 The screenshot is <shots-dir>/<n>-<app>.png, taken after the sign-in (or where it stopped; any text typed into a form is cleared first). The exit
 is 0 unless an app is "failed". One Keycloak one-time code is used once: the script waits for the next 30-second window between sign-ins.
@@ -28,8 +28,8 @@ from urllib.parse import urlsplit
 
 from playwright.sync_api import sync_playwright
 
-SSO = ("jellyfin", "grafana", "argocd", "pve", "mealie", "sso")
-NO_SSO = ("hub", "openbao", "ntfy", "opnsense")
+SSO = ("hub", "jellyfin", "grafana", "argocd", "pve", "mealie", "sso")
+NO_SSO = ("openbao", "ntfy", "opnsense")
 ORDER = ("hub", "jellyfin", "grafana", "argocd", "pve", "mealie", "sso", "openbao", "ntfy", "opnsense")
 NO_SSO_NOTE = {"opnsense": "its own login page"}
 LAST_WINDOW = {"w": None}
@@ -105,6 +105,17 @@ def api(page, url):
 
 def sign_in_app(app, page, cfg):
     kc = cfg["base"]
+    if app == "hub":
+        page.goto(cfg["hub_base"] + "/", wait_until="networkidle", timeout=60000)  # signed out, the app sends the browser to Keycloak
+        keycloak_sign_in(page, cfg)
+        wait_for_origin(page, cfg["hub_base"])
+        page.wait_for_timeout(2000)
+        if urlsplit(page.url).path.startswith("/auth/"):
+            raise RuntimeError("the hub stayed on its sign-in path %s" % urlsplit(page.url).path)
+        code, _ = api(page, cfg["hub_base"] + "/api/v1/systems")
+        if code != 200:
+            raise RuntimeError("/api/v1/systems answered HTTP %s" % code)
+        return "the hub opens and /api/v1/systems answers HTTP 200 for the test user"
     if app == "jellyfin":
         page.goto(cfg["jellyfin_base"] + "/web/", wait_until="networkidle", timeout=60000)
         page.locator('button:has-text("Sign in with")').first.click(timeout=30000)
