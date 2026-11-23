@@ -366,6 +366,26 @@ components:
     verdict: pass
     sources: [image:ghcr.io/mealie-recipes/mealie]
     checked: 2026-11-23
+  - name: Home Assistant
+    kind: software
+    used-for: home automation on c1 (container install)
+    licence: Apache-2.0
+    licence-source: https://raw.githubusercontent.com/home-assistant/core/dev/LICENSE.md
+    paid-edition: none for the software; Nabu Casa Cloud is a paid hosted service (remote access, voice assistants) that we don't use
+    paid-edition-source: https://www.home-assistant.io/cloud/
+    verdict: pass
+    sources: [image:ghcr.io/home-assistant/home-assistant]
+    checked: 2026-11-23
+  - name: hass-oidc-auth (OpenID Connect for Home Assistant)
+    kind: software
+    used-for: sign-in to Home Assistant through Keycloak on c1
+    licence: MIT
+    licence-source: https://raw.githubusercontent.com/christiaangoossens/hass-oidc-auth/main/LICENSE.md
+    paid-edition: none found; the repository's README names no paid edition or premium features
+    paid-edition-source: https://github.com/christiaangoossens/hass-oidc-auth
+    verdict: pass
+    sources: [url:github.com/christiaangoossens/hass-oidc-auth/archive/refs/tags/]
+    checked: 2026-11-23
   - name: ntfy
     kind: software
     used-for: alert notifications from c1

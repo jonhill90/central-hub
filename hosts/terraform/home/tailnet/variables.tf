@@ -31,7 +31,7 @@ variable "split_dns_names" {
 variable "app_split_dns_names" {
   description = "App short aliases <app>.<zone> (STD-0001 rule 5) that tailnet devices ask the lab's DNS server for, added to split_dns_names. The names are the apps' own and public, so they live here and a private home.tfvars that sets split_dns_names does not hide them. A name listed in both is one entry."
   type        = list(string)
-  default     = ["hub", "openbao", "vault"]
+  default     = ["hub", "homeassistant", "openbao", "vault"]
 
   validation {
     condition     = alltrue([for n in var.app_split_dns_names : can(regex("^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$", n))])
