@@ -18,6 +18,9 @@
 #      (k8s_certs_smoke_client), a group the box's inventory copy drops. A failed play also makes the wrapper return non-zero.
 #  17. node-ports runs its one-task playbook with no tags and no extra variables; its output shows nodes as cp-N and wk-N and masks every
 #      address, in the screen and in the log; the playbook and the task file it includes hold no Helm, kubectl, command, shell or delete task.
+#  18. identity-admin-check runs its read-only playbook with no tags, no extra variables and no values file; apply is refused with no
+#      run; the playbook asks for no Secret data (custom-columns over metadata only), has no write verb, and runs its one SELECT in a
+#      read-only transaction.
 #   5. log prints the run's own lines.
 #   9. users runs the identity playbook with tags secrets,users, the values file, no realm replace and one fixed user; apply is its
 #      own verb; it never runs the keycloak tag.
@@ -47,7 +50,7 @@ cat > "$t/bin/git" <<'S'
 #!/bin/bash
 case "$*" in
   *"remote get-url"*) echo https://example.invalid/central-hub.git ;;
-  clone*) mkdir -p "${@: -1}/.git" "${@: -1}/hosts/ansible/playbooks"; for pb in identity gateway gitops observability certs backup-status backup-restore-test backup restore-inspect node-ports; do : > "${@: -1}/hosts/ansible/playbooks/k8s-$pb.yml"; done ;;
+  clone*) mkdir -p "${@: -1}/.git" "${@: -1}/hosts/ansible/playbooks"; for pb in identity-admin-check identity gateway gitops observability certs backup-status backup-restore-test backup restore-inspect node-ports; do : > "${@: -1}/hosts/ansible/playbooks/k8s-$pb.yml"; done ;;
   *rev-parse*) echo abc1234 ;;
 esac
 exit 0
@@ -90,7 +93,7 @@ if [[ $r1 == "2:none 2:none 2:none 2:none 2:none 2:none 2:none 2:none " ]]; then
 
 run list; l=$out
 run check identity
-if [[ $l == $'backup-check\nbackup-restore-test\nbackup-status\ncerts\nclients\ngateway\ngitops\nidentity\nidentity-values\nnode-ports\nobservability\nrestore-inspect\nusers' && $rc -ne 0 && $out == *"identity.env is missing"* && -z $calls ]]; then ok "2. list; a missing values file stops the run"; else bad "2. $l $rc $out"; fi
+if [[ $l == $'backup-check\nbackup-restore-test\nbackup-status\ncerts\nclients\ngateway\ngitops\nidentity\nidentity-admin-check\nidentity-values\nnode-ports\nobservability\nrestore-inspect\nusers' && $rc -ne 0 && $out == *"identity.env is missing"* && -z $calls ]]; then ok "2. list; a missing values file stops the run"; else bad "2. $l $rc $out"; fi
 
 echo "X=1" > "$t/keys/prod/identity.env"
 ens='{"k8s_identity_ensure_clients":["proxmox"]}'
@@ -199,6 +202,16 @@ if [[ $bc1rc -eq 0 && $bc1 == *"playbooks/k8s-backup.yml"* && $bc1 == *"-e k8s_b
       $(grep -c 'cat /etc/central-hub/backup-ssh/id_ed25519\|\.pub' "$SSH_LOG") -eq 0 ]]; then
   ok "14. backup-check: the backup playbook in check mode with the box's own env file and the seed folder; apply is refused"
 else bad "14. $bc1rc [$bc1] $bc2rc [$bc2]"; fi
+run check identity-admin-check; ia1=$calls; ia1rc=$rc
+run apply identity-admin-check "$clr"; ia2rc=$rc ia2=$calls
+pbf=hosts/ansible/playbooks/k8s-identity-admin-check.yml
+if [[ $ia1rc -eq 0 && $ia1 == *"playbooks/k8s-identity-admin-check.yml --check --diff" && $ia1 != *"--tags"* && $ia1 != *" -e "* &&
+      $ia2rc -eq 2 && -z $ia2 && $(grep -c "custom-columns=NAME:.metadata.name,CREATED:.metadata.creationTimestamp" $pbf) -eq 2 &&
+      $(grep -c "'get', 'secret'" $pbf) -eq 1 && $(grep -c "'get'\|'exec'" $pbf) -eq 3 &&
+      $(grep -c -E "'(apply|create|delete|patch|replace|edit|annotate|label|rollout|scale|set|cp)'|-o', *'(yaml|json)'|jsonpath|\.data" $pbf) -eq 0 &&
+      $(grep -c "PGOPTIONS=.*default_transaction_read_only=on" $pbf) -eq 1 && $(grep -c -i -E "password|credential|secret_data|salt|hash" <(sed -n '/admin_check_sql:/,/admin_check_psql:/p' $pbf)) -eq 0 ]]; then
+  ok "18. identity-admin-check: read-only playbook, check only, metadata-only reads, one SELECT in a read-only transaction; apply refused"
+else bad "18. $ia1rc [$ia1] $ia2rc [$ia2]"; fi
 run check observability; o1=$calls
 run apply observability "$clr"; o2=$calls; o2rc=$rc; o2o=$out
 if [[ $o1 == *"playbooks/k8s-observability.yml --tags metrics_server,metrics,logs,route,proof --check --diff" && $o1 != *" -e "* &&

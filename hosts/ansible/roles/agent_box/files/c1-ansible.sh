@@ -68,11 +68,14 @@ export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-
 # backup-check: plays playbooks/k8s-backup.yml in check mode only, to prove the sftp alias tasks (the carried key seeds, the host address
 # from the box's copy of the prod inventory) before a prod rebuild; apply is refused, because the wrapper never takes a backup. The seed folder is the one
 # rebuild-prod.sh fills (<keys>/prod/backup-sftp); the env file is the box's own <keys>/c1-backup.env, as in rebuild-prod.sh (the first run's play 3 stopped on the default path under the keys user's home); the host address is read before the proxmox group is dropped, as rebuild-prod.sh does.
+# identity-admin-check: read only (check only: apply is refused). Prints when each Keycloak bootstrap admin Secret was made (name and
+# creationTimestamp, never data), the ExternalSecret behind sso-bootstrap-admin (no values), and the master realm's users with their
+# creation times from one fixed SELECT in a read-only transaction (playbooks/k8s-identity-admin-check.yml). No tags, no variables, no file.
 # node-ports: opens the ports k8s_node_ports lists (Kubernetes, Cilium and node-exporter's 9100/tcp) in the lab zone on every node, in place
 # (playbooks/k8s-node-ports.yml: one firewalld task of role k8s_node, no restart, no Helm, no kubectl, no delete), for nodes built before a port
 # was added to the list. check prints each port per node and whether it would be added; the output of this name shows each node as cp-N or wk-N
 # (control planes first, by name) and masks every IPv4 address, in the screen and in the log.
-declare -A playbook=([node-ports]=playbooks/k8s-node-ports.yml [identity]=playbooks/k8s-identity.yml [gateway]=playbooks/k8s-gateway.yml [gitops]=playbooks/k8s-gitops.yml [observability]=playbooks/k8s-observability.yml [users]=playbooks/k8s-identity.yml [clients]=playbooks/k8s-identity.yml [identity-values]=playbooks/k8s-identity.yml [backup-status]=playbooks/k8s-backup-status.yml [backup-restore-test]=playbooks/k8s-backup-restore-test.yml [backup-check]=playbooks/k8s-backup.yml [restore-inspect]=playbooks/k8s-restore-inspect.yml [certs]=playbooks/k8s-certs.yml)
+declare -A playbook=([identity-admin-check]=playbooks/k8s-identity-admin-check.yml [node-ports]=playbooks/k8s-node-ports.yml [identity]=playbooks/k8s-identity.yml [gateway]=playbooks/k8s-gateway.yml [gitops]=playbooks/k8s-gitops.yml [observability]=playbooks/k8s-observability.yml [users]=playbooks/k8s-identity.yml [clients]=playbooks/k8s-identity.yml [identity-values]=playbooks/k8s-identity.yml [backup-status]=playbooks/k8s-backup-status.yml [backup-restore-test]=playbooks/k8s-backup-restore-test.yml [backup-check]=playbooks/k8s-backup.yml [restore-inspect]=playbooks/k8s-restore-inspect.yml [certs]=playbooks/k8s-certs.yml)
 declare -A needs_file=([identity]="$keys/prod/identity.env" [users]="$keys/prod/identity.env" [clients]="$keys/prod/identity.env" [identity-values]="$keys/prod/identity.env")
 declare -A needs_var=([identity]=k8s_identity_values_file [users]=k8s_identity_values_file [clients]=k8s_identity_values_file [identity-values]=k8s_identity_values_file)
 # Fixed extra variables per name. identity, users and clients also set k8s_identity_secrets_store=openbao, so the realm's Secrets
@@ -96,6 +99,7 @@ case $action in
     [[ $# -eq 3 ]] || usage
     name=$2 clearance=$3
     [[ $name != backup-check ]] || { echo "c1-ansible: backup-check is check only; it never takes a backup" >&2; exit 2; }
+    [[ $name != identity-admin-check ]] || { echo "c1-ansible: identity-admin-check is check only; it only reads" >&2; exit 2; }
     [[ $clearance =~ ^cmsg_[A-Za-z0-9]{20,60}$ ]] || { echo "c1-ansible: the clearance id is the reviewer's message id, cmsg_<letters and digits>" >&2; exit 2; }
     ;;
   *) usage ;;

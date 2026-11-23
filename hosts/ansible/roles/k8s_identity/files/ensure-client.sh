@@ -20,7 +20,7 @@ trap 'rm -f "$config" "$body" "$err"' EXIT
 # A step's own error text goes to a file; what is printed is a fixed phrase for it.
 fail() {
   local step=$1 rc=$2 why=unclassified
-  for pair in "nvalid user credentials:wrong admin username or password" "invalid_grant:wrong admin username or password" \
+  for pair in "nvalid user credentials:refused (invalid_grant: wrong username or password, or a disabled or locked account)" "invalid_grant:refused (invalid_grant: wrong username or password, or a disabled or locked account)" \
               "already exists:already exists" "onflict:conflict" "not found:not found" "orbidden:forbidden" \
               "nauthorized:unauthorized" "nvalid:invalid input" "Bad Request:bad request" "nrecognized:unrecognized field" \
               "efused:connection refused" "Unable to:kcadm could not run it"; do

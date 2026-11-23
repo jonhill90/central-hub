@@ -1,6 +1,6 @@
 #!/bin/bash
-# /usr/local/libexec/agent-box/signin-check.sh: run the three scripted sign-in checks (Jellyfin, Argo CD, Proxmox) against prod
-# with the test user, from the agent box. It runs as user `keys` through sudo, because the test user's password and TOTP seed are
+# /usr/local/libexec/agent-box/signin-check.sh: run the scripted sign-in checks (Jellyfin, Argo CD, Grafana, Proxmox) and then a headless-
+# browser sign-in to all nine apps (signin-browser.py) against prod with the test user, from the agent box. It runs as user `keys` through sudo, because the test user's password and TOTP seed are
 # lines in <keys>/prod/identity.env, which a session cannot read. Installed by the agent_box role; root owns it.
 #   sudo -n -u keys /usr/local/libexec/agent-box/signin-check.sh run|log
 # run   builds a private credentials file for each check from <keys>/prod/signin-check.json (the places and the test user's
@@ -8,6 +8,11 @@
 #       checkout of main, and prints only their numbered lines. A password, seed, code, state or token is never printed.
 #       The exit is 0 only when every check that ran passed.
 # log   the newest run's lines.
+# The browser step prints one line per app (hub, Jellyfin, Grafana, Argo CD, Proxmox, Keycloak, OpenBao, ntfy, OPNsense): passed, failed,
+# or "no Keycloak sign-in yet", and saves one screenshot per app to /var/tmp/signin-check-shots/<run>/ (world-readable, so a session
+# can copy them; a form's typed text is cleared before each shot, and a password is never on a page). The newest run's folder is
+# /var/tmp/signin-check-shots/latest. Optional signin-check.json names for it: hub_base, openbao_base, ntfy_base, opnsense_base (each
+# defaults to the Argo CD name with its argocd label swapped for hub, openbao, ntfy or opnsense), and pve_base (defaults the same way).
 # The test user is an access right the owner's go creates (docs/runbooks/move-jellyfin-to-argo-cd.md); with no such user in
 # signin-check.json the wrapper stops before any request. It makes nothing in Keycloak, Jellyfin, Argo CD or Proxmox.
 # signin-check.json (JSON, written by the controller and copied by its prod-files run): base, realm, user, expect_admin; jellyfin_base
@@ -21,6 +26,9 @@ work=/var/lib/agent-box
 repo=$work/checkouts/signin-check   # this wrapper's own checkout of central-hub
 logs=$work/signin-check/logs
 conf=$keys/prod/signin-check.json
+browser_python=/usr/local/libexec/agent-box/playwright-venv/bin/python
+browser_browsers=/usr/local/libexec/agent-box/playwright-browsers
+shots_root=/var/tmp/signin-check-shots
 values=$keys/prod/identity.env
 export HOME=$work PATH=/usr/local/bin:/usr/bin:/bin
 
@@ -89,6 +97,11 @@ if c.get("pve_base"):
     files["proxmox"] = dict(common, pve_base=c["pve_base"], pve_realm=c.get("pve_realm", "sso"))
     if c.get("pve_address"):
         files["proxmox"]["pve_address"] = c["pve_address"]
+# The browser step: every app's address, from its own name or the Argo CD name with its first label swapped.
+def swap(label):
+    return c.get(label + "_base") or re.sub(r"^(https?://)argocd\.", r"\1" + label + ".", c["argocd_base"], count=1)
+files["browser"] = dict(common, jellyfin_base=c["jellyfin_base"], argocd_base=c["argocd_base"], grafana_base=graf, pve_base=swap("pve"),
+                        hub_base=swap("hub"), openbao_base=swap("openbao"), ntfy_base=swap("ntfy"), opnsense_base=swap("opnsense"))
 for name, body in files.items():
     fd = os.open(os.path.join(tmp, name + ".json"), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w") as f:
@@ -98,7 +111,8 @@ PY
 )" "$conf" "$values" "$tmp") || { echo "signin-check: $checks" >&2; exit 1; }
 
 declare -A script=([jellyfin]=roles/k8s_identity/files/jellyfin-signin-check.py [argocd]=roles/k8s_gitops/files/argocd-signin-check.py
-                   [proxmox]=roles/proxmox_sso/files/proxmox-signin-check.py [grafana]=roles/k8s_observability/files/grafana-signin-check.py)
+                   [proxmox]=roles/proxmox_sso/files/proxmox-signin-check.py [grafana]=roles/k8s_observability/files/grafana-signin-check.py
+                   [browser]=roles/agent_box/files/signin-browser.py)
 rc=0
 {
   echo "signin-check: commit $commit"
@@ -106,7 +120,18 @@ rc=0
     s=$repo/hosts/ansible/${script[$name]}
     if [[ ! -f $s ]]; then echo "$name: the script is not in this commit of main"; rc=1; continue; fi
     echo "== $name"
-    out=$(python3 -I "$s" "$tmp/$name.json" 2>&1) && sc=0 || sc=$?
+    if [[ $name == browser ]]; then
+      shots=$shots_root/$(date -u +%Y%m%dT%H%M%SZ)
+      mkdir -m 755 "$shots_root" 2>/dev/null || true
+      mkdir "$shots" 2>/dev/null || true
+      chmod 755 "$shots"
+      out=$(PLAYWRIGHT_BROWSERS_PATH=$browser_browsers "$browser_python" -I "$s" "$tmp/$name.json" "$shots" 2>&1) && sc=0 || sc=$?
+      chmod 644 "$shots"/*.png 2>/dev/null || true
+      ln -sfn "$shots" "$shots_root/latest"
+      echo "screenshots: $shots"
+    else
+      out=$(python3 -I "$s" "$tmp/$name.json" 2>&1) && sc=0 || sc=$?
+    fi
     printf '%s\n' "$out" | cut -c1-200
     [[ $sc -eq 0 ]] || { echo "$name: exit $sc"; rc=1; }
   done
