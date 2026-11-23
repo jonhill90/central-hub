@@ -97,8 +97,10 @@ def wait_for_origin(page, base, seconds=30):
 
 
 def api(page, url):
-    r = page.request.get(url, timeout=30000)
-    return r.status, (r.json() if r.status == 200 else None)
+    """GET from inside the page, so the browser's own trust of the lab CA and its cookies apply (Playwright's request client trusts only
+    the system store: it failed with 'unable to get local issuer certificate' on 2026-11-23 although the sign-in itself had worked)."""
+    return page.evaluate("""async (u) => { const r = await fetch(u, {credentials: 'same-origin'});
+        let b = null; if (r.status === 200) { try { b = await r.json(); } catch (e) { b = {}; } } return [r.status, b]; }""", url)
 
 
 def sign_in_app(app, page, cfg):
