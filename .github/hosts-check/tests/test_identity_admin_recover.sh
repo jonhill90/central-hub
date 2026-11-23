@@ -27,13 +27,26 @@ a = sys.argv[1:]
 j = " ".join(a)
 stdin = sys.stdin.read() if ("apply" in a or "exec" in a) else ""
 open(os.environ["KUBE_LOG"], "a").write(json.dumps({"args": a, "stdin": stdin if "apply" in a else ""}) + "\n")
-if "get pod" in j:
+if "get pod" in j and "jsonpath" in j:
     print("Running", end=""); sys.exit(0)
 if "exec" in a and "bash" in a:
     cnt = os.environ["PROBE_COUNT"]
     c = int(open(cnt).read()) if os.path.exists(cnt) else 0
     open(cnt, "w").write(str(c + 1))
     print(open(os.environ["PROBE1" if c == 0 else "PROBE2"]).read(), end=""); sys.exit(0)
+# After the instances 1 patch the pod does not exist for the first two lookups; `wait` on a missing pod fails, as kubectl's does.
+st = os.environ["POD_STATE"]
+n = int(open(st).read()) if os.path.exists(st) else -1
+if "instances\":1" in j:
+    open(st, "w").write("0"); sys.exit(0)
+if "get pod" in j and "-o name" in j:
+    if n < 0: print("pod/sso-0"); sys.exit(0)
+    open(st, "w").write(str(n + 1))
+    if n + 1 >= 3: print("pod/sso-0")
+    sys.exit(0)
+if "wait pod/" in j:
+    if 0 <= n < 3: print('Error from server (NotFound): pods "sso-0" not found', file=sys.stderr); sys.exit(1)
+    sys.exit(0)
 if "get statefulset" in j and "image" in j:
     print("quay.io/keycloak/keycloak:26.8.2", end=""); sys.exit(0)
 if "get statefulset" in j:
@@ -55,9 +68,9 @@ YML
 run() {
   printf '%s\n' "admin-probe: env-user $1" "admin-probe: recovery-user $2" > "$t/p1"
   printf '%s\n' "admin-probe: env-user refused" "admin-probe: recovery-user ok" > "$t/p2"
-  : > "$t/log"; rm -f "$t/count"; shift 2
+  : > "$t/log"; rm -f "$t/count" "$t/podstate"; shift 2
   (cd "$root/hosts/ansible" && ANSIBLE_CONFIG=ansible.cfg PATH="$t/bin:$PATH" KUBE_LOG="$t/log" PROBE1="$t/p1" PROBE2="$t/p2" \
-    PROBE_COUNT="$t/count" ansible-playbook -i localhost, -c local "$t/play.yml" "$@" > "$t/out" 2>&1)
+    PROBE_COUNT="$t/count" POD_STATE="$t/podstate" ansible-playbook -i localhost, -c local "$t/play.yml" "$@" > "$t/out" 2>&1)
   rc=$?
 }
 has() { grep -c -F -- "$1" "$t/log"; }

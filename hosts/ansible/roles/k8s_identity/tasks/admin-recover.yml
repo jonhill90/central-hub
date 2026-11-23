@@ -146,11 +146,15 @@
       ansible.builtin.fail:
         msg: admin recover - the Job that adds c1-admin did not complete; Keycloak is started again below
   always:
-    - name: "admin recover | Start Keycloak again, and wait until it is Ready"
+    - name: "admin recover | Start Keycloak again, wait for its pod to exist, then until it is Ready"
       ansible.builtin.shell: >-
         set -o pipefail &&
         kubectl --kubeconfig /etc/kubernetes/admin.conf -n {{ k8s_identity_namespace }} patch keycloak {{ k8s_identity_name }}
         --type merge -p '{"spec":{"instances":1}}' &&
+        for i in $(seq 120); do
+        [ -n "$(kubectl --kubeconfig /etc/kubernetes/admin.conf -n {{ k8s_identity_namespace }} get pod {{ k8s_identity_name }}-0
+        --ignore-not-found -o name)" ] && break;
+        sleep 5; done &&
         kubectl --kubeconfig /etc/kubernetes/admin.conf -n {{ k8s_identity_namespace }} wait pod/{{ k8s_identity_name }}-0
         --for=condition=Ready --timeout=600s
       args: {executable: /bin/bash}
