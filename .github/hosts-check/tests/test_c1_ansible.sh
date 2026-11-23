@@ -209,7 +209,7 @@ if [[ $ia1rc -eq 0 && $ia1 == *"playbooks/k8s-identity-admin-check.yml --check -
       $ia2rc -eq 2 && -z $ia2 && $(grep -c "custom-columns=NAME:.metadata.name,CREATED:.metadata.creationTimestamp" $pbf) -eq 2 &&
       $(grep -c "'get', 'secret'" $pbf) -eq 1 && $(grep -c "'get'\|'exec'" $pbf) -eq 3 &&
       $(grep -c -E "'(apply|create|delete|patch|replace|edit|annotate|label|rollout|scale|set|cp)'|-o', *'(yaml|json)'|jsonpath|\.data" $pbf) -eq 0 &&
-      $(grep -c "PGOPTIONS=.*default_transaction_read_only=on" $pbf) -eq 1 && $(grep -c -i -E "password|credential|secret_data|salt|hash" <(sed -n '/admin_check_sql/,/ORDER BY/p' $pbf)) -eq 0 ]]; then
+      $(grep -c "PGOPTIONS=.*default_transaction_read_only=on" $pbf) -eq 1 && $(grep -c -i -E "password|credential|secret_data|salt|hash" <(sed -n '/admin_check_sql:/,/admin_check_psql:/p' $pbf)) -eq 0 ]]; then
   ok "18. identity-admin-check: read-only playbook, check only, metadata-only reads, one SELECT in a read-only transaction; apply refused"
 else bad "18. $ia1rc [$ia1] $ia2rc [$ia2]"; fi
 run check observability; o1=$calls

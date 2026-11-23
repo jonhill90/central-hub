@@ -17,20 +17,24 @@
     admin_check_ns: identity
     admin_check_name: sso
     admin_check_kc: [kubectl, --kubeconfig, /etc/kubernetes/admin.conf, -n, identity]
-    # One SELECT per line of output: users with enabled flag and creation time; the realm's brute-force setting; failure counters.
+    # Fixed read-only statements; each runs on its own, so one that names a column this Keycloak lacks does not hide the others.
+    # 2026-11-23: realm.brute_force_protected does not exist in 26.x, the setting is a realm_attribute row. The last statement lists
+    # table names that hold login failures, so the next run can name the right one.
     admin_check_sql: >-
       SELECT 'user ' || u.username || ' enabled=' || u.enabled || ' created '
       || to_char(to_timestamp(u.created_timestamp / 1000.0) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
-      FROM user_entity u JOIN realm r ON r.id = u.realm_id WHERE r.name = 'master'
-      UNION ALL
-      SELECT 'realm master bruteForceProtected=' || r.brute_force_protected FROM realm r WHERE r.name = 'master'
-      UNION ALL
+      FROM user_entity u JOIN realm r ON r.id = u.realm_id WHERE r.name = 'master' ORDER BY u.username;
+      SELECT 'realm_attribute ' || a.name || '=' || a.value FROM realm_attribute a JOIN realm r ON r.id = a.realm_id
+      WHERE r.name = 'master' AND a.name IN ('bruteForceProtected', 'permanentLockout', 'failureFactor',
+      'maxFailureWaitSeconds', 'waitIncrementSeconds', 'maxDeltaTimeSeconds', 'quickLoginCheckMilliSeconds') ORDER BY a.name;
       SELECT 'login failures ' || u.username || ' count=' || f.num_failures || ' last '
       || to_char(to_timestamp(f.last_failure / 1000.0) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
       FROM user_login_failure f JOIN user_entity u ON u.id = f.user_id JOIN realm r ON r.id = f.realm_id
-      WHERE r.name = 'master' ORDER BY 1;
+      WHERE r.name = 'master' ORDER BY u.username;
+      SELECT 'table ' || table_name FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name ~* 'fail|lock' ORDER BY table_name;
     admin_check_psql: >-
-      PGOPTIONS="-c default_transaction_read_only=on" psql -U "$POSTGRES_USER" -d keycloak -v ON_ERROR_STOP=1 -tA -f -
+      PGOPTIONS="-c default_transaction_read_only=on" psql -U "$POSTGRES_USER" -d keycloak -v ON_ERROR_STOP=0 -tA -f - 2>&1
   tasks:
     - name: Bootstrap admin Secrets, names and creation times only
       ansible.builtin.command:
@@ -48,6 +52,12 @@
       changed_when: false
       check_mode: false
 
+    - name: What the Secrets and the ExternalSecret say
+      ansible.builtin.debug:
+        msg:
+          - "identity-admin-check: Secrets (name, created): {{ admin_check_secrets.stdout_lines }}"
+          - "identity-admin-check: ExternalSecret (name, created, ready): {{ admin_check_es.stdout_lines }}"
+
     - name: Master realm users and creation times, one fixed SELECT in a read-only transaction
       ansible.builtin.command:
         argv: "{{ admin_check_kc + ['exec', '-i', admin_check_name ~ '-postgres-0', '--', 'sh', '-c', admin_check_psql] }}"
@@ -56,9 +66,6 @@
       changed_when: false
       check_mode: false
 
-    - name: What was read
+    - name: What the database says
       ansible.builtin.debug:
-        msg:
-          - "identity-admin-check: Secrets (name, created): {{ admin_check_secrets.stdout_lines }}"
-          - "identity-admin-check: ExternalSecret (name, created, ready): {{ admin_check_es.stdout_lines }}"
-          - "identity-admin-check: master realm (users, brute-force setting, failure counters): {{ admin_check_users.stdout_lines }}"
+        msg: "identity-admin-check: master realm (users, brute-force attributes, failure counters, error lines): {{ admin_check_users.stdout_lines }}"
