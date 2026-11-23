@@ -174,7 +174,7 @@ def sign_in_app(app, page, cfg):
         keycloak_sign_in(page, cfg)
         wait_for_origin(page, cfg["homeassistant_base"])
         if "/auth/oidc/finish" in page.url:  # "Logged in!": the component asks which device continues
-            page.get_by_text("Continue on this device").first.click(timeout=30000)
+            page.get_by_role("button", name="Continue on this device").click(timeout=30000)  # the page also has a heading with these words; click the button
             page.wait_for_load_state("networkidle", timeout=30000)
         for _ in range(30):
             ok = page.evaluate("() => { try { return !!JSON.parse(localStorage.getItem('hassTokens')).access_token; } catch (e) { return false; } }")
@@ -189,7 +189,7 @@ def sign_in_app(app, page, cfg):
                         ws.onmessage = (m) => { const d = JSON.parse(m.data);
                             if (d.type === 'auth_required') ws.send(JSON.stringify({type: 'auth', access_token: t}));
                             else if (d.type === 'auth_ok') ws.send(JSON.stringify({id: 1, type: 'auth/current_user'}));
-                            else if (d.id === 1) { resolve(d.result && d.result.is_admin ? 'admin' : 'user'); ws.close(); } };
+                            else if (d.id === 1) { resolve(d.success && d.result ? (d.result.is_admin ? 'admin' : 'user') : 'unknown'); ws.close(); } };
                     } catch (e) { resolve('unknown'); } })""")
                 return "Home Assistant holds its own access token for the test user, who is %s there" % role
             time.sleep(1)
