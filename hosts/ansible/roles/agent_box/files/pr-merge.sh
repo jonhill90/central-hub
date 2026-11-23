@@ -250,6 +250,14 @@ print(m.group(1) if m else "")') || exit 1
         # A merge makes GitHub work out every other open PR's mergeability again, and until it has, it reports mergeable=null
         # (shown as None): ask again, a few seconds apart, so one run can merge every green PR, one at a time, each judged
         # after the one before it.
+        # A cheap look first, to keep a 2-minute sweep inside GitHub's hourly limit for the App: a PR whose head still
+        # has a check queued or running can't be GREEN yet, so it costs one read, not the verdict's six or more.
+        if gh "$base/commits/$h/check-runs?per_page=100" > "$tmp/pre.json" 2>/dev/null && python3 -I -c '
+import json, sys
+c = json.load(open(sys.argv[1])); runs = c.get("check_runs", [])
+sys.exit(0 if c.get("total_count", len(runs)) == len(runs) and any(r.get("status") != "completed" for r in runs) else 1)' "$tmp/pre.json"; then
+          echo "pr-merge sweep: $r#$n ${h:0:7}: waiting on checks"; continue
+        fi
         tries=0 failed=0
         while :; do
           evaluate "$n" "$h" || { failed=1; break; }
@@ -264,7 +272,8 @@ print(m.group(1) if m else "")') || exit 1
         do_merge "$n" "$h" || echo "pr-merge sweep: $r#$n merge call failed"
       done < <(python3 -I -c '
 import json, sys
-for p in sorted(json.load(open(sys.argv[1])), key=lambda p: p["number"]): print(p["number"], p["head"]["sha"])' "$tmp/open.json")
+for p in sorted(json.load(open(sys.argv[1])), key=lambda p: p["number"]):
+    if not p.get("draft"): print(p["number"], p["head"]["sha"])  # a draft is never merged, so it costs no reads' "$tmp/open.json")
     done
     ;;
 esac
