@@ -56,6 +56,7 @@ Home Assistant's first-run screen has no password: the first visitor creates the
 - **Keycloak says "Invalid parameter: redirect_uri":** the client is not in the live realm yet; run step 2.
 - **400 on every request:** the proxy is not trusted. On 2026.8 and later the `http:` block in configuration.yaml is not applied (the settings live in the UI, and a change is dropped unless an admin confirms it within 5 minutes; official page: [HTTP integration](https://www.home-assistant.io/integrations/http/)), so the chart holds the image at 2026.7.4. On 2026.7.4 the other cause is the Gateway's source address being outside `trustedProxies`. The YAML block stops working in 2027.2, so the pin has to move before then.
 - **The route is on and the setup Job says FAIL:** set `route.enabled: false` at once and sync, then read the Job log.
+- **`UnsupportedStorageVersionError: Storage file http has version 3 which is newer than the max supported version 1` and the pod crash-loops:** the volume was written by a newer Home Assistant than the image. Home Assistant does not step back over its storage files. Give the chart a new claim name (`storage.claimName`) so the setup Job onboards a fresh Home Assistant; the old claim is kept and unused, and the owner password Secret is unchanged.
 - **The way back:** set `sso.enabled: false` in the chart values and sync; Home Assistant's own login (the first user made at first run) then stands alone.
 
 ## Not covered yet
