@@ -55,6 +55,23 @@ flowchart LR
    why: the spec's first acceptance check is a clean second plan; SSH through the host is how Ansible reaches the nodes (the inventory's `ansible_ssh_common_args`, [D-0022](../decisions/0022-reach-clusters-by-ssh-now-and-keep-admin-kubeconfigs-for-break-glass.md)).
    expect: no changes; each node prints its STD-0001 name.
 
+## Resize a node's CPU
+
+When apps on the worker cannot be scheduled for lack of CPU (a pod stays `Pending` with "Insufficient cpu"), measure first, then add a vCPU.
+
+1. Read the numbers. `kubectl describe node <worker>` shows the CPU requested against the CPU the node has, and `kubectl top node` the real use. On 2026-11-23 the worker had 1990m of 2000m requested while real use was about 16%, so lowering requests (central-hub #931) came before adding a core.
+   why: requests are what the scheduler counts, so a node can be full with idle cores; a core costs the host, a lower request costs nothing.
+   expect: requested near 100% with real use far lower means fix the requests first.
+2. Read how many cores the Proxmox host has free. From the agent box, read-only: the host's node status (`/nodes/<node>/status`, `cpuinfo.cpus`) and each running guest's `cpus` in `/nodes/<node>/qemu`, summed. Pick the new core count from that figure; this runbook does not fix one.
+   why: the guests share the host's threads, so the sum of their cores should stay near or under the host's.
+3. Set `cores` for the worker in the private `home.tfvars`, and `qm set <vmid> --cores <n>` on the host.
+   why: the real node entries live only in the private file (see "Afterwards"); the VM's CPU type is `host` and no CPU hotplug is set on these VMs, so the new count applies only after a full stop and start.
+4. Stop and start the worker VM from Proxmox (a guest shutdown, then start).
+   why: every app on the single worker is down while it restarts, a few minutes for the guest's shutdown and boot, and its pods return by themselves. Do it when nobody is using the apps.
+   expect: `kubectl get nodes` shows the worker `Ready` with the new CPU count in `kubectl describe node`; `tofu plan -var-file=home.tfvars` shows no changes.
+
+A second worker is not the way to add CPU here: the 200 GB data disk, the local-path volumes and Keycloak's database sit on the first worker.
+
 ## If it fails
 
 - The image download fails its checksum: the pinned build was removed upstream. Pin a newer build and its sha256 in `variables.tf` by STD-0003, in a PR.
