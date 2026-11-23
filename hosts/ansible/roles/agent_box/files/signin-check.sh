@@ -25,6 +25,7 @@
 # verify, admin_group, viewer_group (optional, as the scripts take them).
 set -euo pipefail
 umask 077
+cd / # the caller's folder (a session's home) is not readable by this user, and find fails when it cannot return there
 
 keys=/etc/agent-keys
 work=/var/lib/agent-box
@@ -144,7 +145,7 @@ rc=0
       chmod 600 "$shots"/*.png 2>/dev/null || true
       ln -sfn "$shots" "$shots_root/latest"
       # Keep the newest 5 runs; older folders are removed with their files (the folders are named by UTC time, so the sort is by age).
-      find "$shots_root" -mindepth 1 -maxdepth 1 -type d -name '20*Z' | sort | head -n -5 | while read -r old; do rm -rf -- "$old"; done
+      { find "$shots_root" -mindepth 1 -maxdepth 1 -type d -name '20*Z' | sort | head -n -5 | while read -r old; do rm -rf -- "$old"; done; } || true
       echo "screenshots: $shots"
     else
       out=$(python3 -I "$s" "$tmp/$name.json" 2>&1) && sc=0 || sc=$?

@@ -95,6 +95,9 @@ for bad_name in ../x.png 1-hub.png/../../x 1-hub.txt 'a b.png' ""; do run shot "
 run shot 9-nothing.png; [[ $rc -eq 1 && $out == *"no such screenshot"* ]] && ok "4h. shot of a missing file says so" || bad "4h. rc=$rc $out"
 for d in 20200101T000000Z 20200102T000000Z 20200103T000000Z 20200104T000000Z 20200105T000000Z 20200106T000000Z; do mkdir -p "$t/shots/$d"; done
 run run; [[ $(find "$t/shots" -mindepth 1 -maxdepth 1 -type d -name '20*Z' | wc -l) -eq 5 && ! -d "$t/shots/20200101T000000Z" ]] && ok "4i. only the newest 5 runs are kept" || bad "4i. $(ls "$t/shots")"
+# 4j (seen 2026-11-23 04:03 UTC on the box): a run begun from a folder this user cannot return to (a session's home) must still finish; find fails there
+mkdir "$t/gone"; rc=0; out=$(cd "$t/gone" && rmdir "$t/gone" && bash "$t/run/signin-check.sh" run 2>&1) || rc=$?
+[[ $rc -eq 0 && $out == *"signin-check: PASS"* ]] && ok "4j. a run from a folder it cannot return to still finishes" || bad "4j. rc=$rc $out"
 [[ $out == *"== jellyfin"* && $out == *"== argocd"* && $out == *"== proxmox"* && $out == *"== grafana"* && $out == *"1 step 1: HTTP 200 ok"* ]] && ok "4c. the checks' own lines are printed" || bad "4c. $out"
 cp "$t/out" "$t/out-pass"
 
