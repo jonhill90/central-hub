@@ -771,6 +771,9 @@ run_stage() {
   # in to that config: every tick printed "wizard already completed", then a 401, and failed `checks` (prod resume 4,
   # 2026-11-22; dev run 10). k8s_gitops_source_jellyfin_setup.
   if [ "$ENV_NAME" = dev ] || [ -n "${RESTORE_HOOK:-}" ]; then rootvars+=(-e k8s_gitops_source_jellyfin_setup=false); fi
+  # No Central Hub app feed on dev: only prod's agent-box timer writes kv c1/hub-feed, so the feed's ExternalSecrets there would never
+  # be Ready, Argo CD would show central-hub-app Degraded and the `apps` stage's wait would fail. k8s_gitops_source_hub_feed.
+  if [ "$ENV_NAME" = dev ]; then rootvars+=(-e k8s_gitops_source_hub_feed=false); fi
   case $1 in
     preflight)
       [ "$ENV_NAME" = dev ] || { echo "the memory preflight runs on dev only"; return 1; }

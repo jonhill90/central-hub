@@ -120,6 +120,7 @@ for args in "dev gitops" "dev-fake dev gitops" "dev dev-ca"; do
   check "$args: login-probe off" "$out" "-e k8s_gitops_source_login_probe=false" ""
   check "$args: jellyfin setup off" "$out" "-e k8s_gitops_source_jellyfin_setup=false" ""
   check "$args: panel check suspended" "$out" "-e k8s_gitops_source_panel_check_suspended=true" ""
+  check "$args: hub feed off" "$out" "-e k8s_gitops_source_hub_feed=false" ""
 done
 out=$(OPENBAO_SEAL_KEY_FILE=/k run dev gitops "$t/ok")
 check "dev with a key file: both off and the measurement on" "$out" "k8s_gitops_source_login_probe=false" ""
@@ -142,6 +143,7 @@ out=$(run dev openbao-measure "$t/ok"); check "dev without a key file still skip
 out=$(FAKE_SECRET=yes run prod gitops "$t/ok"); check "prod gitops leaves the lab-ca issuer on" "$out" "AP " "lab_ca_issuer"
 check "prod gitops leaves login-probe on" "$out" "AP " "login_probe"
 check "prod gitops leaves jellyfin setup on" "$out" "AP " "jellyfin_setup"
+check "prod gitops leaves the hub feed on" "$out" "AP " "hub_feed"
 # Prod's rebuild restores its own backup (rebuild-prod.sh sets RESTORE_HOOK), Jellyfin config and admin password with it, so its
 # fresh admin Secret can't sign in (prod resume 4, 2026-11-22: 401 every tick): a prod run with a restore also turns the setup off.
 out=$(RESTORE_HOOK=true FAKE_SECRET=yes run prod gitops "$t/ok")

@@ -9,3 +9,8 @@ nonword: true
 tokens:
   - '\bJon\b[^."\n]{0,80}"[^"\n]{3,}"'
   - '\bJon decided\b'
+  # The owner's own words in quotation marks, however they are introduced (D-0016 rule 5).
+  - '\bowner(?:''s)? (?:own |typed )?(?:words?|line|message)\b[^."\n]{0,80}["“][^"”\n]{3,}["”]'
+  - '\b(?:owner|he|they) (?:wrote|said|typed|answered|replied|called)\b[^."\n]{0,60}[:,]? *["“][^"”\n]{3,}["”]'
+  - '\b(?:his|their) (?:own )?(?:words?|typed line)\b[^."\n]{0,60}["“][^"”\n]{3,}["”]'
+  - '\bit reads \\?["“]'
