@@ -175,4 +175,13 @@ if [[ $r7 -ne 0 && $o7 == *"put-apps"* && $o7 == *"names only"* && $o7 == *"user
   ok "8. SecretSyncedError: stops at the 30 s look naming the keys and put-apps; another reason waits on"
 else bad "8. rc=$r7 waits=$waits7 rc2=$r7b waits2=$waits7b msg=[$(grep -m1 '"msg"' <<<"$o7" | cut -c1-700)]"; fi
 
+# 9 (the reviewer's catch on #941): the reason task's template reaches kubectl with its quotes around Ready, and a failing read does not fail the run
+fresh; SYNC_ERR=slow run -e k8s_gitops_source_app_secrets_store=openbao
+if grep -qF 'jsonpath={.status.conditions[?(@.type==\"Ready\")].reason}' "$t/log"; then
+  ok "9. the Ready reason template keeps its quotes through the command module"
+else bad "9. kubectl got: $(grep -m1 'conditions' "$t/log" | cut -c1-300)"; fi
+if grep -A8 'Reason it is not Ready' hosts/ansible/roles/k8s_identity/tasks/external-secret.yml | grep -q 'failed_when: false'; then
+  ok "9b. the reason task cannot fail the run by itself"
+else bad "9b. no failed_when: false on the reason task"; fi
+
 exit "$fail"
