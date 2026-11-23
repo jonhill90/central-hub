@@ -1,3 +1,4 @@
+#!/bin/sh
 set -eu
 # Runs as root before Home Assistant starts. Installs hass-oidc-auth into /config/custom_components from the pinned
 # archive (sha256 checked) and writes configuration.yaml from the chart. Safe to run again.
