@@ -25,8 +25,8 @@ MAX_RECORDS = 20
 
 # Paths that still need the reviewer's pass for the exact head: the kinds the owner keeps (firewall, tailnet, secrets,
 # access rights, the agents' own rules), the workflows, the Mac's command wrappers and the Proxmox host job (root on the
-# host, run on the agents' pass). Any other green PR merges on its checks alone (the owner's words of 2026-11-23 00:50 to
-# 00:54 UTC: "Stop with the red tape", "FIX IT NOW AND FAST"). The agent box role is not listed: box-apply still installs
+# host, run on the agents' pass). Any other green PR merges on its checks alone (the owner's order of 2026-11-23,
+# 00:52 UTC). The agent box role is not listed: box-apply still installs
 # a change to its limits only on the reviewer's digest pass (D-0044), so a merge-time pass on it was the same check twice.
 GUARDED_ANY = (".github/", "AGENTS.md", "CLAUDE.md", "SECURITY.md")
 GUARDED_CENTRAL = ("hosts/wrappers/", "hosts/ansible/playbooks/proxmox-proxy.yml", "hosts/ansible/roles/proxmox_proxy/")
