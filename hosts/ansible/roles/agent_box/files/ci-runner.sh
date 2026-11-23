@@ -352,15 +352,15 @@ c1_token() {
 hub_feed() {
   local rc=0 token snap put=/usr/local/libexec/agent-box/secrets-store-prod.sh
   if token=$(app_token jonhill90 agent-notebook '{"contents":"read"}') && [[ -n $token ]]; then
-    printf '%s' "$token" | "$put" put c1/hub-feed notebook-token
-    echo "ci-runner: a one-hour read-only notebook token is in prod's store at kv c1/hub-feed (notebook-token)"
+    printf '%s' "$token" | "$put" put-short c1/hub-feed notebook-token
+    echo "ci-runner: a one-hour read-only notebook token is in prod's store at kv c1/hub-feed (notebook-token; OpenBao only, no SOPS copy)"
   else
     echo "ci-runner: no read-only notebook token (does the App have Contents: read on the notebook?)" >&2
     rc=1
   fi
   if snap=$(proxmox_snapshot) && [[ -n $snap ]]; then
-    printf '%s' "$snap" | "$put" put c1/hub-feed proxmox-json
-    echo "ci-runner: a Proxmox snapshot is in prod's store at kv c1/hub-feed (proxmox-json)"
+    printf '%s' "$snap" | "$put" put-short c1/hub-feed proxmox-json
+    echo "ci-runner: a Proxmox snapshot is in prod's store at kv c1/hub-feed (proxmox-json; OpenBao only, no SOPS copy)"
   else
     echo "ci-runner: no Proxmox snapshot (the call to /cluster/resources failed; see the line above)" >&2
     rc=1
