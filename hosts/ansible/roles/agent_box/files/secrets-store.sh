@@ -30,7 +30,7 @@
 set -euo pipefail
 umask 077
 
-usage() { echo "usage: secrets-store recovery|status|snapshot|restore|restore-rebuilt [raft-<time>.snap]|clear-hold|put c1/<path> <key>|put-new c1/<path> <key>|put-short c1/<path> <key>|put-apps|compare|reseed|owner-login owner|test|check-test|remove-test|plan|ssh-ca plan|apply|check|public|sign-host <names>" >&2; exit 2; }
+usage() { echo "usage: secrets-store recovery|status|snapshot|restore|restore-rebuilt [raft-<time>.snap]|clear-hold|put c1/<path> <key>|put-new c1/<path> <key>|put-short c1/<path> <key>|forget c1/<path>|put-apps|compare|reseed|owner-login owner|test|check-test|remove-test|plan|ssh-ca plan|apply|check|public|sign-host <names>" >&2; exit 2; }
 named='' kv_path='' kv_key='' ssh_args=()
 env=dev
 if [[ ${1:-} == --prod ]]; then env=prod; shift; fi
@@ -59,6 +59,13 @@ case ${1:-} in
     kv_path=$2 kv_key=$3
     [[ $kv_path =~ ^c1(/[a-z0-9][a-z0-9_-]*)+$ ]] || { echo "secrets-store: the path is c1/<name>[/<name>...], lowercase letters, digits, - and _" >&2; exit 2; }
     [[ $kv_key =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]*$ ]] || { echo "secrets-store: the key is letters, digits, _, . and -" >&2; exit 2; }
+    ;;
+  # forget removes one path from SOPS's copy only (OpenBao is untouched): for a path that moved to put-short.
+  forget)
+    action=$1
+    [[ $# -eq 2 ]] || usage
+    kv_path=$2
+    [[ $kv_path =~ ^c1(/[a-z0-9][a-z0-9_-]*)+$ ]] || { echo "secrets-store: the path is c1/<name>[/<name>...], lowercase letters, digits, - and _" >&2; exit 2; }
     ;;
   # restore-rebuilt may name one snapshot file exactly, e.g. one moved back from the kept folder (pick 239).
   restore-rebuilt)
@@ -379,6 +386,7 @@ case $action in
   restore-rebuilt) restore_rebuilt ;;
   clear-hold) clear_hold ;;
   put | put-new | put-short) put ;;
+  forget) sops_copies; no_hold; kv forget "$kv_path" ;;
   put-apps) put_apps ;;
   # owner, test and check-test write keys, and a key in a fresh rebuilt store makes restore-rebuilt refuse, so they wait for the
   # hold like put; remove-test only deletes, so it may run (the reviewer's ask on #821).
