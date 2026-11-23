@@ -69,6 +69,10 @@ k8s_gitops_source_login_probe: true
 # admin Secret can't sign in; hosts/rebuild-k8s.sh sets it false on dev and on any run with a RESTORE_HOOK (prod's rebuild), and the
 # box's c1-ansible gitops sets it false for prod. A first-ever c1 with no restore keeps true.
 k8s_gitops_source_jellyfin_setup: true
+# Whether the Central Hub app gets its feed (notebook sync and the ExternalSecrets that read kv c1/hub-feed), passed to the root chart
+# as `hubFeed` only when false. Only prod's agent-box timer writes c1/hub-feed, so on dev the ExternalSecrets would never be Ready and
+# central-hub-app would show Degraded; hosts/rebuild-k8s.sh sets it false on dev. c1 keeps true.
+k8s_gitops_source_hub_feed: true
 # Whether monitoring-extras' panel-check CronJob is suspended, passed to the root chart as `panelCheckSuspended` only
 # when true. A tick inside a dev run failed `checks` on seven panels with no data: Keycloak's has none before the
 # `identity-keycloak` stage, the five OpenBao ones and Jellyfin's request rate for a cause not measured. So

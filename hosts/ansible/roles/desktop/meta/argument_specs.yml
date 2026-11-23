@@ -59,7 +59,7 @@ argument_specs:
       desktop_trust_check_apps:
         type: list
         elements: str
-        default: [grafana, argocd, sso, jellyfin, ntfy]
+        default: [grafana, argocd, sso, jellyfin, ntfy, homeassistant]
         description: The apps whose short names the check opens, the same as the gateway's name check (nameCheck.apps).
       desktop_trust_check_names:
         type: list

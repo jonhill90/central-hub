@@ -84,3 +84,4 @@ The agent that writes the code does not edit the acceptance criteria in the same
 | [Rebuild the lab's host, network and firewall layer on a test copy in dev before prod](2026-11-lab-test-copy.md) | proposed | 2026-11-18 |
 | [Run the Central Hub web app on c1, built at pod start from a pinned commit](2026-11-central-hub-app-on-c1.md) | proposed | 2026-11-20 |
 | [Keep the lab's private inventory on the agent box, with one fixed wrapper to read and edit it](2026-11-private-values-on-the-box.md) | proposed | 2026-11-21 |
+| [Tie a guarded apply's pass to the files the job reads, not to main's commit](2026-11-guarded-pass-on-job-inputs.md) | proposed | 2026-11-23 |

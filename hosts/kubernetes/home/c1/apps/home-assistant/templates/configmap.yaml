@@ -27,9 +27,17 @@ data:
       client_id: {{ $v.sso.clientId }}
       discovery_url: https://{{ include "homeassistant.issuerHost" . }}/realms/{{ $v.sso.realm }}/.well-known/openid-configuration
       display_name: {{ $v.sso.displayName | quote }}
+      # Realm lab has no client scope named `groups` (the claim comes from a mapper on each client), so asking for the
+      # scope makes Keycloak answer invalid_scope. The claim is still in the token and still read.
+      features:
+        include_groups_scope: false
+      claims:
+        groups: groups
       roles:
         admin: {{ $v.sso.adminGroup }}
+        {{- if $v.sso.userGroup }}
         user: {{ $v.sso.userGroup }}
+        {{- end }}
       {{- if $v.sso.labRoot.certificate }}
       network:
         tls_ca_path: /lab-ca/lab-root-ca.pem

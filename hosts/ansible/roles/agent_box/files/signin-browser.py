@@ -3,14 +3,14 @@
 
 Run by the signin-check wrapper (as the keys user, through sudo) with Playwright's Python from the box's virtual environment. <config.json> is
 the wrapper's private file (mode 0600): base (Keycloak's https address), realm, user, password, seed (base32 TOTP seed), digits, period, verify,
-and each app's address: jellyfin_base, grafana_base, argocd_base, pve_base, hub_base, openbao_base, ntfy_base, opnsense_base. It makes nothing in
+and each app's address: jellyfin_base, grafana_base, argocd_base, pve_base, hub_base, mealie_base, homeassistant_base, openbao_base, ntfy_base, opnsense_base. It makes nothing in
 any app: it only signs in as the test user and reads.
 
-Nine apps, each printed as "<n> <app>: <result>" and nothing more (no password, seed, code, state, token or page text):
+Eleven apps (Mealie and Home Assistant added once they had Keycloak clients), each printed as "<n> <app>: <result>" and nothing more (no password, seed, code, state, token or page text):
   passed                    the browser signed in through Keycloak and the app answered as that user (Jellyfin: a stored access token; Grafana
                             /api/user; Argo CD userinfo; Proxmox /access/permissions; Keycloak: the account console's own page).
   failed                    the app should sign in through Keycloak and did not, or its address did not load at all.
-  no Keycloak sign-in yet   the app has no Keycloak sign-in today (the hub, OpenBao, ntfy; OPNsense with its own login). It is still opened and
+  no Keycloak sign-in yet   the app has no Keycloak sign-in today (OpenBao, ntfy; OPNsense with its own login). It is still opened and
                             photographed, and the line says what the address answered (an HTTP 404 is said, not hidden).
 The screenshot is <shots-dir>/<n>-<app>.png, taken after the sign-in (or where it stopped; any text typed into a form is cleared first). The exit
 is 0 unless an app is "failed". One Keycloak one-time code is used once: the script waits for the next 30-second window between sign-ins.
@@ -20,6 +20,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import stat
 import struct
 import sys
@@ -28,9 +29,9 @@ from urllib.parse import urlsplit
 
 from playwright.sync_api import sync_playwright
 
-SSO = ("jellyfin", "grafana", "argocd", "pve", "sso")
-NO_SSO = ("hub", "openbao", "ntfy", "opnsense")
-ORDER = ("hub", "jellyfin", "grafana", "argocd", "pve", "sso", "openbao", "ntfy", "opnsense")
+SSO = ("hub", "jellyfin", "grafana", "argocd", "pve", "mealie", "homeassistant", "sso")
+NO_SSO = ("openbao", "ntfy", "opnsense")
+ORDER = ("hub", "jellyfin", "grafana", "argocd", "pve", "mealie", "homeassistant", "sso", "openbao", "ntfy", "opnsense")
 NO_SSO_NOTE = {"opnsense": "its own login page"}
 LAST_WINDOW = {"w": None}
 
@@ -105,6 +106,30 @@ def api(page, url):
 
 def sign_in_app(app, page, cfg):
     kc = cfg["base"]
+    if app == "hub":
+        page.goto(cfg["hub_base"] + "/", wait_until="networkidle", timeout=60000)  # signed out, the app sends the browser to Keycloak
+        keycloak_sign_in(page, cfg)
+        wait_for_origin(page, cfg["hub_base"])
+        page.wait_for_timeout(2000)
+        if urlsplit(page.url).path.startswith("/auth/"):
+            raise RuntimeError("the hub stayed on its sign-in path %s" % urlsplit(page.url).path)
+        code, _ = api(page, cfg["hub_base"] + "/api/v1/catalog")
+        if code != 200:
+            raise RuntimeError("/api/v1/catalog answered HTTP %s" % code)
+        # The two pages that read data must show data, not their empty or error state. Smallest signal on each:
+        # /notebook prints "<n> notes, read from the notebook's own files" with n > 0 (its empty state says "No notebook is connected");
+        # /systems has a Guests table (the one right after the Guests heading) with at least one row (its empty states say "Not connected" or "lists no guests").
+        page.goto(cfg["hub_base"] + "/notebook", wait_until="networkidle", timeout=60000)
+        text = page.inner_text("body")
+        m = re.search(r"([\d,]+) notes, read from the notebook", text)
+        if not m or int(m.group(1).replace(",", "")) < 1:
+            raise RuntimeError("/notebook shows no notes (%s)" % re.sub(r"\s+", " ", text)[:120])
+        notes = m.group(1)
+        page.goto(cfg["hub_base"] + "/systems", wait_until="networkidle", timeout=60000)
+        rows = page.locator("h3:has-text(\"Guests\") + table.sys-table tbody tr").count()  # only the table right after the Guests heading: Nodes and Storage still draw when no guest is listed
+        if rows < 1:
+            raise RuntimeError("/systems shows no guest rows (%s)" % re.sub(r"\s+", " ", page.inner_text("body"))[:120])
+        return "the hub opens, /api/v1/catalog answers HTTP 200 for the test user, /notebook lists %s notes and /systems lists %d guests" % (notes, rows)
     if app == "jellyfin":
         page.goto(cfg["jellyfin_base"] + "/web/", wait_until="networkidle", timeout=60000)
         page.locator('button:has-text("Sign in with")').first.click(timeout=30000)
@@ -146,6 +171,46 @@ def sign_in_app(app, page, cfg):
         if code != 200:
             raise RuntimeError("/access/permissions answered HTTP %s" % code)
         return "/access/permissions answers HTTP 200"
+    if app == "mealie":
+        page.goto(cfg["mealie_base"] + "/login", wait_until="networkidle", timeout=60000)
+        if "/openid-connect/" not in page.url:  # Mealie may send the browser straight to Keycloak; if not, press its OIDC button
+            page.locator('button:has-text("OAuth"), button:has-text("OpenID"), button:has-text("Keycloak"), a:has-text("OAuth")').first.click(timeout=30000)
+        keycloak_sign_in(page, cfg)
+        wait_for_origin(page, cfg["mealie_base"])
+        page.wait_for_timeout(3000)
+        code, body = api(page, cfg["mealie_base"] + "/api/users/self")
+        if code != 200 or not body:
+            raise RuntimeError("/api/users/self answered HTTP %s" % code)
+        return "/api/users/self answers HTTP 200 for the test user"
+    if app == "homeassistant":
+        # Start where a person starts: Home Assistant's own address. Its frontend sends the browser to /auth/authorize, which the
+        # OIDC component answers with its welcome page; going to the welcome page directly loses the authorize request, so the
+        # "Continue" step has nowhere to return a token to.
+        page.goto(cfg["homeassistant_base"] + "/", wait_until="networkidle", timeout=60000)
+        page.locator("#login-button").click(timeout=30000)
+        keycloak_sign_in(page, cfg)
+        wait_for_origin(page, cfg["homeassistant_base"])
+        if "/auth/oidc/finish" in page.url:  # "Logged in!": the component asks which device continues
+            page.get_by_role("button", name="Continue on this device").click(timeout=30000)  # the page also has a heading with these words; click the button
+            page.wait_for_load_state("networkidle", timeout=30000)
+        for _ in range(30):
+            ok = page.evaluate("() => { try { return !!JSON.parse(localStorage.getItem('hassTokens')).access_token; } catch (e) { return false; } }")
+            if ok:
+                page.wait_for_timeout(2500)
+                # Who is this? Ask Home Assistant's own websocket (auth/current_user) with the stored token; only the role word is kept.
+                role = page.evaluate("""() => new Promise((resolve) => {
+                    try {
+                        const t = JSON.parse(localStorage.getItem('hassTokens')).access_token;
+                        const ws = new WebSocket('wss://' + location.host + '/api/websocket');
+                        setTimeout(() => resolve('unknown'), 15000);
+                        ws.onmessage = (m) => { const d = JSON.parse(m.data);
+                            if (d.type === 'auth_required') ws.send(JSON.stringify({type: 'auth', access_token: t}));
+                            else if (d.type === 'auth_ok') ws.send(JSON.stringify({id: 1, type: 'auth/current_user'}));
+                            else if (d.id === 1) { resolve(d.success && d.result ? (d.result.is_admin ? 'admin' : 'user') : 'unknown'); ws.close(); } };
+                    } catch (e) { resolve('unknown'); } })""")
+                return "Home Assistant holds its own access token for the test user, who is %s there" % role
+            time.sleep(1)
+        raise RuntimeError("Home Assistant stored no access token after the sign-in")
     if app == "sso":
         page.goto("%s/realms/%s/account/" % (kc, cfg["realm"]), wait_until="networkidle", timeout=60000)
         keycloak_sign_in(page, cfg)

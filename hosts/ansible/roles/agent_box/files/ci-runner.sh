@@ -16,7 +16,7 @@
 # runner pod on c1's first start (docs/runbooks/run-the-notebook-runner-on-c1.md). The token goes on stdin only.
 # hub-feed: put what the Central Hub app shows into prod's store (kv c1/hub-feed), two keys: notebook-token, a one-hour
 # read-only token (contents:read, agent-notebook only) for the app pod's notebook sync, and proxmox-json, a snapshot of
-# Proxmox's /cluster/resources trimmed to status, cpu, memory, disk and uptime, read with the agents' own Proxmox token.
+# Proxmox's /cluster/resources trimmed to status, cpu, memory, disk and uptime, read with the lab token (proxmox-lab.env, every guest but VM 258 and the desktop) or, without it, the dev token.
 # The box's timer runs it every 30 minutes (hub-feed.timer); neither value reaches an argument or the log.
 # weekly: configure, then bump. The agent box's timer runs it (role agent_box); the runner's
 # self-update is off, so this is how a merged pin reaches the runner.
@@ -352,15 +352,15 @@ c1_token() {
 hub_feed() {
   local rc=0 token snap put=/usr/local/libexec/agent-box/secrets-store-prod.sh
   if token=$(app_token jonhill90 agent-notebook '{"contents":"read"}') && [[ -n $token ]]; then
-    printf '%s' "$token" | "$put" put c1/hub-feed notebook-token
-    echo "ci-runner: a one-hour read-only notebook token is in prod's store at kv c1/hub-feed (notebook-token)"
+    printf '%s' "$token" | "$put" put-short c1/hub-feed notebook-token
+    echo "ci-runner: a one-hour read-only notebook token is in prod's store at kv c1/hub-feed (notebook-token; OpenBao only, no SOPS copy)"
   else
     echo "ci-runner: no read-only notebook token (does the App have Contents: read on the notebook?)" >&2
     rc=1
   fi
   if snap=$(proxmox_snapshot) && [[ -n $snap ]]; then
-    printf '%s' "$snap" | "$put" put c1/hub-feed proxmox-json
-    echo "ci-runner: a Proxmox snapshot is in prod's store at kv c1/hub-feed (proxmox-json)"
+    printf '%s' "$snap" | "$put" put-short c1/hub-feed proxmox-json
+    echo "ci-runner: a Proxmox snapshot is in prod's store at kv c1/hub-feed (proxmox-json; OpenBao only, no SOPS copy)"
   else
     echo "ci-runner: no Proxmox snapshot (the call to /cluster/resources failed; see the line above)" >&2
     rc=1
@@ -372,9 +372,18 @@ hub_feed() {
 # the token is read from the environment file inside python and never printed.
 proxmox_snapshot() {
   (
+    # The dev token sees only the dev rebuild VMs (/cluster/resources lists what the token may audit), so the snapshot was two
+    # guests. The lab token (give-agents-proxmox-rights-for-the-whole-lab.md) audits every guest except VM 258 and the desktop's,
+    # which it has NoAccess on on purpose. Use it when the box holds it, the dev token otherwise.
+    envfile=$keys/proxmox-lab.env token_name=proxmox-lab
+    if [[ ! -s $envfile ]]; then
+      envfile=$keys/proxmox-dev.env token_name=proxmox-dev
+      echo "ci-runner: no lab token (proxmox-lab.env missing or empty), so the Proxmox snapshot comes from the dev token and lists only the dev VMs" >&2
+    fi
+    export token_name
     set -a
     # shellcheck source=/dev/null
-    . "$keys/proxmox-dev.env"
+    . "$envfile"
     set +a
     python3 -I - <<'PY'
 import json, os, ssl, sys, time, urllib.request
@@ -397,7 +406,7 @@ for r in data:
     row = {k: r[k] for k in keep if k in r}
     row.setdefault("name", r.get("storage") or r.get("node") or r.get("id", ""))
     rows.append(row)
-print(json.dumps({"generatedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "source": "proxmox", "resources": rows}))
+print(json.dumps({"generatedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "source": os.environ["token_name"], "resources": rows}))
 PY
   )
 }

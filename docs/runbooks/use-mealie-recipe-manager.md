@@ -8,7 +8,7 @@ outcome: https://mealie.<zone>/ sends a visitor to Keycloak's sign-in page for c
 needs: Argo CD app `mealie` Synced, realm lab with client `mealie`, Secret `mealie/mealie-sso` (key `client-secret`), the lab CA's public root in Secret `mealie/mealie-lab-ca`
 private-values: [k8s_identity_zone, MEALIE_CLIENT_SECRET]
 files: [hosts/kubernetes/home/c1/apps/mealie/, hosts/kubernetes/home/c1/apps/mealie/files/admin-guard.sh, hosts/kubernetes/home/c1/root/values.yaml, hosts/ansible/roles/k8s_identity/templates/realm.yaml.j2, hosts/ansible/roles/k8s_identity/tasks/secrets.yml, hosts/ansible/roles/agent_box/files/c1-ansible.sh]
-last-tested: not yet; written with the pull request that adds it
+last-tested: 2026-11-23, the Keycloak sign-in by the agent box's signin-check (step 6)
 superseded-by:
 ---
 
@@ -35,15 +35,16 @@ Mealie makes a first account on first start, with an e-mail and password the pro
    why: a realm replace ends every open sign-in; the clients tag adds the one client in place.
    expect: `client mealie: ok`, `failed=0`; `c1-read get secrets -n mealie` lists `mealie-sso`.
 3. The Deployment restarts by itself when the Secret first appears. `c1-read get pods -n mealie` shows `1/1 Running`.
-4. Prove it without a password. Read the guard's proof first: `c1-read logs -n mealie job/<newest mealie-admin-guard job>` ends with `mealie-admin: PASS the published sign-in is refused and the generated one works`. Then: `curl -sI https://mealie.<zone>/` answers 200 (the single-page app); `curl -sI https://mealie.<zone>/api/app/about` is 200; Mealie's `/api/app/about` says `oidcReady`/`enableOidc` true (`curl -s .../api/app/about`); and the Keycloak authorize URL for client `mealie` with redirect `https://mealie.<zone>/login` answers 200 (the sign-in page), not "Invalid parameter: redirect_uri".
+4. Prove it without a password. Read the guard's proof first: `c1-read logs -n mealie job/<newest mealie-admin-guard job>` ends with `mealie-admin: PASS the published sign-in is refused and the generated one works; first-login banner off`. Then: `curl -sI https://mealie.<zone>/` answers 200 (the single-page app); `curl -sI https://mealie.<zone>/api/app/about` is 200; Mealie's `/api/app/about` says `oidcReady`/`enableOidc` true (`curl -s .../api/app/about`); and the Keycloak authorize URL for client `mealie` with redirect `https://mealie.<zone>/login` answers 200 (the sign-in page), not "Invalid parameter: redirect_uri".
    expect: all of the above.
 5. A typed sign-in is the owner's: open the address, sign in as a lab account, and Mealie opens.
+6. Prove the Keycloak sign-in from the agent box: the box's `signin-check` (its browser part) signs the lab test user in through Keycloak and reads `/api/users/self`; `signin-check log` shows the latest run. `expect`: the Mealie line says `passed: /api/users/self answers HTTP 200 for the test user`, ending at `mealie.<zone>/g/home`. Measured 2026-11-23, 06:23 UTC: that line passed, with 8 passed and 0 failed among the apps that have a Keycloak sign-in.
 
 ## The first account
 
 - Sync waves (`templates/`): the Deployment and Service are wave 0, the guard Job (an Argo CD Sync hook, `files/admin-guard.sh`) is wave 1, and both HTTPRoutes are wave 2. Argo CD waits for each wave, so on a first sync the names answer only after the guard passed; a failing guard fails the sync and the route is never made.
-- The guard signs in with the published e-mail and password. If that works it changes the password to the one in Secret `mealie/mealie-admin` (key `password`), then proves two things: the published sign-in is refused, and the generated one works. It reads the password from a file and prints none.
-- A CronJob runs the same script every 10 minutes, for the case that the pod's volume is replaced by an empty one while the route stands; its newest Job log must say PASS.
+- The guard signs in with the published e-mail and password. If that works it changes the password to the one in Secret `mealie/mealie-admin` (key `password`), then moves the account off the published e-mail to `adminGuard.adminEmail` (a reserved `.invalid` name), because Mealie shows a "first login" banner with the published pair for as long as any account has that e-mail (`isFirstLogin` in `/api/app/about/startup-info`). It then proves the published sign-in is refused and the generated one works, and reports whether the banner is off. A failed e-mail change is a warning, not a failed sync. It reads the password from a file and prints none.
+- A CronJob runs the same script every 10 minutes, for the case that the pod's volume is replaced by an empty one while the route stands; its newest Job log must say PASS and end with `first-login banner off`; `curl -s https://mealie.<zone>/api/app/about/startup-info` then shows `isFirstLogin` false, because no account has the published e-mail any more.
 - The account is kept: sign-in goes through Keycloak, and its generated password is in OpenBao (`c1/mealie-admin`), not anywhere in git.
 
 ## If it fails

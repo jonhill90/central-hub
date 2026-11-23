@@ -45,7 +45,7 @@ agent_box_wrappers:
            "ssh-ca plan", "ssh-ca apply", "ssh-ca check", "ssh-ca public", "ssh-ca sign-host *"]
   # The same wrapper for the store inside prod's c1 (D-0058): prod's keys folder, settings and inventory only.
   - name: secrets-store-prod
-    args: [recovery, status, snapshot, restore, restore-rebuilt, "restore-rebuilt *", clear-hold, "put *", put-apps, compare, reseed,
+    args: [recovery, status, snapshot, restore, restore-rebuilt, "restore-rebuilt *", clear-hold, "put *", "forget c1/hub-feed", put-apps, compare, reseed,
            "owner-login owner", "owner-login test", "owner-login check-test", "owner-login remove-test", "owner-login plan",
            "ssh-ca plan", "ssh-ca apply", "ssh-ca check", "ssh-ca public", "ssh-ca sign-host *"]
   # Turns that store on in prod's c1 with the box's own prod node key (files/openbao-prod.sh). The `*` on seal,
@@ -66,8 +66,9 @@ agent_box_wrappers:
   # The four scripted sign-in checks (Jellyfin, Argo CD, Grafana, Proxmox) against prod with the test user (files/signin-check.sh). It runs as
   # the keys user, because the test user's password and seed are lines in identity.env. run makes nothing in any app; it reads
   # signin-check.json, which the controller's prod-files run copies, and prints only the checks' numbered lines.
+  # `shot <n-app.png>` writes one screenshot of the newest browser run to stdout (the shots are readable by the keys user only; the wrapper checks the name).
   - name: signin-check
-    args: [run, log]
+    args: [run, log, "shot *"]
   # Prod's teardown and rebuild under D-0035 (files/rebuild-prod.sh). check is read-only; the `*` on rebuild passes
   # the owner's tap id and the commit the go names, which the wrapper checks (7 to 40 hex digits, on main); the run
   # needs dev to have passed at that same commit first. The `*` on resume passes the same tap id (the stopped run's go) and the
@@ -591,14 +592,16 @@ agent_box_limit_apply: false
 agent_box_self_apply_timer: true
 agent_box_self_apply_interval: 10min
 
-# The dev rebuild's timer run (files/rebuild.sh auto, TASK-0291 row 2b): every interval it builds main's newest commit on
+# The dev rebuild's timer run (files/rebuild.sh auto, TASK-0291 row 2b): once a day, the scheduled proof that the lab
+# rebuilds from code (AGENTS.md rule 7, D-0065 rule 4; it was every 2 hours, which rebuilt dev after most merges). It builds main's newest commit on
 # dev, but only when no rebuild run is going, the newest full run did not already build that commit, a file under hosts/
 # changed since the newest full pass, and the memory preflight fits without stopping the owner's desktop VM. Each run
 # that starts stops VM 300 for its length under ephemeral-dev, as a hand run does.
 agent_box_rebuild_auto: true
-agent_box_rebuild_auto_interval: 2h
+agent_box_rebuild_auto_interval: 24h
 
 # The merge sweep (D-0042 rule 2): a systemd timer that runs `pr-merge.sh sweep` as the keys user. Off until the inventory
 # turns it on, because installing it is a change to the box's limits (D-0042 rule 6).
 agent_box_merge_sweep: false
-agent_box_merge_sweep_interval: 5min
+# 2 minutes, so a green plain PR waits at most about 2 minutes for its merge (D-0065 rule 5); it was 5.
+agent_box_merge_sweep_interval: 2min

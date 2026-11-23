@@ -9,6 +9,11 @@
 # identity (the secrets bundle's, KEYS/../secrets-bundle/age-identity.txt), so it is in the box's daily encrypted
 # bundle and never in git. Paths are under c1/, the paths External Secrets reads (policy eso-c1).
 #
+# put-short PATH KEY   like put, but OpenBao only, with no SOPS copy: for a value that lives about an hour and is made
+#                again by a timer (the hub feed's notebook token and Proxmox snapshot), which a SOPS copy would only
+#                leave behind in the daily bundle. compare and reseed ignore a path the SOPS file does not hold.
+# forget PATH   removes every key of PATH from the SOPS file, and touches nothing in OpenBao: for a path that moved to put-short
+#                (OpenBao only) after put had copied it, since compare would name the old copy as a difference.
 # put PATH KEY   the value on stdin. SOPS first, one key only (never decrypt and re-encrypt the whole file), then
 #                OpenBao: read kv/data/PATH, merge the one key, write it back with check-and-set on the version read
 #                (0 when the path is new), so a write in between is refused, not overwritten. Fails if either write
@@ -111,15 +116,32 @@ plain() {
 }
 valid_path() { [[ $1 =~ ^c1(/[a-z0-9][a-z0-9_-]*)+$ ]]; }
 
+# openbao_holds PATH KEY: 0 when kv/PATH holds KEY, 1 when it does not; stops on a sign-in or read that fails. Prints no value.
+openbao_holds() {
+  local rc
+  token=$(login) && [[ -n $token ]] || die "the admin AppRole did not sign in ($(why)); nothing written"
+  rc=$(call GET "kv/data/$1" -o "$tmp/current.json" -w '%{http_code}') || true
+  [[ $rc == 200 || $rc == 404 ]] || die "reading kv/$1 answered HTTP ${rc:-nothing}; nothing written"
+  [[ $rc == 200 ]] && python3 -I -c 'import json, sys; sys.exit(0 if sys.argv[2] in ((json.load(open(sys.argv[1]))["data"].get("data")) or {}) else 1)' "$tmp/current.json" "$2"
+}
+
 case $action in
-  put | put-new)
+  put | put-new | put-short)
     path=${6:-} key=${7:-}
     valid_path "$path" || die "the path must be c1/<name>[/<name>...], lowercase letters, digits, - and _"
     [[ $key =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]*$ ]] || die "the key must be letters, digits, _, . and -"
     cat > "$tmp/value"
+    # put-new with nothing on stdin is fine only for a key OpenBao already holds (adopt, for a Secret the cluster no longer has, as
+    # the first admin's after it was replaced by c1-admin: the key stays as it was). A key it does not hold still fails below.
+    if [[ $action == put-new && ! -s $tmp/value ]]; then
+      if openbao_holds "$path" "$key"; then
+        echo "secrets-store put-new: kv/$path key $key is in OpenBao already; kept, nothing written (no value on stdin)"
+        exit 0
+      fi
+    fi
     [[ -s $tmp/value ]] || die "no value on stdin; nothing written"
     # The SOPS file, made once as an empty document for the box's identity.
-    if [[ ! -e $kvfile ]]; then
+    if [[ $action != put-short && ! -e $kvfile ]]; then
       recipient=$("$libexec/age-keygen" -y "$identity")
       [[ $recipient =~ ^age1[0-9a-z]{58}$ ]] || die "the box's identity gives no age recipient"
       printf '{}' > "$tmp/empty.json"
@@ -128,22 +150,19 @@ case $action in
       mv -- "$kvfile.part" "$kvfile"
     fi
     # put-new writes nothing when OpenBao already holds the key: a value kept there is never replaced by one adopted later.
-    if [[ $action == put-new ]]; then
-      token=$(login) && [[ -n $token ]] || die "the admin AppRole did not sign in ($(why)); nothing written"
-      rc=$(call GET "kv/data/$path" -o "$tmp/current.json" -w '%{http_code}') || true
-      [[ $rc == 200 || $rc == 404 ]] || die "reading kv/$path answered HTTP ${rc:-nothing}; nothing written"
-      if [[ $rc == 200 ]] && python3 -I -c 'import json, sys; sys.exit(0 if sys.argv[2] in ((json.load(open(sys.argv[1]))["data"].get("data")) or {}) else 1)' "$tmp/current.json" "$key"; then
-        echo "secrets-store put-new: kv/$path key $key is in OpenBao already; kept, nothing written"
-        exit 0
-      fi
+    if [[ $action == put-new ]] && openbao_holds "$path" "$key"; then
+      echo "secrets-store put-new: kv/$path key $key is in OpenBao already; kept, nothing written"
+      exit 0
     fi
-    # 1. SOPS: the value as a JSON string on stdin, into the one key.
-    index=$(python3 -I -c 'import json, sys; print("[%s][%s]" % (json.dumps(sys.argv[1]), json.dumps(sys.argv[2])))' "$path" "$key")
-    python3 -I -c 'import json, sys; sys.stdout.write(json.dumps(open(sys.argv[1]).read()))' "$tmp/value" |
-      "$libexec/sops" set --value-stdin "$kvfile" "$index" ||
-      die "the SOPS write failed; OpenBao was not written"
+    # 1. SOPS: the value as a JSON string on stdin, into the one key. put-short skips it: no copy is kept.
+    if [[ $action != put-short ]]; then
+      index=$(python3 -I -c 'import json, sys; print("[%s][%s]" % (json.dumps(sys.argv[1]), json.dumps(sys.argv[2])))' "$path" "$key")
+      python3 -I -c 'import json, sys; sys.stdout.write(json.dumps(open(sys.argv[1]).read()))' "$tmp/value" |
+        "$libexec/sops" set --value-stdin "$kvfile" "$index" ||
+        die "the SOPS write failed; OpenBao was not written"
+    fi
     # 2. OpenBao: read, merge the one key, write back with check-and-set.
-    [[ -n $token ]] || token=$(login) && [[ -n $token ]] || die "SOPS is written, but the admin AppRole did not sign in ($(why)), so OpenBao is not; run put again"
+    [[ -n $token ]] || token=$(login) && [[ -n $token ]] || die "$([[ $action == put-short ]] || echo 'SOPS is written, but ')the admin AppRole did not sign in ($(why)), so OpenBao is not; run put again"
     rc=$(call GET "kv/data/$path" -o "$tmp/current.json" -w '%{http_code}') || true
     [[ $rc == 200 || $rc == 404 ]] || die "SOPS is written, but reading kv/$path answered HTTP ${rc:-nothing}, so OpenBao is not; run put again"
     python3 -I -c '
@@ -157,7 +176,21 @@ data[key] = open(val).read()
 json.dump({"options": {"cas": version}, "data": data}, open(out, "w"))' "$tmp/current.json" "$tmp/value" "$key" "$tmp/body.json" "$rc"
     rc=$(call POST "kv/data/$path" --data-binary "@$tmp/body.json" -o /dev/null -w '%{http_code}') || true
     [[ $rc == 200 || $rc == 204 ]] || die "SOPS is written, but OpenBao refused the write (HTTP ${rc:-nothing}); run put again, then compare"
-    echo "secrets-store $action: kv/$path key $key written to SOPS, then OpenBao"
+    if [[ $action == put-short ]]; then echo "secrets-store $action: kv/$path key $key written to OpenBao only, no SOPS copy"
+    else echo "secrets-store $action: kv/$path key $key written to SOPS, then OpenBao"; fi
+    ;;
+  forget)
+    path=${6:-}
+    valid_path "$path" || die "the path must be c1/<name>[/<name>...], lowercase letters, digits, - and _"
+    [[ -e $kvfile ]] || die "no SOPS file ($kvfile): nothing to forget"
+    plain
+    if ! python3 -I -c 'import json, sys; sys.exit(0 if sys.argv[2] in json.load(open(sys.argv[1])) else 1)' "$tmp/plain.json" "$path"; then
+      echo "secrets-store forget: kv/$path is not in the SOPS file; nothing changed"
+      exit 0
+    fi
+    index=$(python3 -I -c 'import json, sys; print("[%s]" % json.dumps(sys.argv[1]))' "$path")
+    "$libexec/sops" unset "$kvfile" "$index" || die "the SOPS removal failed; nothing changed"
+    echo "secrets-store forget: kv/$path removed from the SOPS file; OpenBao untouched"
     ;;
   compare)
     [[ -e $kvfile ]] || die "no SOPS file ($kvfile): nothing has been written through put"

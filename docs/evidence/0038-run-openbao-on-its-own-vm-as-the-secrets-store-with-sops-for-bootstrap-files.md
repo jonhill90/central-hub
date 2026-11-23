@@ -12,7 +12,7 @@ This file summarises the research behind D-0038. It adds nothing the research di
 
 ## Question
 
-Is OpenBao free software with no paid edition, and how should the lab run it so that it unseals with no person, is backed up and restored, feeds External Secrets on c1 and the agent box's jobs, and has a break-glass path? What does SOPS add, and how does it fit the owner's earlier "no SOPS" and "no ciphertext in the repository"?
+Is OpenBao free software with no paid edition, and how should the lab run it so that it unseals with no person, is backed up and restored, feeds External Secrets on c1 and the agent box's jobs, and has a break-glass path? What does SOPS add, and how does it fit the owner's earlier decisions of no SOPS and no ciphertext in the repository?
 
 ## Findings
 
@@ -68,7 +68,7 @@ Is OpenBao free software with no paid edition, and how should the lab run it so 
 
 ## How the decision used it
 
-Findings 1 to 4 pass REQ-0032 and the owner's "FOSS not OSS". Finding 22 and the rebuild goal set option 1. Findings 7, 8 and 12 set seal A and rule 5. Finding 10 set rule 4's copies of the key; since 2026-11-14 the box holds the only one off the VM. Findings 12 and 25 set rule 5's prod with no recovery shares, and finding 26 its open question on rotation. Finding 11 sets the seal's exit path. Finding 13 sets rule 8. Findings 14 to 18 set rule 6 and the Confirmation's ExternalSecret steps. Findings 19 to 21 set rule 10. Finding 24 sets rule 7.
+Findings 1 to 4 pass REQ-0032 and the owner's requirement of free software, not merely open source. Finding 22 and the rebuild goal set option 1. Findings 7, 8 and 12 set seal A and rule 5. Finding 10 set rule 4's copies of the key; since 2026-11-14 the box holds the only one off the VM. Findings 12 and 25 set rule 5's prod with no recovery shares, and finding 26 its open question on rotation. Finding 11 sets the seal's exit path. Finding 13 sets rule 8. Findings 14 to 18 set rule 6 and the Confirmation's ExternalSecret steps. Findings 19 to 21 set rule 10. Finding 24 sets rule 7.
 
 ## Limits
 

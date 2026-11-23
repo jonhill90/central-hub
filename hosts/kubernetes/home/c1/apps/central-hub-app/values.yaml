@@ -5,7 +5,7 @@ name: central-hub-app
 # (Activation gate items 3 and 6: no token, no image automation; a new commit is a reviewed pull request).
 source:
   repoURL: https://github.com/jonhill90/central-hub-app.git
-  commit: "454e6777d6eaa100e4d8cf25cddcb5c291509150"
+  commit: "a4e74c4325314623cf5dc3e15c197bf5d34c76d4"
 
 # One stock image builds and runs the app: it has git and npm. Node 22.21.1 on Debian bookworm, tag last
 # pushed 2026-01-13 (Docker Hub tag API), multi-arch index digest. D-0054: Docker Hub by digest, no account.
@@ -18,7 +18,7 @@ port: 3000
 # pod reads them as files, so this public chart names no host. Until they exist the pod is up but answers 503.
 # The token and key requests go to Keycloak inside the cluster; the browser uses the public address.
 #
-# Sign-in is OFF until the realm has client central-hub-app and the two Secrets exist in this namespace. With it on and no
+# Sign-in is ON since the realm has client central-hub-app (the clients apply of 2026-11-23); it was OFF until the realm had client central-hub-app and the two Secrets exist in this namespace. With it on and no
 # Secrets, every page and the data API answer 503 while Argo CD still shows Healthy (the probe stays up on purpose, so a
 # rebuild's apps stage can finish before its identity stage), which put the live front door dark on 2026-11-21. So the
 # chart refuses mode oidc unless secretsConfirmed is true too, and CI renders both cases (.github/hosts-check/run.sh,
@@ -26,8 +26,8 @@ port: 3000
 # realm and the app's health says signIn: on or its Secrets are listed (runbook sign-in-to-the-central-hub-app-with-keycloak.md,
 # "Turn it on").
 auth:
-  mode: "off"
-  secretsConfirmed: false
+  mode: oidc
+  secretsConfirmed: true
   internalURL: http://sso-service.identity.svc:8080/realms/lab
   allowedGroups: lab-admins,lab-viewers
   identityNamespace: identity

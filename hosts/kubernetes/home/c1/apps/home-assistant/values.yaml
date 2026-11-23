@@ -4,14 +4,20 @@ zone: ""
 
 name: homeassistant
 
-# Home Assistant 2026.11.1 (released 2026-11-09, STD-0003: at least 14 days old on 2026-11-23), multi-arch index digest
-# read from ghcr.io on 2026-11-23. The image starts as root (s6-overlay's /init), so the pod does too, with every
+# Home Assistant 2026.7.4, the last release before 2026.8 (STD-0003: well over 14 days old), multi-arch index digest
+# read from ghcr.io on 2026-11-23. Held back on purpose: from 2026.8 the `http:` block (reverse-proxy trust) is no longer
+# applied from configuration.yaml, only from the UI or an unsupported storage file, so every request behind the Gateway
+# gets 400. YAML still works here; it stops working in 2027.2, so move forward only with the http settings seeded another way. The image starts as root (s6-overlay's /init), so the pod does too, with every
 # capability dropped except the few s6 and the config chown need.
-image: ghcr.io/home-assistant/home-assistant:2026.11.1@sha256:6785d1eca68747a524c156faae1b139ed415c07357386ae6fe17291986e59e82
+image: ghcr.io/home-assistant/home-assistant:2026.7.4@sha256:5a531753cea96444200158fc2b0ac7ccd739291ec50414877b396de6e0bb29b3
 port: 8123
 healthPath: /manifest.json
 
 storage:
+  # A new claim for 2026.7.4: the old one, `homeassistant-config`, was written by 2026.11.1, whose `http` storage file
+  # (version 3) 2026.7.4 refuses to read (UnsupportedStorageVersionError). The old claim stays, kept and unused; delete it
+  # once nothing needs it. A move forward past 2026.8 may reuse neither claim.
+  claimName: homeassistant-data
   className: ""      # empty: the cluster's default StorageClass
   configSize: 5Gi    # the config folder, including the recorder's SQLite database (local disk only, never NFS)
 
@@ -35,7 +41,7 @@ trustedProxies: [10.240.0.0/16]
 # first-run screen first the owner, so the setup Job below closes that screen from inside the cluster first. Turn the
 # route on, in its own pull request, only after the newest setup Job's log says PASS (runbook, "Open the route").
 route:
-  enabled: false
+  enabled: true
 
 # First-run setup (templates/setup-*.yaml, files/setup.sh).
 setup:
@@ -60,9 +66,11 @@ sso:
   clientId: homeassistant
   displayName: Lab sign-in
   # Realm groups, from the `groups` claim the realm adds to every client: lab-admins become Home Assistant
-  # administrators, lab-viewers regular users; anyone else is refused.
+  # administrators and everyone else who signs in is a regular user. The user role is left unset on purpose: with
+  # it set, a person in neither group gets the plugin's "invalid" role. Home Assistant applies the role only when it
+  # first creates the user, so a person already created keeps the role they got then (change it in Settings > People).
   adminGroup: lab-admins
-  userGroup: lab-viewers
+  userGroup: ""
   plugin:
     version: "1.2.1"          # released 2026-08-19
     url: https://github.com/christiaangoossens/hass-oidc-auth/archive/refs/tags/v1.2.1.tar.gz

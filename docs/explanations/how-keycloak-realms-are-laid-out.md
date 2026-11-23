@@ -34,7 +34,7 @@ Putting a dev realm beside the prod one in prod's Keycloak would couple them: a 
 
 ## Why no staging realm and no management realm
 
-- **Staging.** The owner said "right now, realistically, we only can really manage two environments, yeah? A dev and a prod, or a lab and a prod" (2026-11-08; the quote is cut off in the copy this page was written from). The repository has dev and prod and nothing between them. A third environment would need a third Keycloak and its database to run, which is more to keep than the owner said he can manage [inferred]. If a staging cluster appears, it gets its own Keycloak with the same realm, not a new realm inside prod's.
+- **Staging.** The owner said on 2026-11-08 that realistically only two environments can be managed, a dev and a prod. The repository has dev and prod and nothing between them. A third environment would need a third Keycloak and its database to run, which is more to keep than the owner said he can manage [inferred]. If a staging cluster appears, it gets its own Keycloak with the same realm, not a new realm inside prod's.
 - **Management.** Keycloak already has one realm for that. The master realm exists "only to create and manage the realms in your system" and the guide advises against making users in it (Server Administration Guide, "The master realm"). Its break-glass admin Secret stays in the cluster and nothing reads it (`hosts/ansible/roles/k8s_identity/templates/keycloak.yaml.j2` line 6). People who administer Proxmox, OPNsense or Argo CD sign in through the app realm and are in `lab-admins`, with a second factor (D-0037 rule 6), so a mgmt realm would only duplicate that group.
 
 ## The name
