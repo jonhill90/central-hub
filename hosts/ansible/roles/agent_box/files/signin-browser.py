@@ -169,7 +169,10 @@ def sign_in_app(app, page, cfg):
             raise RuntimeError("/api/users/self answered HTTP %s" % code)
         return "/api/users/self answers HTTP 200 for the test user"
     if app == "homeassistant":
-        page.goto(cfg["homeassistant_base"] + "/auth/oidc/welcome", wait_until="networkidle", timeout=60000)
+        # Start where a person starts: Home Assistant's own address. Its frontend sends the browser to /auth/authorize, which the
+        # OIDC component answers with its welcome page; going to the welcome page directly loses the authorize request, so the
+        # "Continue" step has nowhere to return a token to.
+        page.goto(cfg["homeassistant_base"] + "/", wait_until="networkidle", timeout=60000)
         page.locator("#login-button").click(timeout=30000)
         keycloak_sign_in(page, cfg)
         wait_for_origin(page, cfg["homeassistant_base"])
