@@ -227,13 +227,17 @@ check_manifests() {
     helm template "$(basename "$chart")" "$chart" --namespace "$(basename "$chart")" --set zone=example.com --set address=192.0.2.10 \
       > "$work/rendered/app-$(basename "$(dirname "$(dirname "$chart")")")-$(basename "$chart").yaml"
   done
-  # central-hub-app: sign-in guard. Off by default; oidc without secretsConfirmed must fail to render (a pod that starts
+  # central-hub-app: sign-in guard. The live values have sign-in on; every off case below sets it off explicitly. oidc without
+  # secretsConfirmed must fail to render (a pod that starts
   # with sign-in on and no Secrets answers 503 to everyone while Argo CD shows Healthy); oidc with it confirmed renders
   # the env and the optional Secret volume.
   local app=hosts/kubernetes/home/c1/apps/central-hub-app
-  helm template central-hub-app "$app" --namespace central-hub-app | grep -q 'name: HUB_AUTH, value: "off"' ||
-    { echo "central-hub-app: sign-in should be off by default" >&2; return 1; }
-  if helm template central-hub-app "$app" --namespace central-hub-app --set auth.mode=oidc > /dev/null 2>&1; then
+  local off=(--set auth.mode=off --set auth.secretsConfirmed=false)
+  helm template central-hub-app "$app" --namespace central-hub-app "${off[@]}" | grep -q 'name: HUB_AUTH, value: "off"' ||
+    { echo "central-hub-app: sign-in should render off when asked to" >&2; return 1; }
+  helm template central-hub-app "$app" --namespace central-hub-app | grep -q 'name: HUB_AUTH, value: "oidc"' ||
+    { echo "central-hub-app: the live values should have sign-in on" >&2; return 1; }
+  if helm template central-hub-app "$app" --namespace central-hub-app --set auth.mode=oidc --set auth.secretsConfirmed=false > /dev/null 2>&1; then
     echo "central-hub-app: auth.mode=oidc without auth.secretsConfirmed should not render" >&2; return 1
   fi
   # A quoted "true" is a string, and any mode but exactly off or oidc is refused (a typo like "OIDC" or "on" must not render).
@@ -252,7 +256,7 @@ check_manifests() {
     { echo "central-hub-app: oidc render lacks the Secret volume or env" >&2; return 1; }
   # The feed (notebook sync and the c1/hub-feed ExternalSecret) is private data, so it renders only with sign-in on, and the
   # app container never mounts the notebook token.
-  if helm template central-hub-app "$app" --namespace central-hub-app | grep -q -e 'notebook-sync' -e 'central-hub-app-feed' -e HUB_NOTEBOOK_DIR; then
+  if helm template central-hub-app "$app" --namespace central-hub-app "${off[@]}" | grep -q -e 'notebook-sync' -e 'central-hub-app-feed' -e HUB_NOTEBOOK_DIR; then
     echo "central-hub-app: the feed must not render while sign-in is off" >&2; return 1
   fi
   local on="$work/rendered/app-central-hub-app-oidc.yaml"
