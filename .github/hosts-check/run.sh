@@ -162,6 +162,7 @@ check_ansible() {
   suite bash "$here/tests/test_pr_merge_verdict.sh"
   suite bash "$here/tests/test_pass_record.sh"
   suite bash "$here/tests/test_pr_merge_sweep.sh"
+  suite bash "$here/tests/test_lead_time.sh"
   suite bash "$here/tests/test_repo_create.sh"
   suite bash "$here/tests/test_checkpoint_note.sh"
   suite bash "$here/tests/test_checkpoint_scan.sh"
