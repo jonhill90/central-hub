@@ -35,7 +35,9 @@ data:
         groups: groups
       roles:
         admin: {{ $v.sso.adminGroup }}
+        {{- if $v.sso.userGroup }}
         user: {{ $v.sso.userGroup }}
+        {{- end }}
       {{- if $v.sso.labRoot.certificate }}
       network:
         tls_ca_path: /lab-ca/lab-root-ca.pem

@@ -66,9 +66,11 @@ sso:
   clientId: homeassistant
   displayName: Lab sign-in
   # Realm groups, from the `groups` claim the realm adds to every client: lab-admins become Home Assistant
-  # administrators, lab-viewers regular users; anyone else is refused.
+  # administrators and everyone else who signs in is a regular user. The user role is left unset on purpose: with
+  # it set, a person in neither group gets the plugin's "invalid" role. Home Assistant applies the role only when it
+  # first creates the user, so a person already created keeps the role they got then (change it in Settings > People).
   adminGroup: lab-admins
-  userGroup: lab-viewers
+  userGroup: ""
   plugin:
     version: "1.2.1"          # released 2026-08-19
     url: https://github.com/christiaangoossens/hass-oidc-auth/archive/refs/tags/v1.2.1.tar.gz
