@@ -5,6 +5,20 @@
 # Every step is safe to repeat: once the user step is done the script prints PASS and exits.
 set -eu
 CID="$BASE/"
+# Trades an auth code for a token and completes the remaining onboarding steps, so the owner lands on the dashboard.
+# A step that is already done answers with an error, which is fine; the owner can still finish any step in the UI.
+finish() {
+  tok=$(printf 'grant_type=authorization_code&code=%s&client_id=%s' "$1" "$CID" \
+    | curl -fsS --max-time 20 -X POST -d @- "$BASE/auth/token" | sed -n 's/.*"access_token": *"\([^"]*\)".*/\1/p')
+  [ -n "$tok" ] || { echo "note: no token to finish onboarding steps; the owner can finish them in the UI"; return 0; }
+  for step in core_config analytics; do
+    curl -sS --max-time 30 -X POST -H "Authorization: Bearer $tok" -H 'Content-Type: application/json' -d '{}' \
+      "$BASE/api/onboarding/$step" >/dev/null || echo "note: onboarding step $step did not complete"
+  done
+  printf '{"client_id":"%s","redirect_uri":"%s"}' "$CID" "$CID" \
+    | curl -sS --max-time 30 -X POST -H "Authorization: Bearer $tok" -H 'Content-Type: application/json' -d @- \
+      "$BASE/api/onboarding/integration" >/dev/null || echo "note: onboarding step integration did not complete"
+}
 steps=$(curl -fsS --max-time 20 "$BASE/api/onboarding") || { echo "FAIL: onboarding endpoint did not answer"; exit 1; }
 case $steps in
   *'"step": "user", "done": true'* | *'"step":"user","done":true'*)
@@ -18,7 +32,10 @@ case $steps in
       | curl -sS --max-time 20 -X POST -H 'Content-Type: application/json' -d @- "$BASE/auth/login_flow/$fid") \
       || { echo "FAIL: login check did not answer"; exit 1; }
     case $res in
-      *'"type": "create_entry"'* | *'"type":"create_entry"'*) echo "PASS: onboarding user step already done, and the Secret's owner password is accepted"; exit 0 ;;
+      *'"type": "create_entry"'* | *'"type":"create_entry"'*)
+        code=$(printf '%s' "$res" | sed -n 's/.*"result": *"\([^"]*\)".*/\1/p')
+        [ -z "$code" ] || finish "$code"
+        echo "PASS: onboarding user step already done, and the Secret's owner password is accepted"; exit 0 ;;
     esac
     echo "FAIL: onboarding is done but the Secret's owner password is refused; the owner was not made by this Job"; exit 1 ;;
 esac
@@ -28,13 +45,7 @@ resp=$(printf '{"client_id":"%s","name":"%s","username":"%s","password":"%s","la
   || { echo "FAIL: creating the owner failed"; exit 1; }
 code=$(printf '%s' "$resp" | sed -n 's/.*"auth_code": *"\([^"]*\)".*/\1/p')
 [ -n "$code" ] || { echo "FAIL: no auth_code in the answer"; exit 1; }
-tok=$(printf 'grant_type=authorization_code&code=%s&client_id=%s' "$code" "$CID" \
-  | curl -fsS --max-time 20 -X POST -d @- "$BASE/auth/token" | sed -n 's/.*"access_token": *"\([^"]*\)".*/\1/p')
-[ -n "$tok" ] || { echo "FAIL: no access token for the owner"; exit 1; }
-for step in core_config analytics; do
-  curl -fsS --max-time 30 -X POST -H "Authorization: Bearer $tok" -H 'Content-Type: application/json' -d '{}' \
-    "$BASE/api/onboarding/$step" >/dev/null || echo "note: onboarding step $step did not complete; the owner can finish it in the UI"
-done
+finish "$code"
 after=$(curl -fsS --max-time 20 "$BASE/api/onboarding")
 case $after in
   *'"step": "user", "done": true'* | *'"step":"user","done":true'*) echo "PASS: onboarding user step done by the setup job"; exit 0 ;;
