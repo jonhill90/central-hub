@@ -20,7 +20,8 @@ trap 'rm -f "$config" "$body" "$err"' EXIT
 # A step's own error text goes to a file; what is printed is a fixed phrase for it.
 fail() {
   local step=$1 rc=$2 why=unclassified
-  for pair in "already exists:already exists" "onflict:conflict" "not found:not found" "orbidden:forbidden" \
+  for pair in "nvalid user credentials:wrong admin username or password" "invalid_grant:wrong admin username or password" \
+              "already exists:already exists" "onflict:conflict" "not found:not found" "orbidden:forbidden" \
               "nauthorized:unauthorized" "nvalid:invalid input" "Bad Request:bad request" "nrecognized:unrecognized field" \
               "efused:connection refused" "Unable to:kcadm could not run it"; do
     if grep -q "${pair%%:*}" "$err" 2>/dev/null; then why=${pair#*:}; break; fi
@@ -34,6 +35,8 @@ for try in $(seq 1 60); do
   "$kcadm" config credentials --config "$config" --server http://localhost:8080 --realm master \
     --user "${KC_BOOTSTRAP_ADMIN_USERNAME:-${KEYCLOAK_ADMIN:-}}" \
     --password "${KC_BOOTSTRAP_ADMIN_PASSWORD:-${KEYCLOAK_ADMIN_PASSWORD:-}}" >/dev/null 2>"$err" && break
+  # A wrong username or password is not a Keycloak that is still starting: waiting five minutes will not fix it.
+  grep -q -e "nvalid user credentials" -e "invalid_grant" "$err" && fail "admin sign-in" 1
   [ "$try" = 60 ] && { echo "could not sign in to Keycloak at localhost:8080" >&2; fail "admin sign-in" 1; }
   sleep 5
 done
