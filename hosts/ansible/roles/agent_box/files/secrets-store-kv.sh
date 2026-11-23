@@ -12,6 +12,8 @@
 # put-short PATH KEY   like put, but OpenBao only, with no SOPS copy: for a value that lives about an hour and is made
 #                again by a timer (the hub feed's notebook token and Proxmox snapshot), which a SOPS copy would only
 #                leave behind in the daily bundle. compare and reseed ignore a path the SOPS file does not hold.
+# forget PATH   removes every key of PATH from the SOPS file, and touches nothing in OpenBao: for a path that moved to put-short
+#                (OpenBao only) after put had copied it, since compare would name the old copy as a difference.
 # put PATH KEY   the value on stdin. SOPS first, one key only (never decrypt and re-encrypt the whole file), then
 #                OpenBao: read kv/data/PATH, merge the one key, write it back with check-and-set on the version read
 #                (0 when the path is new), so a write in between is refused, not overwritten. Fails if either write
@@ -164,6 +166,19 @@ json.dump({"options": {"cas": version}, "data": data}, open(out, "w"))' "$tmp/cu
     [[ $rc == 200 || $rc == 204 ]] || die "SOPS is written, but OpenBao refused the write (HTTP ${rc:-nothing}); run put again, then compare"
     if [[ $action == put-short ]]; then echo "secrets-store $action: kv/$path key $key written to OpenBao only, no SOPS copy"
     else echo "secrets-store $action: kv/$path key $key written to SOPS, then OpenBao"; fi
+    ;;
+  forget)
+    path=${6:-}
+    valid_path "$path" || die "the path must be c1/<name>[/<name>...], lowercase letters, digits, - and _"
+    [[ -e $kvfile ]] || die "no SOPS file ($kvfile): nothing to forget"
+    plain
+    if ! python3 -I -c 'import json, sys; sys.exit(0 if sys.argv[2] in json.load(open(sys.argv[1])) else 1)' "$tmp/plain.json" "$path"; then
+      echo "secrets-store forget: kv/$path is not in the SOPS file; nothing changed"
+      exit 0
+    fi
+    index=$(python3 -I -c 'import json, sys; print("[%s]" % json.dumps(sys.argv[1]))' "$path")
+    "$libexec/sops" unset "$kvfile" "$index" || die "the SOPS removal failed; nothing changed"
+    echo "secrets-store forget: kv/$path removed from the SOPS file; OpenBao untouched"
     ;;
   compare)
     [[ -e $kvfile ]] || die "no SOPS file ($kvfile): nothing has been written through put"

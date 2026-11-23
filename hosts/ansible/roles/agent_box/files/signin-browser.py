@@ -3,10 +3,10 @@
 
 Run by the signin-check wrapper (as the keys user, through sudo) with Playwright's Python from the box's virtual environment. <config.json> is
 the wrapper's private file (mode 0600): base (Keycloak's https address), realm, user, password, seed (base32 TOTP seed), digits, period, verify,
-and each app's address: jellyfin_base, grafana_base, argocd_base, pve_base, hub_base, openbao_base, ntfy_base, opnsense_base. It makes nothing in
+and each app's address: jellyfin_base, grafana_base, argocd_base, pve_base, hub_base, mealie_base, openbao_base, ntfy_base, opnsense_base. It makes nothing in
 any app: it only signs in as the test user and reads.
 
-Nine apps, each printed as "<n> <app>: <result>" and nothing more (no password, seed, code, state, token or page text):
+Ten apps (Mealie added once it had a Keycloak client), each printed as "<n> <app>: <result>" and nothing more (no password, seed, code, state, token or page text):
   passed                    the browser signed in through Keycloak and the app answered as that user (Jellyfin: a stored access token; Grafana
                             /api/user; Argo CD userinfo; Proxmox /access/permissions; Keycloak: the account console's own page).
   failed                    the app should sign in through Keycloak and did not, or its address did not load at all.
@@ -28,9 +28,9 @@ from urllib.parse import urlsplit
 
 from playwright.sync_api import sync_playwright
 
-SSO = ("jellyfin", "grafana", "argocd", "pve", "sso")
+SSO = ("jellyfin", "grafana", "argocd", "pve", "mealie", "sso")
 NO_SSO = ("hub", "openbao", "ntfy", "opnsense")
-ORDER = ("hub", "jellyfin", "grafana", "argocd", "pve", "sso", "openbao", "ntfy", "opnsense")
+ORDER = ("hub", "jellyfin", "grafana", "argocd", "pve", "mealie", "sso", "openbao", "ntfy", "opnsense")
 NO_SSO_NOTE = {"opnsense": "its own login page"}
 LAST_WINDOW = {"w": None}
 
@@ -146,6 +146,17 @@ def sign_in_app(app, page, cfg):
         if code != 200:
             raise RuntimeError("/access/permissions answered HTTP %s" % code)
         return "/access/permissions answers HTTP 200"
+    if app == "mealie":
+        page.goto(cfg["mealie_base"] + "/login", wait_until="networkidle", timeout=60000)
+        if "/openid-connect/" not in page.url:  # Mealie may send the browser straight to Keycloak; if not, press its OIDC button
+            page.locator('button:has-text("OAuth"), button:has-text("OpenID"), button:has-text("Keycloak"), a:has-text("OAuth")').first.click(timeout=30000)
+        keycloak_sign_in(page, cfg)
+        wait_for_origin(page, cfg["mealie_base"])
+        page.wait_for_timeout(3000)
+        code, body = api(page, cfg["mealie_base"] + "/api/users/self")
+        if code != 200 or not body:
+            raise RuntimeError("/api/users/self answered HTTP %s" % code)
+        return "/api/users/self answers HTTP 200 for the test user"
     if app == "sso":
         page.goto("%s/realms/%s/account/" % (kc, cfg["realm"]), wait_until="networkidle", timeout=60000)
         keycloak_sign_in(page, cfg)
