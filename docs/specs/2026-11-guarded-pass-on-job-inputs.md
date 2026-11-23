@@ -37,7 +37,7 @@ This spec keys the pass and the go to an **inputs digest**: a hash of the git ob
 
 ### Automated
 
-- [ ] `bash .github/hosts-check/tests/test_opnsense_prod.sh`, and the same for `tailnet-stack`:
+- [ ] `bash .github/hosts-check/tests/test_opnsense_prod_args.sh` and `test_tailnet_stack_ledger.sh`, with new cases:
   - a pass recorded at commit A still applies at a commit B that changes only `docs/`;
   - it refuses at a commit C that changes `roles/opnsense_lab`;
   - it refuses when the check hash differs;
