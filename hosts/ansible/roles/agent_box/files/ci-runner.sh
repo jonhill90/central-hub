@@ -375,8 +375,12 @@ proxmox_snapshot() {
     # The dev token sees only the dev rebuild VMs (/cluster/resources lists what the token may audit), so the snapshot was two
     # guests. The lab token (give-agents-proxmox-rights-for-the-whole-lab.md) audits every guest except VM 258 and the desktop's,
     # which it has NoAccess on on purpose. Use it when the box holds it, the dev token otherwise.
-    envfile=$keys/proxmox-lab.env
-    [[ -s $envfile ]] || envfile=$keys/proxmox-dev.env
+    envfile=$keys/proxmox-lab.env token_name=proxmox-lab
+    if [[ ! -s $envfile ]]; then
+      envfile=$keys/proxmox-dev.env token_name=proxmox-dev
+      echo "ci-runner: no lab token (proxmox-lab.env missing or empty), so the Proxmox snapshot comes from the dev token and lists only the dev VMs" >&2
+    fi
+    export token_name
     set -a
     # shellcheck source=/dev/null
     . "$envfile"
@@ -402,7 +406,7 @@ for r in data:
     row = {k: r[k] for k in keep if k in r}
     row.setdefault("name", r.get("storage") or r.get("node") or r.get("id", ""))
     rows.append(row)
-print(json.dumps({"generatedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "source": "proxmox", "resources": rows}))
+print(json.dumps({"generatedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "source": os.environ["token_name"], "resources": rows}))
 PY
   )
 }
