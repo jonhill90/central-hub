@@ -203,8 +203,6 @@ apps:
     local: true
     needsZone: true
     # No ClusterIssuer lab-ca (dev): skip the small Certificate that delivers the lab root; sign-in then waits for it.
-    rootParameters:
-      adminSecret.store: appSecretsStore
     switchOffParameters:
       sso.labRoot.certificate: labCaIssuer
     autoSync: true
