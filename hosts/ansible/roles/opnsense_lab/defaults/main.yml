@@ -45,6 +45,7 @@ opnsense_lab_host_overrides: []
 opnsense_lab_short_app_names:
   - hub
   - homeassistant
+  - mealie
   - openbao
   - vault
 
