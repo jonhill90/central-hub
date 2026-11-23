@@ -6,6 +6,8 @@
 name: fabrication
 on:
   pull_request:            # never pull_request_target (CLAUDE.md rule 5)
+    # edited: the claims check reads the PR description, so editing it runs claims again (tests skip on an edit)
+    types: [opened, edited, synchronize, reopened]
   push:
     branches: [main]
 permissions:
@@ -15,6 +17,9 @@ jobs:
   # The change's own tests run in a job of their own: code from the PR can write to GITHUB_PATH or
   # GITHUB_ENV, and that must never reach the job that judges the PR.
   tests:
+    # A description edit changes no code, so the change's tests do not run again; a newer skipped run never hides an
+    # older failure from the merge verdict (pr-merge-verdict.py, superseded()).
+    if: github.event.action != 'edited'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
