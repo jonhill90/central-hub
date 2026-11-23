@@ -378,7 +378,10 @@ reseed() {
   ( snapshot ) || { echo "secrets-store: reseeded, but the snapshot after it failed; run secrets-store snapshot" >&2; exit 1; }
   # On prod only: c1/hub-feed lives in OpenBao alone (put-short), so a fresh store comes back without it and the Central Hub app
   # would sit Degraded until the 30-minute timer. Fill it now; a failure only warns, the timer tries again.
+  # hub-feed's put-short takes this wrapper's lock (flock -n), so let go of it first.
   if [[ $env == prod && -x $libexec/ci-runner.sh ]]; then
+    flock -u 9
+    exec 9>&-
     "$libexec/ci-runner.sh" hub-feed || echo "secrets-store: reseeded, but hub-feed failed; the 30-minute timer will try again" >&2
   fi
 }
