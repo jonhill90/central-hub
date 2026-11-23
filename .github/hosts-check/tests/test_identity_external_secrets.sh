@@ -10,6 +10,8 @@
 #   6. Store openbao on a cluster with no database account: the role makes none (no kubectl create of it); ExternalSecret sso-db reads
 #      username and password from c1/identity-db through store openbao, Owner; store off makes it as before (case 4).
 #   5. No value from the values file shows in the output or in an ExternalSecret.
+#   8. Store openbao with an ExternalSecret that says SecretSyncedError (a key OpenBao lacks): the run stops after the 30 s look with the
+#      key names and the put-apps hint, without the longer wait; with another reason it waits on (90 s more) and the error is the wait's.
 #   6. Store openbao: Grafana is restarted once when grafana-sso's version is new to the role (and not while the Secret
 #      isn't there yet), not again on a run with nothing new, and once more when its data changes, not when only its metadata does.
 # Usage: .github/hosts-check/tests/test_identity_external_secrets.sh   (needs ansible-playbook with community.general)
@@ -42,6 +44,8 @@ if a[:2] == ["get", "externalsecrets"] and "-A" in a:
     for k in st:
         if k.startswith("ExternalSecret/"): print("externalsecret.external-secrets.io/" + k.split("/")[2])
     sys.exit(0)
+if a[:1] == ["get"] and a[1] == "externalsecret" and any("reason" in y for y in a):
+    print("SecretSyncedError" if os.environ.get("SYNC_ERR") == "1" else "Other", end=""); sys.exit(0)
 if a[0] == "get" and a[1] == "secret" and any(".data" in x for x in a):
     obj = st.get(f"Secret/{ns}/{a[2]}")
     print(json.dumps(obj["data"], sort_keys=True) if obj else "", end=""); sys.exit(0)
@@ -60,6 +64,8 @@ if a[0] == "annotate":
     st[f"ExternalSecret/{ns}/{a[2]}"]["metadata"].setdefault("annotations", {})[k] = v; save(); sys.exit(0)
 if a[0] == "delete":
     st.pop(f"Secret/{ns}/{a[2]}", None); save(); sys.exit(0)
+if a[0] == "wait" and os.environ.get("SYNC_ERR") in ("1", "slow"):
+    sys.exit(1)
 if a[0] in ("wait", "rollout"):
     sys.exit(0)
 print("stand-in kubectl: unexpected " + " ".join(a), file=sys.stderr); sys.exit(3)
@@ -161,5 +167,12 @@ if [[ $r6 -eq 0 && $db_made -eq 0 && $db_keys == "openbao Owner sso-db password=
       $boot_keys == "openbao Owner sso-bootstrap-admin password=c1/identity-admin:password,username=c1/identity-admin:username" ]]; then
   ok "7. store openbao: the database account and Keycloak's first admin are ExternalSecrets reading c1/identity-db and c1/identity-admin, and the role no longer makes the account"
 else bad "7. rc=$r6 made=$db_made [$db_keys] $(tail -n 15 "$t/out")"; fi
+
+# 8
+fresh; SYNC_ERR=1 run -e k8s_gitops_source_app_secrets_store=openbao; r7=$rc o7=$out; waits7=$(grep -c '"wait", "externalsecret/' "$t/log")
+fresh; SYNC_ERR=slow run -e k8s_gitops_source_app_secrets_store=openbao; r7b=$rc; waits7b=$(grep -c '"wait", "externalsecret/' "$t/log")
+if [[ $r7 -ne 0 && $o7 == *"put-apps"* && $o7 == *"names only"* && $o7 == *"username, password"* && $waits7 -eq 1 && $o7 != *gsecret1* && $r7b -ne 0 && $waits7b -eq 2 ]]; then
+  ok "8. SecretSyncedError: stops at the 30 s look naming the keys and put-apps; another reason waits on"
+else bad "8. rc=$r7 waits=$waits7 rc2=$r7b waits2=$waits7b msg=[$(grep -m1 '"msg"' <<<"$o7" | cut -c1-700)]"; fi
 
 exit "$fail"
