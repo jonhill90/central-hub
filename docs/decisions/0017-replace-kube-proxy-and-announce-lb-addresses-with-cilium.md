@@ -64,7 +64,7 @@ flowchart LR
 
 1. **No kube-proxy.** `kubeadm init`, `kubeadm upgrade apply` and `kubeadm upgrade node` skip the `addon/kube-proxy` phase, and Cilium runs with `kubeProxyReplacement=true` and `k8sServiceHost` set to the cluster's API name (STD-0001).
 2. **One pool per cluster, from STD-0002.** The cluster's `CiliumLoadBalancerIPPool` is the node VLAN's `.224/27`. The router's DHCP pool never overlaps it.
-3. **L2 announcements on the node interface.** `l2announcements.enabled=true`, with the node's lab interface in `devices`, and one announcement policy for the pool.
+3. **L2 announcements on the node interface.** `l2announcements.enabled=true`, with the node's lab interface in `devices`, and one announcement policy for the pool, except a Service that brings its own policy under D-0062.
 4. **Addresses that names point at are pinned.** A Service or Gateway whose address a DNS name points at sets that address in its spec, so a rebuild keeps it (agent pick).
 
 ### Not decided here
@@ -75,7 +75,7 @@ flowchart LR
 
 ### Consequences
 
-- Good: no new tool; one pool, one policy, both in Cilium.
+- Good: no new tool; one pool and its general policy, both in Cilium.
 - Good: the same switch lets Cilium serve the Gateway API (D-0021).
 - Bad: L2 announcements are a beta feature in Cilium 1.20.
 - Bad: one node takes all traffic for an address; failover takes 10 to 20 seconds by default; the feature can't be used with `externalTrafficPolicy: Local`.
