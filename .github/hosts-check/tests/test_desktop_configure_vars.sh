@@ -56,7 +56,7 @@ cat >"$t/render.yml" <<YML
     - ansible.builtin.copy: {content: "{{ desktop_trust_check_names | to_json }}", dest: "$t/names.json", mode: "0600"}
 YML
 names() { ANSIBLE_LOCALHOST_WARNING=False ansible-playbook -i localhost, -e ansible_python_interpreter=auto_silent "$t/render.yml" "$@" >/dev/null && cat "$t/names.json"; }
-want='["grafana.lab.example.com", "argocd.lab.example.com", "sso.lab.example.com", "jellyfin.lab.example.com", "ntfy.lab.example.com"]'
+want='["grafana.lab.example.com", "argocd.lab.example.com", "sso.lab.example.com", "jellyfin.lab.example.com", "ntfy.lab.example.com", "homeassistant.lab.example.com"]'
 got=$(names -e desktop_trust_check_zone=lab.example.com -e desktop_trust_check_reach=true)
 [[ $got == "$want" ]] && echo "ok   with a zone and reach on, the names are each app's short name" || { echo "FAIL: names with a zone: $got"; fails=$((fails + 1)); }
 got=$(names -e desktop_trust_check_zone=lab.example.com)

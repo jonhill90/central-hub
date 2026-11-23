@@ -599,7 +599,7 @@ cat > "$venv/ansible" <<EOS
 import base64, json, sys
 a = sys.argv[sys.argv.index("-a") + 1]
 open("$t/kcalls", "a").write(a + "\\n")
-vals = {"jellyfin-admin": "jf-secret-Aa11", "sso-db": "db-secret-Bb22", "sso-initial-admin": "kc-secret-Cc33", "kube-prometheus-stack-grafana": "gr-secret-Dd44", "argocd-initial-admin-secret": "ar-secret-Ee55"}
+vals = {"jellyfin-admin": "jf-secret-Aa11", "sso-db": "db-secret-Bb22", "sso-initial-admin": "kc-secret-Cc33", "kube-prometheus-stack-grafana": "gr-secret-Dd44", "argocd-initial-admin-secret": "ar-secret-Ee55", "homeassistant-owner": "ha-secret-Ff66"}
 name = a.split(" secret ")[1].split()[0] if " secret " in a else ""
 miss = open("$t/kube/MISSING").read().split() if __import__("os").path.exists("$t/kube/MISSING") else []
 ok = name in vals and name not in miss
@@ -627,11 +627,11 @@ echo argocd-initial-admin-secret > "$t/kube/MISSING"; : > "$t/ss_calls"; run ado
 rm -f "$t/kube/MISSING"; touch "$t/kube/READFAIL"; : > "$t/ss_calls"; run adopt; h_rc=$rc h_out=$out; h_ss=$(cat "$t/ss_calls")
 rm -f "$t/kube/READFAIL"; touch "$t/kube/CMPFAIL"; run adopt; c_rc=$rc c_out=$out
 rm -f "$t/kube/CMPFAIL"; run adopt extra; x_rc=$rc x_calls=$calls
-if [[ $a_rc -eq 0 && $a_out == *"PASS: openbao-prod: adopt: 8 values adopted or already held; compare passed"* &&
+if [[ $a_rc -eq 0 && $a_out == *"PASS: openbao-prod: adopt: 9 values adopted or already held; compare passed"* &&
       $a_ss == *"put-new c1/jellyfin-admin password value=jf-secret-Aa11"* && $a_ss == *"put-new c1/identity-db username value=db-secret-Bb22"* &&
       $a_ss == *"put-new c1/identity-admin password value=kc-secret-Cc33"* && $a_ss == *"put-new c1/grafana-admin username value=gr-secret-Dd44"* &&
-      $a_ss == *"secrets-store-prod put c1/argocd-admin password value=ar-secret-Ee55"* && $(grep -c '^secrets-store-prod put-new' <<< "$a_ss") -eq 7 && $(grep -c '^secrets-store-prod put ' <<< "$a_ss") -eq 1 &&
-      $a_ss == *"secrets-store-prod compare" && $(grep -c ' get secret ' <<< "$a_k") -eq 9 && $(grep -cvE ' get secret (jellyfin-admin|sso-db|sso-initial-admin|kube-prometheus-stack-grafana|argocd-initial-admin-secret) ' <<< "$a_k") -eq 0 &&
+      $a_ss == *"put-new c1/homeassistant-owner password value=ha-secret-Ff66"* && $a_ss == *"secrets-store-prod put c1/argocd-admin password value=ar-secret-Ee55"* && $(grep -c '^secrets-store-prod put-new' <<< "$a_ss") -eq 8 && $(grep -c '^secrets-store-prod put ' <<< "$a_ss") -eq 1 &&
+      $a_ss == *"secrets-store-prod compare" && $(grep -c ' get secret ' <<< "$a_k") -eq 10 && $(grep -cvE ' get secret (jellyfin-admin|sso-db|sso-initial-admin|kube-prometheus-stack-grafana|argocd-initial-admin-secret|homeassistant-owner) ' <<< "$a_k") -eq 0 &&
       $a_out != *-secret-* && $b_rc -ne 0 && $b_out == *"FAIL: openbao-prod: adopt: at least one value was not adopted"* && $b_out == *"identity/sso-db key username: not adopted"* &&
       $b_ss != *"compare" && $b_out != *-secret-* && $c_rc -ne 0 && $c_out == *"compare of SOPS against OpenBao did not pass"* && $c_out != *"PASS: openbao-prod: adopt"* &&
       $g_rc -eq 0 && $g_out == *"argocd/argocd-initial-admin-secret key password: skipped, not in the cluster; c1/argocd-admin key password stays as it was"* &&
