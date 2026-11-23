@@ -122,7 +122,9 @@ rc=0
     echo "== $name"
     if [[ $name == browser ]]; then
       shots=$shots_root/$(date -u +%Y%m%dT%H%M%SZ)
-      mkdir -p -m 755 "$shots_root" "$shots"
+      mkdir -m 755 "$shots_root" 2>/dev/null || true
+      mkdir "$shots" 2>/dev/null || true
+      chmod 755 "$shots"
       out=$(PLAYWRIGHT_BROWSERS_PATH=$browser_browsers "$browser_python" -I "$s" "$tmp/$name.json" "$shots" 2>&1) && sc=0 || sc=$?
       chmod 644 "$shots"/*.png 2>/dev/null || true
       ln -sfn "$shots" "$shots_root/latest"
