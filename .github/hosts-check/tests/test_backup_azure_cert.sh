@@ -206,7 +206,8 @@ for line in "AZURE_ACCOUNT_NAME=exampleaccount" "AZURE_CLIENT_ID=$client" "AZURE
   "AZURE_APP_OBJECT_ID=$object" "AZURE_CLIENT_CERTIFICATE_PATH=$pem"; do
   grep -qx "$line" "$work/env.lines" || { cat "$work/env.lines"; fail "env line $line"; }
 done
-grep -q SAS "$work/env.lines" && fail "env lines still name a SAS"
+# Only a variable NAME may not mention SAS: the certificate path holds the random name of mktemp -d, which spells SAS by chance.
+grep -Eq '^[A-Z_]*SAS[A-Z_]*=' "$work/env.lines" && fail "env lines still name a SAS"
 echo "ok   7. azure_identity.yml uploads once, records the key ID, removes a certificate no node holds, writes the env lines"
 # 8. A rebuilt prod node backs up as before (k8s_backup_azure_seed_dir): the certificate copied off the
 # node before its teardown comes back, nothing is uploaded, and a seed Entra ID no longer knows stops the run.
