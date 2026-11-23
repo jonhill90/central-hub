@@ -1,0 +1,14 @@
+---
+# Give the Keycloak master realm an admin that takes the password in Secret sso-bootstrap-admin, when it has none that does
+# (roles/k8s_identity/tasks/admin-recover.yml). For the agent box's `c1-ansible check|apply identity-admin-recover`: check only
+# probes; apply may stop Keycloak for about a minute to run Keycloak's own recovery command, and always starts it again.
+#   ansible-playbook -i <the box's prod inventory> playbooks/k8s-identity-admin-recover.yml --check
+- name: Give the Keycloak master realm an admin that signs in
+  hosts: k8s_control_plane[0]
+  become: true
+  gather_facts: false
+  tasks:
+    - name: The recovery tasks of role k8s_identity
+      ansible.builtin.include_role:
+        name: k8s_identity
+        tasks_from: admin-recover.yml

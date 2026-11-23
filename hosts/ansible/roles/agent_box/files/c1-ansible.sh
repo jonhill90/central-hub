@@ -71,11 +71,17 @@ export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-
 # identity-admin-check: read only (check only: apply is refused). Prints when each Keycloak bootstrap admin Secret was made (name and
 # creationTimestamp, never data), the ExternalSecret behind sso-bootstrap-admin (no values), and the master realm's users with their
 # creation times from one fixed SELECT in a read-only transaction (playbooks/k8s-identity-admin-check.yml). No tags, no variables, no file.
+# identity-admin-recover: gives the Keycloak master realm an admin that takes the password in Secret sso-bootstrap-admin, when the
+# restored master realm's own admin does not (playbooks/k8s-identity-admin-recover.yml, role k8s_identity tasks/admin-recover.yml). check only
+# probes (can the env admin or c1-admin sign in?). apply, when both are refused, stops Keycloak (instances 0, about a minute), runs one
+# Job with Keycloak's own `bootstrap-admin user` command for the public name c1-admin, password by secretKeyRef from the Secret, and
+# always starts Keycloak again; with a name that exists the command adds nothing, so the old admin is never changed. No tags, no
+# variables, no file; apply needs the reviewer's clearance id like every apply, and a secret change (a new account) needs its own.
 # node-ports: opens the ports k8s_node_ports lists (Kubernetes, Cilium and node-exporter's 9100/tcp) in the lab zone on every node, in place
 # (playbooks/k8s-node-ports.yml: one firewalld task of role k8s_node, no restart, no Helm, no kubectl, no delete), for nodes built before a port
 # was added to the list. check prints each port per node and whether it would be added; the output of this name shows each node as cp-N or wk-N
 # (control planes first, by name) and masks every IPv4 address, in the screen and in the log.
-declare -A playbook=([identity-admin-check]=playbooks/k8s-identity-admin-check.yml [node-ports]=playbooks/k8s-node-ports.yml [identity]=playbooks/k8s-identity.yml [gateway]=playbooks/k8s-gateway.yml [gitops]=playbooks/k8s-gitops.yml [observability]=playbooks/k8s-observability.yml [users]=playbooks/k8s-identity.yml [clients]=playbooks/k8s-identity.yml [identity-values]=playbooks/k8s-identity.yml [backup-status]=playbooks/k8s-backup-status.yml [backup-restore-test]=playbooks/k8s-backup-restore-test.yml [backup-check]=playbooks/k8s-backup.yml [restore-inspect]=playbooks/k8s-restore-inspect.yml [certs]=playbooks/k8s-certs.yml)
+declare -A playbook=([identity-admin-recover]=playbooks/k8s-identity-admin-recover.yml [identity-admin-check]=playbooks/k8s-identity-admin-check.yml [node-ports]=playbooks/k8s-node-ports.yml [identity]=playbooks/k8s-identity.yml [gateway]=playbooks/k8s-gateway.yml [gitops]=playbooks/k8s-gitops.yml [observability]=playbooks/k8s-observability.yml [users]=playbooks/k8s-identity.yml [clients]=playbooks/k8s-identity.yml [identity-values]=playbooks/k8s-identity.yml [backup-status]=playbooks/k8s-backup-status.yml [backup-restore-test]=playbooks/k8s-backup-restore-test.yml [backup-check]=playbooks/k8s-backup.yml [restore-inspect]=playbooks/k8s-restore-inspect.yml [certs]=playbooks/k8s-certs.yml)
 declare -A needs_file=([identity]="$keys/prod/identity.env" [users]="$keys/prod/identity.env" [clients]="$keys/prod/identity.env" [identity-values]="$keys/prod/identity.env")
 declare -A needs_var=([identity]=k8s_identity_values_file [users]=k8s_identity_values_file [clients]=k8s_identity_values_file [identity-values]=k8s_identity_values_file)
 # Fixed extra variables per name. identity, users and clients also set k8s_identity_secrets_store=openbao, so the realm's Secrets
