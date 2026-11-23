@@ -26,6 +26,7 @@ containers:
       - {name: BASE, value: "http://{{ .Values.name }}.{{ .Release.Namespace }}.svc:{{ .Values.port }}"}
       - {name: DEFAULT_EMAIL, value: {{ .Values.adminGuard.publishedEmail | quote }}}
       - {name: DEFAULT_PASSWORD, value: {{ .Values.adminGuard.publishedPassword | quote }}}
+      - {name: ADMIN_EMAIL, value: {{ .Values.adminGuard.adminEmail | quote }}}
     resources:
       requests: {cpu: 10m, memory: 32Mi}
       limits: {memory: 128Mi}
