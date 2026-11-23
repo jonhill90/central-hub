@@ -24,8 +24,8 @@ case "$method $last" in
   "POST "*access_tokens) reply '{"token":"T"}' 201 ;;
   "GET https://api.github.com/repos/jonhill90/central-hub/pulls?state=open"*) reply "[{\"number\":7,\"head\":{\"sha\":\"$FAKE_HEAD\"}}]" ;;
   "GET "*"/pulls?state=open"*) reply '[]' ;;
-  "GET "*"/pulls/7") reply "{\"state\":\"open\",\"draft\":false,\"base\":{\"ref\":\"main\",\"sha\":\"c\"},\"head\":{\"sha\":\"$FAKE_HEAD\"},\"mergeable\":true,\"mergeable_state\":\"clean\",\"body\":\"Author-Lane: OpenBao thread\"}" ;;
-  "GET "*"/pulls/7/files"*) if [[ -n ${FAKE_FILES_N:-} ]]; then pg=${last##*page=}; python3 -I -c 'import json,sys; n,p=int(sys.argv[1]),int(sys.argv[2]); print(json.dumps([{"filename":"docs/f%d.md"%i} for i in range((p-1)*100,min(n,p*100))]))' "$FAKE_FILES_N" "$pg"; echo 200; exit 0; fi; reply "[{\"filename\":\"${FAKE_FILE:-docs/runbooks/x.md}\"}]" ;;
+  "GET "*"/pulls/7") reply "{\"state\":\"open\",\"draft\":false,\"base\":{\"ref\":\"main\",\"sha\":\"c\"},\"head\":{\"sha\":\"$FAKE_HEAD\",\"repo\":{\"full_name\":\"jonhill90/central-hub\"}},\"mergeable\":true,\"mergeable_state\":\"clean\",\"body\":\"Author-Lane: OpenBao thread\"}" ;;
+  "GET "*"/pulls/7/files"*) if [[ -n ${FAKE_FILES_N:-} ]]; then pg=${last##*page=}; python3 -I -c 'import json,sys; n,p=int(sys.argv[1]),int(sys.argv[2]); print(json.dumps([{"filename":"docs/f%d.md"%i} for i in range((p-1)*100,min(n,p*100))]))' "$FAKE_FILES_N" "$pg"; echo 200; exit 0; fi; reply "[{\"filename\":\"${FAKE_FILE:-docs/runbooks/x.md}\",\"patch\":\"@@ -1 +1 @@\\n+a line\"}]" ;;
   "GET "*"/check-runs"*) [[ -n ${FAKE_CHECKS_FAIL:-} ]] && reply '{"message":"boom"}' 500; reply '{"total_count":1,"check_runs":[{"name":"docs","status":"completed","conclusion":"success"}]}' ;;
   "GET "*"/status") reply '{}' ;;
   "PUT "*"/pulls/7/merge") reply '{"sha":"deadbeefdeadbeef"}' ;;

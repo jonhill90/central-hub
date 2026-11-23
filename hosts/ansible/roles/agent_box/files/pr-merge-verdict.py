@@ -26,16 +26,32 @@ MAX_RECORDS = 20
 # Paths that still need the reviewer's pass for the exact head: the kinds the owner keeps (firewall, tailnet, secrets,
 # access rights, the agents' own rules), the workflows, the Mac's command wrappers and the Proxmox host job (root on the
 # host, run on the agents' pass). Any other green PR merges on its checks alone (the owner's order of 2026-11-23,
-# 00:52 UTC). The agent box role is not listed: box-apply still installs
+# 00:50:45 UTC; the list is an agent pick, D-0065). The agent box role is not listed: box-apply still installs
 # a change to its limits only on the reviewer's digest pass (D-0044), so a merge-time pass on it was the same check twice.
 GUARDED_ANY = (".github/", "AGENTS.md", "CLAUDE.md", "SECURITY.md")
-GUARDED_CENTRAL = ("hosts/wrappers/", "hosts/ansible/playbooks/proxmox-proxy.yml", "hosts/ansible/roles/proxmox_proxy/")
-GUARDED_WORDS = ("opnsense", "tailnet", "tailscale", "firewall", "sops", "secret", "sudoers", "openbao")
+GUARDED_CENTRAL = ("hosts/wrappers/", "hosts/ansible/playbooks/proxmox-proxy.yml", "hosts/ansible/roles/proxmox_proxy/",
+                   "hosts/ansible/roles/k8s_identity/")
+GUARDED_WORDS = ("opnsense", "tailnet", "tailscale", "firewall", "sops", "secret", "sudoers", "openbao", "realm")
+# An added or removed line that handles a secret or a password guards its file whatever the file's name.
+GUARDED_LINE = re.compile(r"ExternalSecret|secretKeyRef|kind:\s*Secret\b|password", re.I)
+
+
+def guarded_file(full, f):
+    """A changed file from GitHub's PR files list: guarded by its path, or by a changed line that touches a secret.
+    A file GitHub sends no patch for (too large, or binary) counts as guarded when it has changes."""
+    if guarded(full, f["filename"]):
+        return True
+    patch = f.get("patch")
+    if patch is None:
+        return f.get("changes", 1) != 0
+    return any(l[:1] in "+-" and not l.startswith(("+++", "---")) and GUARDED_LINE.search(l) for l in patch.splitlines())
 
 
 def guarded(full, name):
     if name.startswith(GUARDED_ANY) or name.rsplit("/", 1)[-1] in GUARDED_ANY:
         return True
+    if full == "jonhill90/central-hub-app":
+        return name.startswith("docs/evidence/")   # its screenshot allow-list and images
     if full != "jonhill90/central-hub":
         return False
     low = name.lower()
@@ -201,7 +217,10 @@ def main():
     # The ledger: the reviewer's pass for this exact head, needed only when a guarded path changed or a record's status
     # changes (decided below, after the record checks).
     roles, lines, err = read_ledger(os.path.join(d, "ledger.jsonl"), full, head, pr_no)
-    hit = [n for n in names if guarded(full, n)]
+    hit = [f["filename"] for f in files if guarded_file(full, f)]
+    # Only a PR whose head branch is in this repository may merge without a pass: a fork's PR is someone else's code.
+    if ((pr.get("head") or {}).get("repo") or {}).get("full_name") != full:
+        hit.append("(head branch is not in %s)" % full)
 
     central = full == "jonhill90/central-hub"
     # The Proxmox host job runs this playbook and role as root on the host on the agents' pass (pick 241).
