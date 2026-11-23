@@ -23,7 +23,7 @@ The app (`jonhill90/central-hub-app`) signs visitors in with the authorization c
 | The realm's address and the app's public origins | `central-hub-app/central-hub-app-oidc`, keys `issuer` and `public-urls`, made by the same role from the zone |
 | Which accounts may open it | `HUB_OIDC_ALLOWED_GROUPS` in the chart: `lab-admins` and `lab-viewers` |
 
-Sign-in ships off; see "Turn it on" below. The pod mounts the two Secrets as one folder (optional, so the pod starts before they exist) and reads the files on each request. Until they exist the app is up but answers 503 on everything except `/api/v1/health`, which says `signIn: not configured`. The rebuild waits for every app to be healthy before it makes the Secrets, so the probe must stay green; that is why.
+Sign-in is on in the chart (`auth.mode: oidc`, `auth.secretsConfirmed: true`) since the clients apply of 2026-11-23; "Turn it on" below is the order to follow on a cluster where the client or the Secrets are not there yet, and the way back is `auth.mode: "off"`. The pod mounts the two Secrets as one folder (optional, so the pod starts before they exist) and reads the files on each request. Until they exist the app is up but answers 503 on everything except `/api/v1/health`, which says `signIn: not configured`. The rebuild waits for every app to be healthy before it makes the Secrets, so the probe must stay green; that is why.
 
 ## Before you start
 
