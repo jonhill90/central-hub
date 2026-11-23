@@ -22,11 +22,11 @@ reply() { printf '%s\n%s' "$1" "${2:-200}"; exit 0; }
 case "$method $last" in
   *"/installation") reply '{"id":1}' ;;
   "POST "*access_tokens) reply '{"token":"T"}' 201 ;;
-  "GET https://api.github.com/repos/jonhill90/central-hub/pulls?state=open"*) reply "[{\"number\":7,\"head\":{\"sha\":\"$FAKE_HEAD\"}}]" ;;
+  "GET https://api.github.com/repos/jonhill90/central-hub/pulls?state=open"*) reply "[{\"number\":7,\"draft\":${FAKE_DRAFT:-false},\"head\":{\"sha\":\"$FAKE_HEAD\"}}]" ;;
   "GET "*"/pulls?state=open"*) reply '[]' ;;
   "GET "*"/pulls/7") reply "{\"state\":\"open\",\"draft\":false,\"base\":{\"ref\":\"main\",\"sha\":\"c\"},\"head\":{\"sha\":\"$FAKE_HEAD\",\"repo\":{\"full_name\":\"jonhill90/central-hub\"}},\"mergeable\":true,\"mergeable_state\":\"clean\",\"body\":\"Author-Lane: OpenBao thread\"}" ;;
   "GET "*"/pulls/7/files"*) if [[ -n ${FAKE_FILES_N:-} ]]; then pg=${last##*page=}; python3 -I -c 'import json,sys; n,p=int(sys.argv[1]),int(sys.argv[2]); print(json.dumps([{"filename":"docs/f%d.md"%i} for i in range((p-1)*100,min(n,p*100))]))' "$FAKE_FILES_N" "$pg"; echo 200; exit 0; fi; reply "[{\"filename\":\"${FAKE_FILE:-docs/runbooks/x.md}\",\"patch\":\"@@ -1 +1 @@\\n+a line\"}]" ;;
-  "GET "*"/check-runs"*) [[ -n ${FAKE_CHECKS_FAIL:-} ]] && reply '{"message":"boom"}' 500; reply '{"total_count":1,"check_runs":[{"name":"docs","status":"completed","conclusion":"success"}]}' ;;
+  "GET "*"/check-runs"*) [[ -n ${FAKE_CHECKS_FAIL:-} ]] && reply '{"message":"boom"}' 500; [[ -n ${FAKE_PENDING:-} ]] && reply '{"total_count":2,"check_runs":[{"name":"docs","status":"completed","conclusion":"success"},{"name":"hosts","status":"in_progress","conclusion":null}]}'; reply '{"total_count":1,"check_runs":[{"name":"docs","status":"completed","conclusion":"success"}]}' ;;
   "GET "*"/status") reply '{}' ;;
   "PUT "*"/pulls/7/merge") reply '{"sha":"deadbeefdeadbeef"}' ;;
   "POST "*"/issues/7/comments") reply '{}' 201 ;;
@@ -78,4 +78,12 @@ check "mutation: one page of 100 reads 100 files and the 3000-file PR passes the
 out=$(run "$t/pr-merge.sh" lane jonhill90/central-hub 7); check "lane reads a label with a space, like OpenBao thread" "$out" "OpenBao thread"
 out=$(run "$t/pr-merge.sh" merge jonhill90/elsewhere 7 "$H"); check "another repository exits 2" "$out" "rc=2"
 out=$(run "$t/pr-merge.sh" sweep extra); check "sweep takes no arguments" "$out" "rc=2"
+# A 2-minute sweep stays inside GitHub's hourly limit: a draft costs no reads, and a head with a check still running costs one.
+rm -rf "$t/work/passes"; out=$(FAKE_DRAFT=true run "$t/pr-merge.sh" sweep); no_ "a draft: nothing merged" merged
+no_ "a draft: its head is not read" "grep -q 'pulls/7\|check-runs' $t/calls"
+rm -rf "$t/work/passes"; out=$(FAKE_PENDING=1 run "$t/pr-merge.sh" sweep); check "a check still running: waiting on checks" "$out" "waiting on checks"
+no_ "a check still running: nothing merged" merged; no_ "a check still running: the verdict's reads are not made" "grep -q 'pulls/7' $t/calls"
+# the mutation: without the precheck the verdict still refuses, but only after its full set of reads
+sed 's|any(r.get("status") != "completed" for r in runs)|False|' "$t/pr-merge.sh" > "$t/mut.sh"; out=$(FAKE_PENDING=1 run "$t/mut.sh" sweep)
+yes_ "mutation: without the precheck the PR's own reads are made" "grep -q 'pulls/7' $t/calls"; no_ "mutation: still nothing merged" merged
 exit $fail
