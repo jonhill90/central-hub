@@ -4,8 +4,9 @@
 # was restored from a backup; the bootstrap admin Secrets are newer). It prints three things and no value:
 #   1. each bootstrap admin Secret's name and creationTimestamp (kubectl custom-columns over .metadata only: the Secret's data is never asked for);
 #   2. the ExternalSecret that makes sso-bootstrap-admin: its name, creation time and Ready condition (no values);
-#   3. the master realm's users in Keycloak's database: username and creation time, from one fixed SELECT run in a read-only
-#      transaction (default_transaction_read_only=on); no credential, hash or attribute is selected.
+#   3. the master realm's users (username, enabled, creation time), the realm's bruteForceProtected setting and each user's failed-login
+#      counter (count, last failure: a temporary lock shows here), from one fixed SELECT run in a read-only transaction
+#      (default_transaction_read_only=on); no credential, hash or attribute is selected.
 # It changes nothing, in the cluster or on the node. No extra variable can change what it asks for.
 #   ansible-playbook -i <the box's prod inventory> playbooks/k8s-identity-admin-check.yml
 - name: When each Keycloak admin credential was made, read only
@@ -16,27 +17,40 @@
     admin_check_ns: identity
     admin_check_name: sso
     admin_check_kc: [kubectl, --kubeconfig, /etc/kubernetes/admin.conf, -n, identity]
+    # One SELECT per line of output: users with enabled flag and creation time; the realm's brute-force setting; failure counters.
     admin_check_sql: >-
-      SELECT u.username || ' created ' || to_char(to_timestamp(u.created_timestamp / 1000.0) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
-      FROM user_entity u JOIN realm r ON r.id = u.realm_id WHERE r.name = 'master' ORDER BY u.username;
+      SELECT 'user ' || u.username || ' enabled=' || u.enabled || ' created '
+      || to_char(to_timestamp(u.created_timestamp / 1000.0) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+      FROM user_entity u JOIN realm r ON r.id = u.realm_id WHERE r.name = 'master'
+      UNION ALL
+      SELECT 'realm master bruteForceProtected=' || r.brute_force_protected FROM realm r WHERE r.name = 'master'
+      UNION ALL
+      SELECT 'login failures ' || u.username || ' count=' || f.num_failures || ' last '
+      || to_char(to_timestamp(f.last_failure / 1000.0) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+      FROM user_login_failure f JOIN user_entity u ON u.id = f.user_id JOIN realm r ON r.id = f.realm_id
+      WHERE r.name = 'master' ORDER BY 1;
+    admin_check_psql: >-
+      PGOPTIONS="-c default_transaction_read_only=on" psql -U "$POSTGRES_USER" -d keycloak -v ON_ERROR_STOP=1 -tA -f -
   tasks:
     - name: Bootstrap admin Secrets, names and creation times only
       ansible.builtin.command:
-        argv: "{{ admin_check_kc + ['get', 'secret', 'sso-initial-admin', 'sso-bootstrap-admin', '--ignore-not-found', '--no-headers', '-o', 'custom-columns=NAME:.metadata.name,CREATED:.metadata.creationTimestamp'] }}"
+        argv: "{{ admin_check_kc + ['get', 'secret', 'sso-initial-admin', 'sso-bootstrap-admin', '--ignore-not-found',
+          '--no-headers', '-o', 'custom-columns=NAME:.metadata.name,CREATED:.metadata.creationTimestamp'] }}"
       register: admin_check_secrets
       changed_when: false
       check_mode: false
 
     - name: The ExternalSecret that makes sso-bootstrap-admin, no values
       ansible.builtin.command:
-        argv: "{{ admin_check_kc + ['get', 'externalsecret', 'sso-bootstrap-admin', '--ignore-not-found', '--no-headers', '-o', 'custom-columns=NAME:.metadata.name,CREATED:.metadata.creationTimestamp,READY:.status.conditions[0].status'] }}"
+        argv: "{{ admin_check_kc + ['get', 'externalsecret', 'sso-bootstrap-admin', '--ignore-not-found', '--no-headers', '-o',
+          'custom-columns=NAME:.metadata.name,CREATED:.metadata.creationTimestamp,READY:.status.conditions[0].status'] }}"
       register: admin_check_es
       changed_when: false
       check_mode: false
 
     - name: Master realm users and creation times, one fixed SELECT in a read-only transaction
       ansible.builtin.command:
-        argv: "{{ admin_check_kc + ['exec', '-i', admin_check_name ~ '-postgres-0', '--', 'sh', '-c', 'PGOPTIONS=\"-c default_transaction_read_only=on\" psql -U \"$POSTGRES_USER\" -d keycloak -v ON_ERROR_STOP=1 -tA -f -'] }}"
+        argv: "{{ admin_check_kc + ['exec', '-i', admin_check_name ~ '-postgres-0', '--', 'sh', '-c', admin_check_psql] }}"
         stdin: "{{ admin_check_sql }}"
       register: admin_check_users
       changed_when: false
@@ -47,4 +61,4 @@
         msg:
           - "identity-admin-check: Secrets (name, created): {{ admin_check_secrets.stdout_lines }}"
           - "identity-admin-check: ExternalSecret (name, created, ready): {{ admin_check_es.stdout_lines }}"
-          - "identity-admin-check: master realm users: {{ admin_check_users.stdout_lines }}"
+          - "identity-admin-check: master realm (users, brute-force setting, failure counters): {{ admin_check_users.stdout_lines }}"
