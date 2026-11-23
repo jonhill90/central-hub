@@ -1,3 +1,4 @@
+{{- if .Values.route.enabled }}
 # Same shape as apps/jellyfin/templates/route.yaml: TLS ends at the shared Gateway's https listener; plain http for
 # the same name gets a 301 to https. With gateway.https off, the route serves on the http listeners.
 {{- $v := .Values }}
@@ -58,4 +59,5 @@ spec:
           requestRedirect:
             scheme: https
             statusCode: 301
+{{- end }}
 {{- end }}

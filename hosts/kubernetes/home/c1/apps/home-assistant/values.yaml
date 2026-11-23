@@ -27,9 +27,30 @@ gateway:
   shortNames: true
   https: true
 
-# What Home Assistant trusts as a reverse proxy: the Gateway's Envoy reaches the pod from a pod address, so the
-# private ranges. Anything else sending X-Forwarded-For is refused with a 400 (Home Assistant docs, "http").
-trustedProxies: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+# What Home Assistant trusts as a reverse proxy: the Gateway's Envoy reaches the pod from a pod address, so c1's pod
+# network (k8s_control_plane_pod_cidr, STD-0002 cluster 1). Anything else sending X-Forwarded-For is refused with a 400.
+trustedProxies: [10.240.0.0/16]
+
+# The route (and with it the name in DNS) is OFF on a new install. A fresh Home Assistant makes whoever reaches its
+# first-run screen first the owner, so the setup Job below closes that screen from inside the cluster first. Turn the
+# route on, in its own pull request, only after the newest setup Job's log says PASS (runbook, "Open the route").
+route:
+  enabled: false
+
+# Where the owner's password comes from: `openbao` reads c1/homeassistant-owner (key password) through store openbao,
+# else External Secrets makes it once in the cluster. The root chart sets it from appSecretsStore.
+adminSecret:
+  store: c1
+
+# First-run setup (templates/setup-*.yaml, files/setup.sh).
+setup:
+  enabled: true
+  schedule: "*/5 * * * *"
+  ownerName: Owner
+  ownerUser: owner
+  language: en
+  # Same curl image as sso.initImage.
+  image: docker.io/curlimages/curl:8.22.0@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777
 
 # Sign-in through the lab's Keycloak (hass-oidc-auth, MIT). Home Assistant has no OIDC of its own, so the custom
 # component is copied into /config/custom_components from a pinned, checksummed archive before Home Assistant starts
