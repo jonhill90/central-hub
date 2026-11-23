@@ -1,7 +1,7 @@
 ---
 id: D-0065
 title: Merge plain PRs on green checks, review only guarded changes, and ship a change without a rebuild
-status: proposed
+status: accepted
 date: 2026-11-23
 decision-makers: [owner]
 proposed-by: drafting-agent
@@ -9,6 +9,11 @@ consulted: []
 waits-on: [D-0031, D-0035, D-0042, D-0044, D-0056, D-0061]
 supersedes: []
 superseded-by:
+accepted-evidence:
+  approved-by: agents
+  approved-commit: c1772fd8402687a32d3ddf3a528cefdbc0845bf5
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNXhRg7JZG4oHckL4Cywu4HF
+  approval-names: "the reviewer's pass of central-hub #926 at head c1772fd8402687a32d3ddf3a528cefdbc0845bf5, as recorded by the orchestrator; the record is D-0065 as proposed in #926, apart from these acceptance fields"
 revisit-when: a merged plain PR breaks prod; the agents get GitHub identities of their own and GitHub can require their reviews; or the owner asks for review on every PR again
 ---
 
