@@ -581,6 +581,7 @@ print(n if n.replace("-", "").isalnum() and n == n.lower() else "sso", end="")')
       "monitoring kube-prometheus-stack-grafana admin-user c1/grafana-admin username"
       "monitoring kube-prometheus-stack-grafana admin-password c1/grafana-admin password"
       "argocd argocd-initial-admin-secret password c1/argocd-admin password latest"
+      "home homeassistant-owner password c1/homeassistant-owner password"
     )
     failed=0
     for row in "${table[@]}"; do
