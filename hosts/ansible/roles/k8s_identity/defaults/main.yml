@@ -118,6 +118,10 @@ k8s_identity_jellyfin_provider: keycloak
 # setup Job skips the sign-in step.
 k8s_identity_jellyfin_root_ca_file: ""
 
+# Home Assistant's client (hosts/kubernetes/home/c1/apps/home-assistant), for the hass-oidc-auth component. A public
+# client with PKCE, so no secret and no Secret copy. The first label of its hostnames, which is also the gateway route name.
+k8s_identity_homeassistant_name: homeassistant
+
 # Proxmox VE's web UI (role proxmox_sso): its DNS names, the same as proxmox_cert_names. Private, from the
 # inventory. The client allows https://<name> for each, because the UI sends its own origin as the redirect
 # (pve-manager www/manager6/window/LoginWindow.js). Empty: realm lab has no proxmox client. Its secret,
