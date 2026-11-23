@@ -31,6 +31,9 @@ k8s_identity_argocd_hosts: >-
 k8s_identity_jellyfin_hosts: >-
   {{ ([k8s_identity_jellyfin_name ~ '.' ~ k8s_identity_zone] if k8s_identity_short_names | bool else [])
   + [k8s_identity_jellyfin_name ~ '.apps.c1.prod.' ~ k8s_identity_zone] }}
+k8s_identity_homeassistant_hosts: >-
+  {{ ([k8s_identity_homeassistant_name ~ '.' ~ k8s_identity_zone] if k8s_identity_short_names | bool else [])
+  + [k8s_identity_homeassistant_name ~ '.apps.c1.prod.' ~ k8s_identity_zone] }}
 k8s_identity_central_hub_app_hosts: >-
   {{ ([k8s_identity_central_hub_app_host_label ~ '.' ~ k8s_identity_zone] if k8s_identity_short_names | bool else [])
   + [k8s_identity_central_hub_app_host_label ~ '.apps.c1.prod.' ~ k8s_identity_zone] }}

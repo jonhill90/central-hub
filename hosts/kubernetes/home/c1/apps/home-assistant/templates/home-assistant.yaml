@@ -1,0 +1,129 @@
+{{- $v := .Values }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Release.Namespace }}
+  annotations:
+    # Deleting the namespace would delete the claim in it.
+    argocd.argoproj.io/sync-options: Delete=false
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $v.name }}-config
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    # Never delete the data, even if the Application or this chart goes away.
+    argocd.argoproj.io/sync-options: Delete=false
+    helm.sh/resource-policy: keep
+spec:
+  {{- with $v.storage.className }}
+  storageClassName: {{ . }}
+  {{- end }}
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: {{ $v.storage.configSize }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $v.name }}
+  namespace: {{ .Release.Namespace }}
+  labels: {app.kubernetes.io/name: home-assistant}
+spec:
+  replicas: 1
+  # A ReadWriteOnce volume on one node can't be held by two pods while a rolling update runs.
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app.kubernetes.io/name: home-assistant}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: home-assistant}
+      annotations:
+        # A changed configuration.yaml restarts the pod.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum | trunc 16 }}
+    spec:
+      # Container install: no service links, and no host network. Discovery by multicast (mDNS, SSDP) does not cross
+      # VLANs anyway; devices are added by address in the UI (spec note in the notebook, research on Home Assistant).
+      enableServiceLinks: false
+      initContainers:
+        - name: install-sso
+          image: {{ $v.sso.initImage }}
+          command: [/bin/sh, -c]
+          args:
+            - |
+{{ .Files.Get "files/install-sso.sh" | indent 14 }}
+          env:
+            - {name: PLUGIN_VERSION, value: {{ $v.sso.plugin.version | quote }}}
+            - {name: PLUGIN_URL, value: {{ $v.sso.plugin.url | quote }}}
+            - {name: PLUGIN_SHA256, value: {{ $v.sso.plugin.sha256 | quote }}}
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {memory: 128Mi}
+          securityContext:
+            runAsUser: 0
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+              add: [CHOWN, DAC_OVERRIDE, FOWNER]
+          volumeMounts:
+            - {name: config, mountPath: /config}
+            - {name: chart, mountPath: /chart, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      containers:
+        - name: home-assistant
+          image: {{ $v.image }}
+          ports:
+            - {name: http, containerPort: {{ $v.port }}}
+          startupProbe:
+            httpGet: {path: {{ $v.healthPath }}, port: http}
+            periodSeconds: 10
+            failureThreshold: 60
+          readinessProbe:
+            httpGet: {path: {{ $v.healthPath }}, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: {{ $v.healthPath }}, port: http}
+            periodSeconds: 30
+            timeoutSeconds: 10
+          resources:
+            requests: {cpu: {{ $v.resources.requests.cpu }}, memory: {{ $v.resources.requests.memory }}}
+            limits: {memory: {{ $v.resources.limits.memory }}}
+          # s6-overlay's /init runs as root, then drops to the service users.
+          securityContext:
+            allowPrivilegeEscalation: false
+            seccompProfile: {type: RuntimeDefault}
+            capabilities:
+              drop: [ALL]
+              add: [CHOWN, DAC_OVERRIDE, FOWNER, SETUID, SETGID, KILL]
+          volumeMounts:
+            - {name: config, mountPath: /config}
+            {{- if and $v.sso.enabled $v.sso.labRoot.certificate }}
+            - {name: lab-root-ca, mountPath: /lab-ca, readOnly: true}
+            {{- end }}
+      volumes:
+        - name: config
+          persistentVolumeClaim: {claimName: {{ $v.name }}-config}
+        - name: chart
+          configMap: {name: {{ $v.name }}-config}
+        - name: tmp
+          emptyDir: {sizeLimit: 64Mi}
+        {{- if and $v.sso.enabled $v.sso.labRoot.certificate }}
+        - name: lab-root-ca
+          secret:
+            secretName: {{ $v.sso.labRoot.secretName }}
+            items: [{key: {{ $v.sso.labRoot.key }}, path: lab-root-ca.pem}]
+            optional: true
+        {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $v.name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector: {app.kubernetes.io/name: home-assistant}
+  ports:
+    - {name: http, port: {{ $v.port }}, targetPort: http}

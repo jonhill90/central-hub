@@ -45,6 +45,7 @@ argument_specs:
         type: str
         default: central-hub-app
         description: "The Central Hub app's namespace; gets Secrets central-hub-app-sso and central-hub-app-oidc."
+      k8s_identity_homeassistant_name: {type: str, default: homeassistant, description: "Home Assistant's client id and the first label of its hostnames (homeassistant.<zone>, homeassistant.apps.c1.prod.<zone>); a public client with PKCE, so it has no secret."}
       k8s_identity_argocd_name: {type: str, default: argocd, description: "First label of Argo CD's hostname (k8s_gitops_ui_name)."}
       k8s_identity_argocd_namespace: {type: str, default: argocd, description: "Argo CD's namespace; gets Secret argocd-sso."}
       k8s_identity_jellyfin_name: {type: str, default: jellyfin, description: "First label of Jellyfin's hostname (k8s_jellyfin_name)."}
