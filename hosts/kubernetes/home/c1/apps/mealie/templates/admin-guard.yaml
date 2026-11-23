@@ -1,0 +1,83 @@
+{{- /*
+No known default password is ever reachable. Argo CD sync waves: the Deployment and Service are wave 0, this Job is wave 1
+(a Sync hook, so it runs inside the sync and the next wave waits for it to finish), and the routes are wave 2. A first sync
+therefore opens the route only after the first account's published password is replaced and refused; a failed Job fails the
+sync and the route is never made. The hook runs again on every sync (BeforeHookCreation). The CronJob runs the same script
+every 10 minutes, for the case the pod's volume is ever replaced by an empty one (a new first account with the published
+password) while the route stands. The script is files/admin-guard.sh and prints no password.
+*/ -}}
+{{- $g := .Values.adminGuard }}
+{{- define "mealie.guardPod" }}
+restartPolicy: Never
+automountServiceAccountToken: false
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 100
+  runAsGroup: 101
+  seccompProfile: {type: RuntimeDefault}
+containers:
+  - name: admin-guard
+    image: {{ .Values.adminGuard.image }}
+    command: [/bin/sh, -c]
+    args:
+      - |
+{{ .Files.Get "files/admin-guard.sh" | indent 8 }}
+    env:
+      - {name: BASE, value: "http://{{ .Values.name }}.{{ .Release.Namespace }}.svc:{{ .Values.port }}"}
+      - {name: DEFAULT_EMAIL, value: {{ .Values.adminGuard.publishedEmail | quote }}}
+      - {name: DEFAULT_PASSWORD, value: {{ .Values.adminGuard.publishedPassword | quote }}}
+    resources:
+      requests: {cpu: 10m, memory: 32Mi}
+      limits: {memory: 128Mi}
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities: {drop: [ALL]}
+    volumeMounts:
+      - {name: admin, mountPath: /admin, readOnly: true}
+      - {name: tmp, mountPath: /tmp}
+volumes:
+  - name: admin
+    secret: {secretName: {{ .Values.name }}-admin}
+  - name: tmp
+    emptyDir: {sizeLimit: 1Mi}
+{{- end }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Values.name }}-admin-guard
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 900
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: mealie-admin-guard}
+    spec:
+{{ include "mealie.guardPod" . | indent 6 }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ .Values.name }}-admin-guard
+  namespace: {{ .Release.Namespace }}
+spec:
+  schedule: {{ $g.schedule | quote }}
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 900
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels: {app.kubernetes.io/name: mealie-admin-guard}
+        spec:
+{{ include "mealie.guardPod" . | indent 10 }}

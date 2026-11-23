@@ -21,6 +21,8 @@
 #  18. identity-admin-check runs its read-only playbook with no tags, no extra variables and no values file; apply is refused with no
 #      run; the playbook asks for no Secret data (custom-columns over metadata only), has no write verb, and runs its one SELECT in a
 #      read-only transaction.
+#  19. identity-admin-recover runs its playbook with no tags, no extra variables and no values file, for check and for apply (with a
+#      clearance id); apply without one is refused.
 #   5. log prints the run's own lines.
 #   9. users runs the identity playbook with tags secrets,users, the values file, no realm replace and one fixed user; apply is its
 #      own verb; it never runs the keycloak tag.
@@ -50,7 +52,7 @@ cat > "$t/bin/git" <<'S'
 #!/bin/bash
 case "$*" in
   *"remote get-url"*) echo https://example.invalid/central-hub.git ;;
-  clone*) mkdir -p "${@: -1}/.git" "${@: -1}/hosts/ansible/playbooks"; for pb in identity-admin-check identity gateway gitops observability certs backup-status backup-restore-test backup restore-inspect node-ports; do : > "${@: -1}/hosts/ansible/playbooks/k8s-$pb.yml"; done ;;
+  clone*) mkdir -p "${@: -1}/.git" "${@: -1}/hosts/ansible/playbooks"; for pb in identity-admin-check identity-admin-recover identity gateway gitops observability certs backup-status backup-restore-test backup restore-inspect node-ports; do : > "${@: -1}/hosts/ansible/playbooks/k8s-$pb.yml"; done ;;
   *rev-parse*) echo abc1234 ;;
 esac
 exit 0
@@ -93,11 +95,11 @@ if [[ $r1 == "2:none 2:none 2:none 2:none 2:none 2:none 2:none 2:none " ]]; then
 
 run list; l=$out
 run check identity
-if [[ $l == $'backup-check\nbackup-restore-test\nbackup-status\ncerts\nclients\ngateway\ngitops\nidentity\nidentity-admin-check\nidentity-values\nnode-ports\nobservability\nrestore-inspect\nusers' && $rc -ne 0 && $out == *"identity.env is missing"* && -z $calls ]]; then ok "2. list; a missing values file stops the run"; else bad "2. $l $rc $out"; fi
+if [[ $l == $'backup-check\nbackup-restore-test\nbackup-status\ncerts\nclients\ngateway\ngitops\nidentity\nidentity-admin-check\nidentity-admin-recover\nidentity-values\nnode-ports\nobservability\nrestore-inspect\nusers' && $rc -ne 0 && $out == *"identity.env is missing"* && -z $calls ]]; then ok "2. list; a missing values file stops the run"; else bad "2. $l $rc $out"; fi
 
 echo "X=1" > "$t/keys/prod/identity.env"
 ens='{"k8s_identity_ensure_clients":["proxmox"]}'
-ens_c='{"k8s_identity_ensure_clients":["proxmox","openbao","opnsense","central-hub-app","homeassistant"]}'   # the clients name also makes the store's, the firewall's, the Central Hub app's and Home Assistant's sign-in clients
+ens_c='{"k8s_identity_ensure_clients":["proxmox","openbao","opnsense","central-hub-app","homeassistant","mealie"]}'   # the clients name also makes the store's, the firewall's, the Central Hub app's, Home Assistant's and Mealie's sign-in clients
 run check identity
 seen=$(cat "$t/seen-inventory.yml" 2>/dev/null)
 if [[ $rc -eq 0 && $calls == *"playbooks/k8s-identity.yml -e k8s_identity_values_file=$t/keys/prod/identity.env -e k8s_identity_realm_replace=false k8s_identity_secrets_store=openbao --tags all,clients -e $ens --check --diff" &&
@@ -212,6 +214,13 @@ if [[ $ia1rc -eq 0 && $ia1 == *"playbooks/k8s-identity-admin-check.yml --check -
       $(grep -c "PGOPTIONS=.*default_transaction_read_only=on" $pbf) -eq 1 && $(grep -c -i -E "password|credential|secret_data|salt|hash" <(sed -n '/admin_check_sql:/,/admin_check_psql:/p' $pbf)) -eq 0 ]]; then
   ok "18. identity-admin-check: read-only playbook, check only, metadata-only reads, one SELECT in a read-only transaction; apply refused"
 else bad "18. $ia1rc [$ia1] $ia2rc [$ia2]"; fi
+run check identity-admin-recover; ir1=$calls; ir1rc=$rc
+run apply identity-admin-recover; ir2rc=$rc ir2=$calls
+run apply identity-admin-recover "$clr"; ir3rc=$rc ir3=$calls
+if [[ $ir1rc -eq 0 && $ir1 == *"playbooks/k8s-identity-admin-recover.yml --check --diff" && $ir1 != *"--tags"* && $ir1 != *" -e "* &&
+      $ir2rc -eq 2 && -z $ir2 && $ir3rc -eq 0 && $ir3 == *"playbooks/k8s-identity-admin-recover.yml" && $ir3 != *"--check"* && $ir3 != *"--tags"* && $ir3 != *" -e "* ]]; then
+  ok "19. identity-admin-recover: own playbook, no tags or variables; apply needs a clearance id"
+else bad "19. $ir1rc [$ir1] $ir2rc [$ir2] $ir3rc [$ir3]"; fi
 run check observability; o1=$calls
 run apply observability "$clr"; o2=$calls; o2rc=$rc; o2o=$out
 if [[ $o1 == *"playbooks/k8s-observability.yml --tags metrics_server,metrics,logs,route,proof --check --diff" && $o1 != *" -e "* &&

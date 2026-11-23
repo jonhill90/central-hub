@@ -7,7 +7,20 @@ set -eu
 CID="$BASE/"
 steps=$(curl -fsS --max-time 20 "$BASE/api/onboarding") || { echo "FAIL: onboarding endpoint did not answer"; exit 1; }
 case $steps in
-  *'"step": "user", "done": true'* | *'"step":"user","done":true'*) echo "PASS: onboarding user step already done"; exit 0 ;;
+  *'"step": "user", "done": true'* | *'"step":"user","done":true'*)
+    # Done by someone: prove the owner password in the Secret is the one Home Assistant holds, so an owner made by anyone else shows as FAIL.
+    flow=$(printf '{"client_id":"%s","handler":["homeassistant",null],"redirect_uri":"%s"}' "$CID" "$CID" \
+      | curl -fsS --max-time 20 -X POST -H 'Content-Type: application/json' -d @- "$BASE/auth/login_flow") \
+      || { echo "FAIL: could not start a login check"; exit 1; }
+    fid=$(printf '%s' "$flow" | sed -n 's/.*"flow_id": *"\([^"]*\)".*/\1/p')
+    [ -n "$fid" ] || { echo "FAIL: no login flow id"; exit 1; }
+    res=$(printf '{"client_id":"%s","username":"%s","password":"%s"}' "$CID" "$OWNER_USER" "$OWNER_PASSWORD" \
+      | curl -sS --max-time 20 -X POST -H 'Content-Type: application/json' -d @- "$BASE/auth/login_flow/$fid") \
+      || { echo "FAIL: login check did not answer"; exit 1; }
+    case $res in
+      *'"type": "create_entry"'* | *'"type":"create_entry"'*) echo "PASS: onboarding user step already done, and the Secret's owner password is accepted"; exit 0 ;;
+    esac
+    echo "FAIL: onboarding is done but the Secret's owner password is refused; the owner was not made by this Job"; exit 1 ;;
 esac
 # The body goes in on stdin, never as an argument, so the password is not in any process's argument list.
 resp=$(printf '{"client_id":"%s","name":"%s","username":"%s","password":"%s","language":"%s"}' "$CID" "$OWNER_NAME" "$OWNER_USER" "$OWNER_PASSWORD" "$LANGUAGE" \

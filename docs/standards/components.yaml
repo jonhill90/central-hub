@@ -356,6 +356,16 @@ components:
     verdict: pass
     sources: [url:github.com/K0lin/jellyfin-plugin-sso/releases/download/]
     checked: 2026-11-18
+  - name: Mealie
+    kind: software
+    used-for: recipe manager on c1
+    licence: AGPL-3.0
+    licence-source: https://raw.githubusercontent.com/mealie-recipes/mealie/mealie-next/LICENSE
+    paid-edition: none found; the docs name GitHub Sponsors as the project's only funding
+    paid-edition-source: https://docs.mealie.io/
+    verdict: pass
+    sources: [image:ghcr.io/mealie-recipes/mealie]
+    checked: 2026-11-23
   - name: Home Assistant
     kind: software
     used-for: home automation on c1 (container install)

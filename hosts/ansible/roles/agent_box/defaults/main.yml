@@ -32,9 +32,9 @@ agent_box_wrappers:
     args: [plan, apply, destroy]
   # bump opens a PR moving the runner pin; `weekly` (configure, then bump) is the timer's only, so
   # sessions can't start it through sudo. c1-token writes the notebook runner pod's one-hour
-  # registration token to prod's store.
+  # registration token to prod's store; hub-feed writes the Central Hub app's notebook token and Proxmox snapshot there.
   - name: ci-runner
-    args: [plan, apply, configure, destroy, bump, c1-token]
+    args: [plan, apply, configure, destroy, bump, c1-token, hub-feed]
   # The owner's desktop VM (docs/runbooks/set-up-the-desktop.md). Not applied until the owner says so.
   - name: desktop
     args: [plan, apply, configure, destroy, configure-test, start, stop, status, rdp-check, diag]

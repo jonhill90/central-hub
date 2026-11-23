@@ -1,0 +1,12 @@
+# Managed by the agent_box role (central-hub hosts/ansible). The notebook token lasts an hour, so this runs every 30
+# minutes; a missed run (box off) runs at the next boot.
+[Unit]
+Description=Central Hub app feed, every 30 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=30min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
