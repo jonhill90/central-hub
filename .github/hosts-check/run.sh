@@ -255,8 +255,8 @@ check_manifests() {
     echo "central-hub-app: the feed must not render while sign-in is off" >&2; return 1
   fi
   local on="$work/rendered/app-central-hub-app-oidc.yaml"
-  grep -q 'name: notebook-sync' "$on" && grep -q 'name: central-hub-app-feed' "$on" && grep -q 'name: HUB_NOTEBOOK_DIR' "$on" ||
-    { echo "central-hub-app: the oidc render lacks the notebook sync, the feed ExternalSecret or HUB_NOTEBOOK_DIR" >&2; return 1; }
+  grep -q 'name: notebook-sync' "$on" && grep -q 'name: central-hub-app-feed-token$' "$on" && grep -q 'name: central-hub-app-feed-app$' "$on" && grep -q 'name: HUB_NOTEBOOK_DIR' "$on" ||
+    { echo "central-hub-app: the oidc render lacks the notebook sync, the two feed ExternalSecrets or HUB_NOTEBOOK_DIR" >&2; return 1; }
   if ! grep -q 'feed-app' "$on" || python3 - "$on" <<'PY'
 import sys, yaml
 d = [x for x in yaml.safe_load_all(open(sys.argv[1])) if x and x.get("kind") == "Deployment"][0]
