@@ -35,7 +35,7 @@ Every part has its own switch, all on by default: `k8s_gateway_short_names`, `k8
 
 1. Say go for steps 2 and 3, which change the firewall's DNS and the tailnet (D-0036 rule 8).
 2. Say go for the firewall pass that lets the agent box and the desktop VM open the Gateway on tcp 443 (the app access pass, [set-up-lab-network-and-firewall.md](set-up-lab-network-and-firewall.md), the paragraph "For the apps' names from dev"). It is not a step of this runbook: steps 1 to 7 and the in-cluster check below do not need it. Without it, the box's and the desktop's own checks of the names cannot pass.
-3. After step 7, sign in at `https://grafana.<zone>/` with "Lab sign-in".
+3. After step 7, sign in at `https://grafana.<zone>/` with "Hub sign-in".
 
 ## Where this stands on main
 
@@ -126,7 +126,7 @@ The old name's override is removed by the role's list `opnsense_lab_short_app_na
 
 7. Grafana: sync `kube-prometheus-stack` in Argo CD (or run `playbooks/k8s-observability.yml` when Ansible runs it).
    why: Grafana's `root_url` becomes `https://grafana.<zone>/` and its sign-in goes to `https://sso.<zone>/`.
-   expect: `https://grafana.<zone>/` opens, "Lab sign-in" goes to `sso.<zone>` and comes back signed in.
+   expect: `https://grafana.<zone>/` opens, "Hub sign-in" goes to `sso.<zone>` and comes back signed in.
 
 ## Prove it from the agent box
 

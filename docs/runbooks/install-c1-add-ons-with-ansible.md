@@ -69,8 +69,8 @@ Run from `hosts/ansible/`, each first with `--check --diff`.
    ansible-playbook -i inventories/home/ playbooks/k8s-observability.yml --tags metrics,proof
    ```
 
-   why: Grafana gets a "Lab sign-in" button; users with the realm role `admin` become Grafana Admins ([hosts/ansible/README.md, Sign-in on c1](../../hosts/ansible/README.md#sign-in-on-c1)).
-   expect: the owner signs in to Grafana with "Lab sign-in" and sets a new password when Keycloak asks.
+   why: Grafana gets a "Hub sign-in" button; users with the realm role `admin` become Grafana Admins ([hosts/ansible/README.md, Sign-in on c1](../../hosts/ansible/README.md#sign-in-on-c1)).
+   expect: the owner signs in to Grafana with "Hub sign-in" and sets a new password when Keycloak asks.
 
 5. Jellyfin.
 

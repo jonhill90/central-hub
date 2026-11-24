@@ -191,7 +191,7 @@ expect: each `dig` in that step answers with the right address.
 Install the add-ons and apps with Ansible: External Secrets, metrics and logs with Grafana, Keycloak with realm `lab`, Grafana's sign-in through it, and Jellyfin.
 why: this is how they are installed today, and Keycloak sits in the middle because Grafana's sign-in needs both; Argo CD takes the add-ons and apps over in step 15.
 runbook: [Install c1's add-ons and apps with Ansible](install-c1-add-ons-with-ansible.md), then [Seed namespace secret-source](seed-secret-source.md) only if its file has lines (nothing reads store `c1` today). Its Keycloak step becomes `set-up-lab-sign-in.md` (PR #69) once that merges; on `main` today the procedure is [hosts/ansible/README.md, Sign-in on c1](../../hosts/ansible/README.md#sign-in-on-c1).
-expect: Grafana's "Lab sign-in" button signs the owner in, and Jellyfin answers at its name.
+expect: Grafana's "Hub sign-in" button signs the owner in, and Jellyfin answers at its name.
 
 #### Step 13
 

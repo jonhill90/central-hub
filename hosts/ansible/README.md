@@ -122,7 +122,7 @@ The `argocd` CLI over this name needs `--grpc-web`: there is no GRPCRoute.
 |---|---|
 | `k8s_observability_zone` | The zone; the template sets it to `k8s_gateway_zone`. |
 | `k8s_observability_storage_class` | StorageClass of the three claims, default empty: the cluster's default. |
-| `k8s_observability_grafana_sso` | `true` after [Sign-in on c1](#sign-in-on-c1): Grafana gets a "Lab sign-in" button that signs in through realm `lab`. Users with the `admin` realm role become Grafana Admins, everyone else Viewer. |
+| `k8s_observability_grafana_sso` | `true` after [Sign-in on c1](#sign-in-on-c1): Grafana gets a "Hub sign-in" button that signs in through realm `lab`. Users with the `admin` realm role become Grafana Admins, everyone else Viewer. |
 
 ## Sign-in on c1
 

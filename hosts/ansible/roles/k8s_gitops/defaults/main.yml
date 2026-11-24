@@ -146,7 +146,7 @@ k8s_gitops_ui_proof_client: "{{ groups['k8s_workers'] | first }}"
 # argocd/argocd-sso from k8s_identity. Off (the default), a run removes the keys an earlier run set.
 # The built-in admin account stays, as the way in when Keycloak is down.
 k8s_gitops_sso: false
-k8s_gitops_sso_name: Lab sign-in
+k8s_gitops_sso_name: Hub sign-in
 k8s_gitops_sso_issuer: >-
   https://sso.{{ '' if k8s_gitops_ui_short_names | bool else 'apps.' ~ k8s_gitops_ui_cluster ~ '.' ~ k8s_gitops_ui_env ~ '.'
   }}{{ k8s_gitops_ui_zone | default('') }}/realms/lab

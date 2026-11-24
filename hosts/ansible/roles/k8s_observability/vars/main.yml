@@ -145,7 +145,7 @@ k8s_observability_kps_values:
 k8s_observability_grafana_sso_ini:
   auth.generic_oauth:
     enabled: true
-    name: Lab sign-in
+    name: Hub sign-in
     allow_sign_up: true
     client_id: "{{ k8s_observability_sso_client_id }}"
     scopes: openid profile email

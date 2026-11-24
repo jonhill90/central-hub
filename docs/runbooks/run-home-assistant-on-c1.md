@@ -4,7 +4,7 @@ status: draft
 kind: automated
 trigger: after a change to Home Assistant's chart (`hosts/kubernetes/home/c1/apps/home-assistant/`), its Keycloak client, or its image or sign-in component pin; and as part of every c1 rebuild
 runner: an agent lane; Argo CD does the app, the box's `c1-ansible` adds the client
-outcome: the first-run screen is closed by the setup Job before the route opens; then https://homeassistant.<zone>/ shows Home Assistant, its sign-in page offers "Lab sign-in" through realm lab, and a lab-admins account becomes an administrator
+outcome: the first-run screen is closed by the setup Job before the route opens; then https://homeassistant.<zone>/ shows Home Assistant, its sign-in page offers "Hub sign-in" through realm lab, and a lab-admins account becomes an administrator
 needs: Argo CD app `home-assistant` (namespace `home`), cert-manager ClusterIssuer `lab-ca`, realm lab with client `homeassistant`, the Gateway `apps`
 private-values: [k8s_gitops_source_zone]
 files: [hosts/kubernetes/home/c1/apps/home-assistant/, hosts/kubernetes/home/c1/root/values.yaml, hosts/ansible/roles/k8s_identity/templates/realm.yaml.j2, hosts/ansible/roles/agent_box/files/c1-ansible.sh]
@@ -47,12 +47,12 @@ Home Assistant's first-run screen has no password: the first visitor creates the
 5. Open the route, in its own pull request: set `route.enabled: true` in the chart values. Then `openbao-prod adopt` copies the owner's password (Secret `homeassistant-owner` in namespace `home`) into OpenBao key `c1/homeassistant-owner` and the SOPS copy, from its fixed table, once the box has installed the row ([set-up-the-secrets-store.md](set-up-the-secrets-store.md)). Until that is done a rebuild makes a new owner password, which only matters if Home Assistant's volume is restored from a backup that holds the old one.
    why: the route is the only thing that exposes the app, and the password must outlive a teardown.
 6. Prove it from the box, no password: `curl -s -o /dev/null -w '%{http_code}' https://homeassistant.apps.c1.prod.<zone>/manifest.json` is 200; `curl -s https://homeassistant.apps.c1.prod.<zone>/auth/oidc/welcome` shows the sign-in welcome page; its redirect goes to `https://sso.<zone>/realms/lab/protocol/openid-connect/auth?...client_id=homeassistant...code_challenge_method=S256`.
-7. A typed sign-in is the owner's: open the address, choose "Lab sign-in", sign in, and Home Assistant's first-run screen (or its dashboard) opens.
+7. A typed sign-in is the owner's: open the address, choose "Hub sign-in", sign in, and Home Assistant's first-run screen (or its dashboard) opens.
 
 ## If it fails
 
 - **Pod stuck at the init container:** `c1-read logs -n home deploy/homeassistant -c install-sso`; a `sha256sum` failure means the archive changed, so check the pin.
-- **Sign-in page has no "Lab sign-in":** the component did not load; `c1-read logs -n home deploy/homeassistant` and look for `auth_oidc`. A wrong discovery URL or a certificate error names itself there.
+- **Sign-in page has no "Hub sign-in":** the component did not load; `c1-read logs -n home deploy/homeassistant` and look for `auth_oidc`. A wrong discovery URL or a certificate error names itself there.
 - **Keycloak says "Invalid parameter: redirect_uri":** the client is not in the live realm yet; run step 2.
 - **400 on every request:** the proxy is not trusted. On 2026.8 and later the `http:` block in configuration.yaml is not applied (the settings live in the UI, and a change is dropped unless an admin confirms it within 5 minutes; official page: [HTTP integration](https://www.home-assistant.io/integrations/http/)), so the chart holds the image at 2026.7.4. On 2026.7.4 the other cause is the Gateway's source address being outside `trustedProxies`. The YAML block stops working in 2027.2, so the pin has to move before then.
 - **The route is on and the setup Job says FAIL:** set `route.enabled: false` at once and sync, then read the Job log.

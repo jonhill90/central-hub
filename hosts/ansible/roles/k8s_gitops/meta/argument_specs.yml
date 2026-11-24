@@ -131,7 +131,7 @@ argument_specs:
         type: bool
         default: false
         description: "Sign-in to Argo CD through Keycloak realm lab (tag sso). Needs the UI route and Secret argocd/argocd-sso."
-      k8s_gitops_sso_name: {type: str, default: Lab sign-in, description: Button text on Argo CD's sign-in page.}
+      k8s_gitops_sso_name: {type: str, default: Hub sign-in, description: Button text on Argo CD's sign-in page.}
       k8s_gitops_sso_issuer: {type: str, description: "Issuer URL. Default: realm lab on sso.<zone> (on sso.apps.<cluster>.<env>.<zone> without short names)."}
       k8s_gitops_sso_client_id: {type: str, default: argocd, description: Keycloak client for the web UI.}
       k8s_gitops_sso_cli_client_id: {type: str, default: argocd-cli, description: "Public Keycloak client for argocd login --sso."}
