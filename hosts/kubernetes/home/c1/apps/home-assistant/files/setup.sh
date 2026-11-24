@@ -20,7 +20,16 @@ finish() {
     | curl -fsS --max-time 30 -X POST -H "Authorization: Bearer $tok" -H 'Content-Type: application/json' -d @- \
       "$BASE/api/onboarding/integration" >/dev/null || echo "note: onboarding step integration did not complete"
 }
-steps=$(curl -fsS --max-time 20 "$BASE/api/onboarding") || { echo "FAIL: onboarding endpoint did not answer"; exit 1; }
+# Once every onboarding step is done, Home Assistant registers no onboarding views at its next start, so the status read
+# answers 404 (homeassistant/components/onboarding/__init__.py, async_setup). Treat 404 as all steps done and still run the
+# owner password check below; any other failure is a FAIL.
+out=$(curl -sS --max-time 20 -w '\n%{http_code}' "$BASE/api/onboarding") || { echo "FAIL: onboarding endpoint did not answer"; exit 1; }
+http=$(printf '%s' "$out" | sed -n '$p')
+case $http in
+  200) steps=$(printf '%s' "$out" | sed '$d') ;;
+  404) steps='[{"step":"user","done":true}]' ;;
+  *) echo "FAIL: onboarding endpoint answered HTTP $http"; exit 1 ;;
+esac
 case $steps in
   *'"step": "user", "done": true'* | *'"step":"user","done":true'*)
     # Done by someone: prove the owner password in the Secret is the one Home Assistant holds, so an owner made by anyone else shows as FAIL.
