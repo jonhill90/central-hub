@@ -366,6 +366,26 @@ components:
     verdict: pass
     sources: [image:ghcr.io/mealie-recipes/mealie]
     checked: 2026-11-23
+  - name: Headlamp
+    kind: software
+    used-for: read-only view of c1 in the browser
+    licence: Apache-2.0
+    licence-source: https://raw.githubusercontent.com/kubernetes-sigs/headlamp/main/LICENSE
+    paid-edition: none found; Headlamp is a Kubernetes SIG project with no commercial edition
+    paid-edition-source: https://headlamp.dev/
+    verdict: pass
+    sources: [image:ghcr.io/headlamp-k8s/headlamp]
+    checked: 2026-11-24
+  - name: oauth2-proxy
+    kind: software
+    used-for: sign-in in front of Headlamp, through Keycloak
+    licence: MIT
+    licence-source: https://raw.githubusercontent.com/oauth2-proxy/oauth2-proxy/master/LICENSE
+    paid-edition: none found; the project is community run
+    paid-edition-source: https://oauth2-proxy.github.io/oauth2-proxy/
+    verdict: pass
+    sources: [image:quay.io/oauth2-proxy/oauth2-proxy]
+    checked: 2026-11-24
   - name: Home Assistant
     kind: software
     used-for: home automation on c1 (container install)

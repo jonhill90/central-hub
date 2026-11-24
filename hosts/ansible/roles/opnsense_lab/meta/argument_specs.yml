@@ -189,7 +189,7 @@ argument_specs:
       opnsense_lab_short_app_names:
         type: list
         elements: str
-        default: [hub, homeassistant, mealie, openbao, vault]
+        default: [hub, homeassistant, mealie, headlamp, openbao, vault]
         description: App short aliases (<app>.<zone>); each gets an Unbound host override pointing at k8s_gateway_address.
       opnsense_lab_short_app_names_retired:
         type: list

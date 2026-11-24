@@ -46,6 +46,7 @@ opnsense_lab_short_app_names:
   - hub
   - homeassistant
   - mealie
+  - headlamp
   - openbao
   - vault
 

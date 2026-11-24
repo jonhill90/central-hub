@@ -101,6 +101,34 @@
     quiet: true
   when: not ansible_check_mode
 
+# The realm import never changes a live realm, so the sign-in's display name is set here from the rendered template's value.
+- name: clients | The display name the template gives the realm
+  ansible.builtin.slurp: {src: "{{ k8s_identity_clients_dir.path }}/realm.yaml"}
+  register: k8s_identity_clients_realm_manifest
+  delegate_to: localhost
+  become: false
+  check_mode: false
+
+- name: clients | Realm {{ k8s_identity_realm }} shows that display name
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - -n
+      - "{{ k8s_identity_namespace }}"
+      - exec
+      - "{{ k8s_identity_name }}-0"
+      - --
+      - bash
+      - -c
+      - "{{ lookup('ansible.builtin.file', 'ensure-realm-display-name.sh') }}"
+      - ensure-realm-display-name
+      - "{{ k8s_identity_realm }}"
+      - "{{ (k8s_identity_clients_realm_manifest.content | b64decode | from_yaml).spec.realm.displayName }}"
+  register: k8s_identity_realm_display_name
+  changed_when: "'updated' in k8s_identity_realm_display_name.stdout"
+  failed_when: k8s_identity_realm_display_name.rc != 0
+  when: not ansible_check_mode
+
 - name: clients | Remove the controller's temporary folder
   ansible.builtin.file: {path: "{{ k8s_identity_clients_dir.path }}", state: absent}
   delegate_to: localhost

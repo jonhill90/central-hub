@@ -3,10 +3,10 @@
 
 Run by the signin-check wrapper (as the keys user, through sudo) with Playwright's Python from the box's virtual environment. <config.json> is
 the wrapper's private file (mode 0600): base (Keycloak's https address), realm, user, password, seed (base32 TOTP seed), digits, period, verify,
-and each app's address: jellyfin_base, grafana_base, argocd_base, pve_base, hub_base, mealie_base, homeassistant_base, openbao_base, ntfy_base, opnsense_base. It makes nothing in
+and each app's address: jellyfin_base, grafana_base, argocd_base, pve_base, hub_base, mealie_base, homeassistant_base, headlamp_base, openbao_base, ntfy_base, opnsense_base. It makes nothing in
 any app: it only signs in as the test user and reads.
 
-Eleven apps (Mealie and Home Assistant added once they had Keycloak clients), each printed as "<n> <app>: <result>" and nothing more (no password, seed, code, state, token or page text):
+Twelve apps (Mealie, Home Assistant and Headlamp added once they had Keycloak clients), each printed as "<n> <app>: <result>" and nothing more (no password, seed, code, state, token or page text):
   passed                    the browser signed in through Keycloak and the app answered as that user (Jellyfin: a stored access token; Grafana
                             /api/user; Argo CD userinfo; Proxmox /access/permissions; Keycloak: the account console's own page).
   failed                    the app should sign in through Keycloak and did not, or its address did not load at all.
@@ -29,9 +29,9 @@ from urllib.parse import urlsplit
 
 from playwright.sync_api import sync_playwright
 
-SSO = ("hub", "jellyfin", "grafana", "argocd", "pve", "mealie", "homeassistant", "sso")
+SSO = ("hub", "jellyfin", "grafana", "argocd", "pve", "mealie", "homeassistant", "headlamp", "sso")
 NO_SSO = ("openbao", "ntfy", "opnsense")
-ORDER = ("hub", "jellyfin", "grafana", "argocd", "pve", "mealie", "homeassistant", "sso", "openbao", "ntfy", "opnsense")
+ORDER = ("hub", "jellyfin", "grafana", "argocd", "pve", "mealie", "homeassistant", "headlamp", "sso", "openbao", "ntfy", "opnsense")
 NO_SSO_NOTE = {"opnsense": "its own login page"}
 LAST_WINDOW = {"w": None}
 
@@ -211,6 +211,23 @@ def sign_in_app(app, page, cfg):
                 return "Home Assistant holds its own access token for the test user, who is %s there" % role
             time.sleep(1)
         raise RuntimeError("Home Assistant stored no access token after the sign-in")
+    if app == "headlamp":
+        # oauth2-proxy sends the browser straight to Keycloak (skip-provider-button). After the sign-in Headlamp answers for its one
+        # read-only service account: the namespaces list must come back (HTTP 200), and Secrets must be refused (HTTP 403).
+        page.goto(cfg["headlamp_base"] + "/", wait_until="networkidle", timeout=60000)
+        if "/openid-connect/" not in page.url:
+            page.locator('a:has-text("Sign in"), button:has-text("Sign in")').first.click(timeout=30000)
+        keycloak_sign_in(page, cfg)
+        wait_for_origin(page, cfg["headlamp_base"])
+        page.wait_for_timeout(3000)
+        code, body = api(page, cfg["headlamp_base"] + "/clusters/main/api/v1/namespaces")
+        if code != 200 or not body or not body.get("items"):
+            raise RuntimeError("the namespaces list answered HTTP %s" % code)
+        n = len(body["items"])
+        code, _ = api(page, cfg["headlamp_base"] + "/clusters/main/api/v1/secrets")
+        if code != 403:
+            raise RuntimeError("the Secrets list answered HTTP %s, not 403 (read only means no Secrets)" % code)
+        return "Headlamp lists %d namespaces for the test user and refuses to list Secrets (HTTP 403)" % n
     if app == "sso":
         page.goto("%s/realms/%s/account/" % (kc, cfg["realm"]), wait_until="networkidle", timeout=60000)
         keycloak_sign_in(page, cfg)

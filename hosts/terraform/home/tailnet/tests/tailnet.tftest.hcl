@@ -48,7 +48,7 @@ run "split_dns_goes_to_the_mgmt_gateway" {
   command = plan
 
   assert {
-    condition     = toset(keys(tailscale_dns_split_nameservers.lab)) == toset(["c1.prod", "opnsense", "pve", "grafana", "argocd", "sso", "jellyfin", "ntfy", "hub", "homeassistant", "mealie", "openbao", "vault"])
+    condition     = toset(keys(tailscale_dns_split_nameservers.lab)) == toset(["c1.prod", "opnsense", "pve", "grafana", "argocd", "sso", "jellyfin", "ntfy", "hub", "homeassistant", "mealie", "headlamp", "openbao", "vault"])
     error_message = "One split DNS entry per name in split_dns_names."
   }
 
@@ -86,7 +86,7 @@ run "app_names_survive_a_private_split_dns_list" {
   }
 
   assert {
-    condition     = toset(keys(tailscale_dns_split_nameservers.lab)) == toset(["c1.prod", "grafana", "hub", "homeassistant", "mealie", "openbao", "vault"])
+    condition     = toset(keys(tailscale_dns_split_nameservers.lab)) == toset(["c1.prod", "grafana", "hub", "homeassistant", "mealie", "headlamp", "openbao", "vault"])
     error_message = "A private split_dns_names list must not drop the app aliases in app_split_dns_names."
   }
 }

@@ -166,6 +166,26 @@ spec:
         attributes:
           post.logout.redirect.uris: "{{ k8s_identity_mealie_hosts | map('regex_replace', '^(.*)$', 'https://\\1/login') | join('##') }}"
 {{ mappers }}
+      # Headlamp, behind oauth2-proxy (oauth2-proxy docs, "Keycloak OIDC"): confidential, code flow with PKCE S256. The
+      # proxy calls back on /oauth2/callback and reads the `groups` claim for its --allowed-group.
+      - clientId: {{ k8s_identity_headlamp_name }}
+        name: Headlamp
+        protocol: openid-connect
+        publicClient: false
+        clientAuthenticatorType: client-secret
+        secret: "${HEADLAMP_CLIENT_SECRET}"
+        standardFlowEnabled: true
+        directAccessGrantsEnabled: false
+        implicitFlowEnabled: false
+        serviceAccountsEnabled: false
+        rootUrl: https://{{ k8s_identity_headlamp_hosts | first }}
+        baseUrl: /
+        redirectUris: {{ k8s_identity_headlamp_hosts | map('regex_replace', '^(.*)$', 'https://\\1/oauth2/callback') | list | to_json }}
+        webOrigins: {{ k8s_identity_headlamp_hosts | map('regex_replace', '^(.*)$', 'https://\\1') | list | to_json }}
+        attributes:
+          pkce.code.challenge.method: S256
+          post.logout.redirect.uris: "{{ k8s_identity_headlamp_hosts | map('regex_replace', '^(.*)$', 'https://\\1/') | join('##') }}"
+{{ mappers }}
       # Argo CD's web UI (Argo CD docs, "Keycloak"): confidential, code flow. PKCE is allowed, not
       # required, so it works whether or not argocd-cm sets enablePKCEAuthentication. Argo CD's
       # callback is /auth/callback on its own name.

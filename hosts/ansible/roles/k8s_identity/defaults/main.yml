@@ -107,6 +107,13 @@ k8s_identity_mealie_name: mealie
 k8s_identity_mealie_host_label: mealie
 k8s_identity_mealie_namespace: mealie
 
+# Headlamp's client (apps/headlamp): oauth2-proxy is the OpenID Connect client, confidential, code flow with PKCE, calling
+# back on /oauth2/callback. The secret is copied to Secret <ns>/headlamp-sso, key client-secret, and oauth2-proxy's
+# Deployment (headlamp-auth) is restarted when it changes. Served on headlamp.<zone> and headlamp.apps.c1.prod.<zone>.
+k8s_identity_headlamp_name: headlamp
+k8s_identity_headlamp_host_label: headlamp
+k8s_identity_headlamp_namespace: headlamp
+
 # Argo CD's clients (k8s_gitops): argocd for the web UI, argocd-cli (public, PKCE) for
 # `argocd login --sso`. The secret is copied to Secret <argocd ns>/argocd-sso, key clientSecret,
 # labelled part-of argocd so argocd-cm can name it as $argocd-sso:clientSecret.

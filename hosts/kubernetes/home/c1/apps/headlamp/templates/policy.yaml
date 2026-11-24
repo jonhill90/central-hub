@@ -1,0 +1,29 @@
+# Headlamp trusts the headers it is sent, so only oauth2-proxy may reach it; and only the Gateway (Cilium's reserved
+# "ingress" identity, which a Kubernetes NetworkPolicy namespace rule can't select) may reach oauth2-proxy.
+{{- $v := .Values }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $v.name }}-only-from-auth
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: headlamp}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: headlamp-auth}
+      ports:
+        - {protocol: TCP, port: {{ $v.port }}}
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: {{ $v.name }}-auth-from-gateway
+  namespace: {{ .Release.Namespace }}
+spec:
+  endpointSelector:
+    matchLabels: {app.kubernetes.io/name: headlamp-auth}
+  ingress:
+    - fromEntities: [ingress]
