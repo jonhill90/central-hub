@@ -8,7 +8,7 @@ outcome: https://headlamp.<zone>/ sends a visitor to Keycloak's sign-in page for
 needs: Argo CD app `headlamp` Synced, realm lab with client `headlamp`, Secret `headlamp/headlamp-sso` (key `client-secret`), the lab CA's public root in Secret `headlamp/headlamp-lab-ca`, Argo CD app `agent-read` (its ClusterRole `agent-read-cluster`)
 private-values: [k8s_identity_zone, HEADLAMP_CLIENT_SECRET]
 files: [hosts/kubernetes/home/c1/apps/headlamp/, hosts/kubernetes/home/c1/root/values.yaml, hosts/ansible/roles/k8s_identity/templates/realm.yaml.j2, hosts/ansible/roles/k8s_identity/tasks/clients.yml, hosts/ansible/roles/k8s_identity/files/ensure-realm-display-name.sh, hosts/ansible/roles/k8s_identity/tasks/secrets.yml, hosts/ansible/roles/agent_box/files/c1-ansible.sh, hosts/ansible/roles/agent_box/files/signin-browser.py]
-last-tested: not yet run
+last-tested: "2026-11-24, on prod from the agent box (reported by the orchestrator thread's run, not re-run here): `secrets-store-prod put-apps` then `compare` (31 keys equal), `c1-ansible apply clients` (failed=0, display name changed), the firewall-DNS and tailnet applies for `headlamp`, then the box's `signin-check` printed `headlamp: passed: 24 namespaces, Secrets 403`, 9 passed and 0 failed overall"
 superseded-by:
 ---
 
