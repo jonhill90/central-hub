@@ -64,7 +64,7 @@ sso:
   shortNames: true
   realm: lab
   clientId: homeassistant
-  displayName: Lab sign-in
+  displayName: Hub sign-in
   # Realm groups, from the `groups` claim the realm adds to every client: lab-admins become Home Assistant
   # administrators and everyone else who signs in is a regular user. The user role is left unset on purpose: with
   # it set, a person in neither group gets the plugin's "invalid" role. Home Assistant applies the role only when it

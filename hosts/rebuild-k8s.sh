@@ -359,15 +359,15 @@ for (ns, cj), js in sorted(by.items()):
   done 3<<< "$plan"  # fd 3: a kc inside the loop must not read the plan from stdin
 }
 
-# Argo CD's argocd-cm holds oidc.config with the provider name `Lab sign-in` (k8s_gitops_sso_name, tag sso). Read-only: one ConfigMap,
+# Argo CD's argocd-cm holds oidc.config with the provider name `Hub sign-in` (k8s_gitops_sso_name, tag sso). Read-only: one ConfigMap,
 # no Secret. Prod only, where the sign-in is on.
 argocd_signin_listed() {
   kc -n argocd get configmap argocd-cm -o json | python3 -I -c '
 import json, sys
 cm = json.load(sys.stdin).get("data") or {}
-if "name: Lab sign-in" not in (cm.get("oidc.config") or ""):
-    print("argocd-cm has no oidc.config naming Lab sign-in: Argo CD would not offer the Keycloak sign-in"); sys.exit(1)
-print("argocd-cm lists the Lab sign-in provider")
+if "name: Hub sign-in" not in (cm.get("oidc.config") or ""):
+    print("argocd-cm has no oidc.config naming Hub sign-in: Argo CD would not offer the Keycloak sign-in"); sys.exit(1)
+print("argocd-cm lists the Hub sign-in provider")
 '
 }
 
@@ -945,7 +945,7 @@ run_stage() {
       fi
       if [ -n "${APP_SECRETS_CACERT:-}" ]; then store_ca "$APP_SECRETS_CACERT" || return 1; fi
       hook "$APP_SECRETS_HOOK" ;;
-    # Prod: right after the ui and sso tags, Argo CD's own ConfigMap must list the provider the sso tag writes (name Lab sign-in), so a
+    # Prod: right after the ui and sso tags, Argo CD's own ConfigMap must list the provider the sso tag writes (name Hub sign-in), so a
     # run that passed while the keys were not there, or that something removes later, shows at once (checks asks again).
     # Dev, added after dev-ca (the route needs the Gateway's https listener and the apps-tls Secret, which only dev-ca makes on dev): the
     # Argo CD routes and the role's proof, which on dev goes to this cluster's own Gateway address (k8s_lab_dns_points_here is false there,

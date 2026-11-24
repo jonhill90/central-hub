@@ -9,7 +9,7 @@ grafana:
   grafana.ini:
     auth.generic_oauth:
       enabled: true
-      name: Lab sign-in
+      name: Hub sign-in
       allow_sign_up: true
       client_id: grafana
       scopes: openid profile email

@@ -45,8 +45,8 @@ c=$(code -G "$auth" --data-urlencode "client_id=login-probe-no-such-client" \
 echo "argo cd"
 s=$(curl -sS -m 20 "$ARGOCD/api/v1/settings" 2>/dev/null || true)
 case $s in
-  *'"name":"Lab sign-in"'*) pass "argo cd settings list the provider Lab sign-in" ;;
-  *) fail "argo cd settings do not list the provider Lab sign-in" ;;
+  *'"name":"Hub sign-in"'*) pass "argo cd settings list the provider Hub sign-in" ;;
+  *) fail "argo cd settings do not list the provider Hub sign-in" ;;
 esac
 # Argo CD refuses a return_url that is not under its own configured URL (HTTP 400), so give it one: its short address.
 h=$(curl -sS -o /dev/null -m 20 -D - -G "$ARGOCD/auth/login" --data-urlencode "return_url=https://argocd.$ZONE/applications" 2>/dev/null | tr -d '\r'); loc=$(sloc "$h")

@@ -4,7 +4,7 @@ status: draft
 kind: automated
 trigger: on request, once realm lab has the argocd clients (Keycloak identity as code) and the Argo CD UI route is on
 runner: an agent lane, through the owner's Mac (D-0022)
-outcome: Argo CD's sign-in page shows "Lab sign-in"; a lab-admins member gets admin, a lab-viewers member read-only, anyone else nothing; the built-in admin still works
+outcome: Argo CD's sign-in page shows "Hub sign-in"; a lab-admins member gets admin, a lab-viewers member read-only, anyone else nothing; the built-in admin still works
 needs: the lab clone of central-hub with its private inventory; SSH to c1's control plane as D-0022 says; Secret argocd/argocd-sso made by playbooks/k8s-identity.yml
 private-values: [k8s_gateway_zone, k8s_gitops_ui_zone]
 files: [hosts/ansible/roles/k8s_gitops/files/argocd-signin-check.py, .github/hosts-check/tests/test_argocd_signin_check.sh, hosts/ansible/roles/k8s_gitops/tasks/sso.yml, hosts/ansible/roles/k8s_gitops/templates/argocd-sso.yaml.j2, hosts/ansible/roles/k8s_gitops/defaults/main.yml]
@@ -40,7 +40,7 @@ Stop if any of these is not true.
    expect: one change (Apply). Argo CD reads both ConfigMaps live, so no pod restarts.
 
 3. Open Argo CD's sign-in page in a private window.
-   expect: a "Lab sign-in" button. Sign in as a lab-admins member: every Application shows, and Sync works. Sign in as a lab-viewers member: Applications show, and Sync is refused.
+   expect: a "Hub sign-in" button. Sign in as a lab-admins member: every Application shows, and Sync works. Sign in as a lab-viewers member: Applications show, and Sync is refused.
 
    Scripted instead, with no browser and no owner account: `argocd-signin-check.py <file>` (`hosts/ansible/roles/k8s_gitops/files/`), run on the agent box against a test account that an access-rights step made, a member of `lab-admins` (the script needs a TOTP seed, and only that group has one). The file is JSON, held by the box, mode 0600 or 0400 and owned by the user running it: `base` (Keycloak), `argocd_base` (the host in `argocd-cm`'s `url`), `realm`, `user`, `password`, `seed`, `digits`, `period`, `expect_admin`, and optionally `admin_group`, `viewer_group`, `address`, `verify`. It follows Argo CD's own flow (`/auth/login`, Keycloak's password and then code, `/auth/callback` with the cookies from the start, the session cookie), then reads `/api/v1/session/userinfo` (logged in, Keycloak's issuer, the expected group) and `/api/v1/account/can-i/applications/sync/*/*` (yes exactly for an admin). It prints seven numbered lines and no password, seed, code, state or token. The stand-in test is `.github/hosts-check/tests/test_argocd_signin_check.sh`. It has not run against Argo CD, and a test user does not exist yet. From the box it also needs tcp 443 to the apps' address, which the firewall pass of #491 is there to give ([set-up-the-agent-box.md](set-up-the-agent-box.md), the `signin-check` paragraph).
 4. Run step 2 again.
