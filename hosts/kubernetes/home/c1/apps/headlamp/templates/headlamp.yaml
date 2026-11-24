@@ -1,0 +1,94 @@
+# Headlamp, read only. It trusts the headers oauth2-proxy sends (-proxy-auth) and reads c1 with its own service account
+# for every person (-unsafe-use-service-account-token), so that account may only read: the built-in `view` and the
+# agents' extra read role, no Secrets, no exec, no writes. Headlamp's doc "Identity-Aware Proxy" asks for two guards:
+# oauth2-proxy overwrites the identity headers (it does), and only oauth2-proxy reaches Headlamp (templates/policy.yaml).
+{{- $v := .Values }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Release.Namespace }}
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $v.name }}
+  namespace: {{ .Release.Namespace }}
+---
+{{- range $role := $v.readRoles }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $v.name }}-{{ $role }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $role }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $v.name }}
+    namespace: {{ $.Release.Namespace }}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $v.name }}
+  namespace: {{ .Release.Namespace }}
+  labels: {app.kubernetes.io/name: headlamp}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: headlamp}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: headlamp}
+    spec:
+      serviceAccountName: {{ $v.name }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: {{ $v.uid }}
+        runAsGroup: {{ $v.gid }}
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: headlamp
+          image: {{ $v.image }}
+          args:
+            - -in-cluster
+            - -proxy-auth
+            - -unsafe-use-service-account-token
+            - -html-static-dir=/headlamp/frontend
+            - -plugins-dir=/headlamp/plugins
+            - -listen-addr=0.0.0.0
+            - -port={{ $v.port }}
+          ports:
+            - {name: http, containerPort: {{ $v.port }}}
+          readinessProbe:
+            httpGet: {path: /, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /, port: http}
+            periodSeconds: 30
+          resources:
+            requests: {cpu: {{ $v.resources.headlamp.requests.cpu }}, memory: {{ $v.resources.headlamp.requests.memory }}}
+            limits: {memory: {{ $v.resources.headlamp.limits.memory }}}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {sizeLimit: 64Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $v.name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector: {app.kubernetes.io/name: headlamp}
+  ports:
+    - {name: http, port: {{ $v.port }}, targetPort: http}

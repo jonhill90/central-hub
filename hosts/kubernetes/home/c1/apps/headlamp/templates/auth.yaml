@@ -1,0 +1,130 @@
+# oauth2-proxy in front of Headlamp (research RB-0235, route 1): the only way in. It signs people in through Keycloak realm
+# `lab` with the client `headlamp`, lets in only the realm group `sso.allowedGroup`, and passes the user name to Headlamp in
+# X-Forwarded-User, overwriting any such header a client sends. Sessions live in an encrypted cookie, so it keeps no data.
+{{- $v := .Values }}
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: Password
+metadata:
+  name: {{ $v.name }}-cookie
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  # oauth2-proxy wants a cookie secret of exactly 16, 24 or 32 bytes: 32 letters and digits.
+  length: 32
+  digits: 8
+  symbols: 0
+  noUpper: false
+  allowRepeat: true
+---
+# The cookie secret only signs sessions, so it is made once inside the cluster and never leaves it (a new one only ends
+# the open sessions); no OpenBao key. Created once, then never changed.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ $v.name }}-cookie
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  refreshPolicy: CreatedOnce
+  target:
+    name: {{ $v.name }}-cookie
+    creationPolicy: Owner
+    deletionPolicy: Retain
+    template:
+      data:
+        cookie-secret: "{{ "{{" }} .password {{ "}}" }}"
+  dataFrom:
+    - sourceRef:
+        generatorRef:
+          apiVersion: generators.external-secrets.io/v1alpha1
+          kind: Password
+          name: {{ $v.name }}-cookie
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $v.name }}-auth
+  namespace: {{ .Release.Namespace }}
+  labels: {app.kubernetes.io/name: headlamp-auth}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: headlamp-auth}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: headlamp-auth}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: {{ $v.proxy.uid }}
+        runAsGroup: {{ $v.proxy.uid }}
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: oauth2-proxy
+          image: {{ $v.proxy.image }}
+          args:
+            - --provider=keycloak-oidc
+            - --oidc-issuer-url=https://{{ include "headlamp.ssoHost" . }}/realms/{{ $v.sso.realm }}
+            - --client-id={{ $v.sso.clientId }}
+            - --redirect-url=https://{{ include "headlamp.shortHost" . }}/oauth2/callback
+            - --scope=openid profile email
+            - --code-challenge-method=S256
+            - --allowed-group={{ $v.sso.allowedGroup }}
+            - --user-id-claim=preferred_username
+            - --oidc-email-claim=preferred_username
+            - --email-domain=*
+            - --insecure-oidc-allow-unverified-email=true
+            - --upstream=http://{{ $v.name }}.{{ .Release.Namespace }}.svc:{{ $v.port }}
+            - --http-address=0.0.0.0:{{ $v.proxy.port }}
+            - --reverse-proxy=true
+            - --pass-user-headers=true
+            - --skip-provider-button=true
+            - --cookie-secure=true
+            - --cookie-samesite=lax
+            - --whitelist-domain={{ include "headlamp.shortHost" . }}
+            {{- if $v.sso.labRoot.certificate }}
+            - --provider-ca-file=/lab-ca/lab-root-ca.pem
+            {{- end }}
+          env:
+            - name: OAUTH2_PROXY_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef: {name: {{ $v.sso.secretName }}, key: client-secret, optional: true}
+            - name: OAUTH2_PROXY_COOKIE_SECRET
+              valueFrom:
+                secretKeyRef: {name: {{ $v.name }}-cookie, key: cookie-secret}
+          ports:
+            - {name: http, containerPort: {{ $v.proxy.port }}}
+          readinessProbe:
+            httpGet: {path: /ping, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /ping, port: http}
+            periodSeconds: 30
+          resources:
+            requests: {cpu: {{ $v.resources.proxy.requests.cpu }}, memory: {{ $v.resources.proxy.requests.memory }}}
+            limits: {memory: {{ $v.resources.proxy.limits.memory }}}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: lab-root-ca, mountPath: /lab-ca, readOnly: true}
+      volumes:
+        - name: lab-root-ca
+          secret:
+            secretName: {{ $v.sso.labRoot.secretName }}
+            items: [{key: {{ $v.sso.labRoot.key }}, path: lab-root-ca.pem}]
+            optional: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $v.name }}-auth
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector: {app.kubernetes.io/name: headlamp-auth}
+  ports:
+    - {name: http, port: {{ $v.proxy.port }}, targetPort: http}

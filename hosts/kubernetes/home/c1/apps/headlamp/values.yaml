@@ -1,0 +1,55 @@
+# Headlamp on c1 (https://headlamp.dev), read only, signed in through oauth2-proxy and Keycloak realm `lab`.
+# Every value here is public; the zone comes only from the root Application's `zone` parameter (CLAUDE.md rule 4).
+zone: ""
+
+name: headlamp
+
+# Headlamp v0.46.0, built 2026-10-15 (image config `created`; STD-0003 asks for at least 14 days). ghcr.io, pinned by
+# multi-arch index digest (D-0054: by digest). The image runs as user `headlamp`, which the chart's own default maps to 100:101.
+image: ghcr.io/headlamp-k8s/headlamp:v0.46.0@sha256:8a0ef97527544baa2b35825940ddf4db6e2d09c30cd5aa31fd269ff604cc8b75
+uid: 100
+gid: 101
+port: 4466
+
+# oauth2-proxy v7.14.1 (MIT), quay.io, pinned by multi-arch index digest. Runs as 65532.
+proxy:
+  image: quay.io/oauth2-proxy/oauth2-proxy:v7.14.1@sha256:530f239b73a6b79bd7774971c844aec544d9c1bcd4e95ce6614a33649d8f3f0c
+  uid: 65532
+  port: 4180
+
+# The shared Gateway and the name under it: <name>.apps.c1.prod.<zone>, and <name>.<zone> with shortNames.
+gateway:
+  name: apps
+  namespace: gateway
+  hostSuffix: apps.c1.prod
+  shortNames: true
+  https: true
+
+# The same as apps/mealie: Keycloak's public address, the client `headlamp` and its secret (Secret <name>-sso... see
+# secretName; made by the realm role k8s_identity, key client-secret), and the lab CA's public root for oauth2-proxy to
+# trust Keycloak's certificate (--provider-ca-file adds it to the system roots; the image has no shell for a bundle).
+# Only members of the realm group `allowedGroup` get in.
+sso:
+  issuerHost: sso
+  shortNames: true     # must match k8s_identity_short_names (sso.<zone> or sso.apps.c1.prod.<zone>)
+  realm: lab
+  clientId: headlamp
+  secretName: headlamp-sso
+  allowedGroup: lab-admins
+  labRoot:
+    certificate: true
+    issuer: lab-ca
+    secretName: headlamp-lab-ca
+    key: ca.crt
+
+# What Headlamp's one service account may read: the built-in `view` (no Secrets, no exec, no writes) and the agents' extra
+# read role from apps/agent-read (nodes, namespaces, volumes, storage classes, CRDs, events).
+readRoles: [view, agent-read-cluster]
+
+resources:
+  headlamp:
+    requests: {cpu: 20m, memory: 64Mi}
+    limits: {memory: 256Mi}
+  proxy:
+    requests: {cpu: 10m, memory: 32Mi}
+    limits: {memory: 128Mi}

@@ -215,6 +215,19 @@ apps:
       sso.labRoot.certificate: labCaIssuer
     autoSync: true
     prune: false
+  # Headlamp, a read-only view of c1 (research RB-0235, route 1): oauth2-proxy signs people in through Keycloak's client
+  # `headlamp` (apps/headlamp, docs/runbooks/use-headlamp-to-view-c1.md). Like Mealie, it reads the lab CA's public root from
+  # a Certificate on lab-ca, so a cluster with no ClusterIssuer lab-ca (dev) skips that Certificate.
+  headlamp:
+    namespace: headlamp
+    local: true
+    needsZone: true
+    zoneParameters:
+      gateway.https: "{gatewayHttps}"
+    switchOffParameters:
+      sso.labRoot.certificate: labCaIssuer
+    autoSync: true
+    prune: false
   # Home Assistant (container install), signed in through Keycloak's realm lab by the hass-oidc-auth component
   # (docs/runbooks/run-home-assistant-on-c1.md). Its volume is a kept claim, so a sync never deletes the data.
   home-assistant:

@@ -84,6 +84,34 @@
   loop_control: {loop_var: __result, label: "{{ __result.__client }}"}
   no_log: true
 
+# The realm import never changes a live realm, so the sign-in's display name is set here from the rendered template's value.
+- name: clients | The display name the template gives the realm
+  ansible.builtin.slurp: {src: "{{ k8s_identity_clients_dir.path }}/realm.yaml"}
+  register: k8s_identity_clients_realm_manifest
+  delegate_to: localhost
+  become: false
+  check_mode: false
+
+- name: clients | The realm shows the template display name
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - -n
+      - "{{ k8s_identity_namespace }}"
+      - exec
+      - "{{ k8s_identity_name }}-0"
+      - --
+      - bash
+      - -c
+      - "{{ lookup('ansible.builtin.file', 'ensure-realm-display-name.sh') }}"
+      - ensure-realm-display-name
+      - "{{ k8s_identity_realm }}"
+      - "{{ (k8s_identity_clients_realm_manifest.content | b64decode | from_yaml).spec.realm.displayName }}"
+  register: k8s_identity_realm_display_name
+  changed_when: "'updated' in k8s_identity_realm_display_name.stdout"
+  failed_when: k8s_identity_realm_display_name.rc != 0
+  when: not ansible_check_mode
+
 # ensure-client.sh prints one line, "ensure-client: <step> failed: <reason>", with a fixed phrase for the reason, never
 # kcadm's text; only that line is shown. A failure with no such line (kubectl itself) shows its exit code. One task
 # with no loop, because a failed loop item is printed in full, and its result holds the JSON, with its secrets.
