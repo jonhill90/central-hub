@@ -3,7 +3,7 @@
 
   lead-time.py OWNER/REPO [HOURS] [LIMIT_MINUTES]      reads GITHUB_TOKEN from the environment; changes nothing
 
-An unguarded PR (pr-merge-verdict.py's guarded()) that took longer than LIMIT_MINUTES (default 30) from open, or from leaving
+An unguarded PR (pr_guarded() below: pr-merge-verdict.py's guarded_file() on each file, or a fork head) that took longer than LIMIT_MINUTES (default 30) from open, or from leaving
 draft when GitHub says so, to merge is SLOW. Prints a Markdown table, then one last line: FAST or SLOW: <PR numbers>.
 Exits 1 on SLOW so the scheduled run fails and GitHub tells the owner.
 """
@@ -43,6 +43,13 @@ def ready_at(full, pr):
     return t(pr["created_at"])
 
 
+def pr_guarded(full, pr, files):
+    """The verdict's own test: a guarded path or a changed secret line in any file, or a head branch from a fork."""
+    if ((pr.get("head") or {}).get("repo") or {}).get("full_name") != full:
+        return True
+    return any(verdict.guarded_file(full, f) for f in files)
+
+
 def main():
     full = sys.argv[1]
     hours = float(sys.argv[2]) if len(sys.argv) > 2 else 24
@@ -53,7 +60,7 @@ def main():
     for pr in prs:
         if not pr.get("merged_at") or t(pr["merged_at"]) < since: continue
         files = get("https://api.github.com/repos/%s/pulls/%d/files?per_page=100" % (full, pr["number"]))
-        g = any(verdict.guarded(full, f["filename"]) for f in files)
+        g = pr_guarded(full, pr, files)
         mins = (t(pr["merged_at"]) - ready_at(full, pr)).total_seconds() / 60
         bad = not g and mins > limit
         if bad: slow.append(pr["number"])
