@@ -2,6 +2,11 @@
 
 Each environment has its own Keycloak, and each Keycloak has one realm for people and apps, with a client for every app. There is no separate realm for staging or for management, because there is no staging environment and the people who administer the lab are already in that one realm's `lab-admins` group. This page says why, and what would make the layout change.
 
+![Prod and dev each have their own Keycloak with a master realm and one lab realm; prod's lab realm has a client for each app](images/keycloak-realms.svg)
+
+<details>
+<summary>Mermaid source of the same figure</summary>
+
 ```mermaid
 flowchart LR
   subgraph prod["prod: c1 and its Keycloak"]
@@ -15,6 +20,8 @@ flowchart LR
   end
   prod -. "no shared users, secrets or sessions" .- dev
 ```
+
+</details>
 
 *In words:* prod and dev are two clusters, so they are two Keycloak servers. Each one has the same realm, made from the same code, with its own users and its own secrets. Inside one environment every app is a client of that one realm, so one sign-in works for all of them.
 

@@ -2,6 +2,11 @@
 
 An app that must remember something, such as Grafana's dashboards or Jellyfin's library, asks for a **volume**. On c1 each volume is a plain folder on the worker's **data disk**. Nothing copies it to a second machine while it runs. The copies are the backups.
 
+![A volume is a folder on the worker VM's data disk; a pod mounts a claim, the local-path StorageClass and its provisioner make the folder, and backups copy it](images/c1-data.svg)
+
+<details>
+<summary>Mermaid source of the same figure</summary>
+
 ```mermaid
 flowchart LR
   subgraph px["Proxmox host"]
@@ -27,6 +32,8 @@ flowchart LR
   bk[("backups<br/>Proxmox backup of the VM;<br/>restic snapshots")]
   fs -.-> bk
 ```
+
+</details>
 
 The claim and folder names in the drawing are examples. On dev each folder is named `<namespace>/<claim>` (`hosts/kubernetes/home/c1/apps/local-path/values.yaml` line 25).
 

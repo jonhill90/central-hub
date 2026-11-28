@@ -2,6 +2,11 @@
 
 c1 is the lab's Kubernetes cluster. It runs on two virtual machines on the one Proxmox host: a **control plane** that runs the cluster, and a **worker** that runs the apps. Every app runs in **pods**, and each pod sits in a **namespace** that groups it with its own parts.
 
+![c1 drawn as two VMs: a control plane with the API server, etcd, scheduler and controller-manager, and a worker whose kubelet starts pods in the media, logging and monitoring namespaces on one data disk](images/c1-parts.svg)
+
+<details>
+<summary>Mermaid source of the same figure</summary>
+
 ```mermaid
 flowchart TB
   you["you or an agent<br/>kubectl, Argo CD"]
@@ -36,6 +41,8 @@ flowchart TB
   kw --> j & l & g
   j & l & g -.-> disk
 ```
+
+</details>
 
 The drawing shows three of c1's namespaces. The table below lists all of them.
 

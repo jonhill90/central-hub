@@ -4,6 +4,11 @@ A c1 build runs in three parts. **Ansible** builds the machines, the cluster and
 
 The rule of thumb: whatever has to exist before Argo CD can run, Ansible builds. Whatever runs inside the cluster and can be written in git without a private value, Argo CD owns.
 
+![The three parts of a c1 build, Ansible then Argo CD then Ansible, and the five steps by which an app moves from an Ansible role to Argo CD](images/argo-ansible.svg)
+
+<details>
+<summary>Mermaid source of the same figure</summary>
+
 ```mermaid
 flowchart TB
   subgraph a1["1. Ansible and OpenTofu build what Argo CD stands on"]
@@ -21,6 +26,8 @@ flowchart TB
   go --> root
   sync --> gw
 ```
+
+</details>
 
 The stage names are the ones `hosts/rebuild-k8s.sh` runs, in the order of [Rebuild one cluster's Kubernetes layer with one command](../runbooks/rebuild-k8s-layer-with-one-command.md#stages). Dev runs a shorter list (same runbook, line 28).
 
@@ -45,6 +52,9 @@ The stage names are the ones `hosts/rebuild-k8s.sh` runs, in the order of [Rebui
 
 Every app on c1 was first put there by Ansible. Each one moved on its own, with a runbook. The app went into git, Argo CD synced it once by hand, auto-sync went on, and then the role's switch `*_by_argocd` was set to true so Ansible stopped applying the same objects (spec, "Taking over a running component"; the switches are listed in the rebuild runbook, line 68). [Move c1's volume provisioner to Argo CD](../runbooks/move-local-path-to-argo-cd.md) is one worked example.
 
+<details>
+<summary>Mermaid source of the same figure</summary>
+
 ```mermaid
 flowchart LR
   a["Ansible role applies the app"] --> b["the same app written in<br/>hosts/kubernetes/home/c1/apps/"]
@@ -52,6 +62,8 @@ flowchart LR
   c --> d["auto-sync on"]
   d --> e["the role's *_by_argocd = true:<br/>Ansible stops applying it"]
 ```
+
+</details>
 
 **The way back,** for any app, is to delete its child Application without deleting what it made. The objects stay, and the Ansible role runs as before (spec, line 65).
 

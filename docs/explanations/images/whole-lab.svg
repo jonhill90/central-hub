@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 800" width="1240" height="800" font-family="system-ui,-apple-system,'Segoe UI',Roboto,sans-serif" role="img" aria-labelledby="t d">
+<title id="t">Where one failure stops a lot</title><desc id="d">The same lab as connected blocks. Four parts are marked as having no second copy: 1 the one Proxmox host, 2 the worker&#x27;s data disk, 3 the backup HDD in the same machine, 4 c1&#x27;s single control plane.</desc>
+<style>
+:root{--plate:#f5f7fb;--tray:#e8eef7;--tray-s:#a3b3cc;--body:#ffffff;--body-s:#9fb0c8;--ink:#14213a;--sub:#475772;
+--glyph-bg:#e6edf8;--glyph:#1d3050;--casing:#f5f7fb;--pill:#ffffff;--shadow:#14213a;--risk:#b3261e;
+--net:#0b6fb3;--ctl:#b35f00;--git:#6d3fc7;--data:#0a7a54;--id:#b81b55;--gap:#5d6b82}
+@media (prefers-color-scheme: dark){:root{--plate:#0f1b2d;--tray:#16263d;--tray-s:#2c4263;--body:#1d3050;--body-s:#35507a;
+--ink:#f1f5fb;--sub:#a9bbd4;--glyph-bg:#eef3fa;--glyph:#16263d;--casing:#050b14;--pill:#050b14;--shadow:#050b14;--risk:#ff6b6b;
+--net:#4cc3ff;--ctl:#ffb347;--git:#b48cff;--data:#5be3b0;--id:#ff7a9c;--gap:#8fa3c2}}
+</style>
+<rect width="1240" height="800" rx="18" style="fill:var(--plate)"/>
+<text x="28" y="40" font-size="20" font-weight="700" style="fill:var(--ink)">Where one failure stops a lot</text>
+<text x="28" y="62" font-size="13" style="fill:var(--sub)">The lab&#x27;s connections, with the four parts that have no second copy marked in red and numbered as on the page.</text>
+<rect x="290" y="104" width="940" height="660" rx="16" style="fill:var(--tray);stroke:var(--risk)" stroke-width="2" stroke-dasharray="8 5" stroke-linecap="round"/><text x="306" y="128" font-size="12" font-weight="700" letter-spacing=".05em" style="fill:var(--sub)">PROXMOX HOST</text>
+<circle cx="1208" cy="126" r="11" style="fill:var(--risk)"/><text x="1208" y="130.5" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">1</text>
+<rect x="860" y="134" width="340" height="330" rx="16" style="fill:var(--tray);stroke:var(--tray-s)" stroke-width="2" stroke-dasharray="2 7" stroke-linecap="round"/><text x="876" y="158" font-size="12" font-weight="700" letter-spacing=".05em" style="fill:var(--sub)">C1, PROD VLAN</text>
+<rect x="860" y="494" width="340" height="250" rx="16" style="fill:var(--tray);stroke:var(--tray-s)" stroke-width="2" stroke-dasharray="2 7" stroke-linecap="round"/><text x="876" y="518" font-size="12" font-weight="700" letter-spacing=".05em" style="fill:var(--sub)">DEV VLAN</text>
+<path d="M230.0 276.0 L320.0 276.0" fill="none" style="stroke:var(--casing)" stroke-width="9" stroke-linecap="round"/>
+<path d="M230.0 276.0 L320.0 276.0" fill="none" style="stroke:var(--net)" stroke-width="4" stroke-linecap="round"/>
+<circle cx="230.0" cy="276.0" r="7" style="fill:var(--casing)"/><circle cx="230.0" cy="276.0" r="4" style="fill:var(--net)"/>
+<circle cx="320.0" cy="276.0" r="7" style="fill:var(--casing)"/><circle cx="320.0" cy="276.0" r="4" style="fill:var(--net)"/>
+<path d="M510.0 276.0 L580.0 276.0" fill="none" style="stroke:var(--casing)" stroke-width="9" stroke-linecap="round"/>
+<path d="M510.0 276.0 L580.0 276.0" fill="none" style="stroke:var(--net)" stroke-width="4" stroke-linecap="round"/>
+<circle cx="510.0" cy="276.0" r="7" style="fill:var(--casing)"/><circle cx="510.0" cy="276.0" r="4" style="fill:var(--net)"/>
+<circle cx="580.0" cy="276.0" r="7" style="fill:var(--casing)"/><circle cx="580.0" cy="276.0" r="4" style="fill:var(--net)"/>
+<path d="M770.0 276.0 L803.5 276.0 Q815.0 276.0 815.0 287.5 L815.0 287.5 Q815.0 299.0 826.5 299.0 L860.0 299.0" fill="none" style="stroke:var(--casing)" stroke-width="9" stroke-linecap="round"/>
+<path d="M770.0 276.0 L803.5 276.0 Q815.0 276.0 815.0 287.5 L815.0 287.5 Q815.0 299.0 826.5 299.0 L860.0 299.0" fill="none" style="stroke:var(--net)" stroke-width="4" stroke-linecap="round"/>
+<circle cx="770.0" cy="276.0" r="7" style="fill:var(--casing)"/><circle cx="770.0" cy="276.0" r="4" style="fill:var(--net)"/>
+<circle cx="860.0" cy="299.0" r="7" style="fill:var(--casing)"/><circle cx="860.0" cy="299.0" r="4" style="fill:var(--net)"/>
+<path d="M230.0 556.0 L320.0 556.0" fill="none" style="stroke:var(--casing)" stroke-width="9" stroke-linecap="round"/>
+<path d="M230.0 556.0 L320.0 556.0" fill="none" style="stroke:var(--git)" stroke-width="4" stroke-linecap="round"/>
+<circle cx="230.0" cy="556.0" r="7" style="fill:var(--casing)"/><circle cx="230.0" cy="556.0" r="4" style="fill:var(--git)"/>
+<circle cx="320.0" cy="556.0" r="7" style="fill:var(--casing)"/><circle cx="320.0" cy="556.0" r="4" style="fill:var(--git)"/>
+<path d="M510.0 556.0 L550.0 556.0 Q555.0 556.0 555.0 561.0 L555.0 561.0 Q555.0 566.0 560.0 566.0 L880.0 566.0" fill="none" style="stroke:var(--casing)" stroke-width="9" stroke-linecap="round"/>
+<path d="M510.0 556.0 L550.0 556.0 Q555.0 556.0 555.0 561.0 L555.0 561.0 Q555.0 566.0 560.0 566.0 L880.0 566.0" fill="none" style="stroke:var(--ctl)" stroke-width="4" stroke-linecap="round"/>
+<circle cx="510.0" cy="556.0" r="7" style="fill:var(--casing)"/><circle cx="510.0" cy="556.0" r="4" style="fill:var(--ctl)"/>
+<circle cx="880.0" cy="566.0" r="7" style="fill:var(--casing)"/><circle cx="880.0" cy="566.0" r="4" style="fill:var(--ctl)"/>
+<path d="M415.0 520.0 L415.0 492.0 Q415.0 480.0 427.0 480.0 L848.0 480.0 Q860.0 480.0 860.0 468.0 L860.0 429.0" fill="none" style="stroke:var(--casing)" stroke-width="9" stroke-linecap="round"/>
+<path d="M415.0 520.0 L415.0 492.0 Q415.0 480.0 427.0 480.0 L848.0 480.0 Q860.0 480.0 860.0 468.0 L860.0 429.0" fill="none" style="stroke:var(--ctl)" stroke-width="4" stroke-linecap="round"/>
+<circle cx="415.0" cy="520.0" r="7" style="fill:var(--casing)"/><circle cx="415.0" cy="520.0" r="4" style="fill:var(--ctl)"/>
+<circle cx="860.0" cy="429.0" r="7" style="fill:var(--casing)"/><circle cx="860.0" cy="429.0" r="4" style="fill:var(--ctl)"/>
+<path d="M880.0 405.0 L687.0 405.0 Q675.0 405.0 675.0 417.0 L675.0 660.0" fill="none" style="stroke:var(--casing)" stroke-width="9" stroke-linecap="round"/>
+<path d="M880.0 405.0 L687.0 405.0 Q675.0 405.0 675.0 417.0 L675.0 660.0" fill="none" style="stroke:var(--data)" stroke-width="4" stroke-linecap="round" stroke-dasharray="10 7"/>
+<circle cx="880.0" cy="405.0" r="7" style="fill:var(--casing)"/><circle cx="880.0" cy="405.0" r="4" style="fill:var(--data)"/>
+<circle cx="675.0" cy="660.0" r="7" style="fill:var(--casing)"/><circle cx="675.0" cy="660.0" r="4" style="fill:var(--data)"/>
+<path d="M415.0 592.0 L415.0 684.0 Q415.0 696.0 403.0 696.0 L230.0 696.0" fill="none" style="stroke:var(--casing)" stroke-width="9" stroke-linecap="round"/>
+<path d="M415.0 592.0 L415.0 684.0 Q415.0 696.0 403.0 696.0 L230.0 696.0" fill="none" style="stroke:var(--ctl)" stroke-width="4" stroke-linecap="round"/>
+<circle cx="415.0" cy="592.0" r="7" style="fill:var(--casing)"/><circle cx="415.0" cy="592.0" r="4" style="fill:var(--ctl)"/>
+<circle cx="230.0" cy="696.0" r="7" style="fill:var(--casing)"/><circle cx="230.0" cy="696.0" r="4" style="fill:var(--ctl)"/>
+<g><rect x="40" y="244" width="190" height="72" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="40" y="240" width="190" height="72" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M40 252a12 12 0 0 1 12-12h166a12 12 0 0 1 12 12v2H40z" style="fill:var(--net)"/>
+<rect x="50" y="262.0" width="42" height="42" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(55.0 267.0) scale(0.665)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="24" cy="16" r="7"/><path d="M9 41c1-9 8-13 15-13s14 4 15 13"/></g></g>
+<text x="102" y="280.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">Owner&#x27;s devices</text>
+<text x="102" y="294.8" font-size="11.5" style="fill:var(--sub)">from anywhere</text>
+</g>
+<g><rect x="40" y="524" width="190" height="72" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="40" y="520" width="190" height="72" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M40 532a12 12 0 0 1 12-12h166a12 12 0 0 1 12 12v2H40z" style="fill:var(--git)"/>
+<rect x="50" y="542.0" width="42" height="42" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(55.0 547.0) scale(0.665)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="14" cy="12" r="4"/><circle cx="14" cy="36" r="4"/><circle cx="34" cy="18" r="4"/><path d="M14 16v16M34 22c0 8-20 4-20 10"/></g></g>
+<text x="102" y="560.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">GitHub</text>
+<text x="102" y="574.8" font-size="11.5" style="fill:var(--sub)">central-hub main</text>
+</g>
+<g><rect x="40" y="664" width="190" height="72" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="40" y="660" width="190" height="72" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5" stroke-dasharray="7 5"/><path d="M40 672a12 12 0 0 1 12-12h166a12 12 0 0 1 12 12v2H40z" style="fill:var(--ctl)"/>
+<rect x="50" y="682.0" width="42" height="42" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(55.0 687.0) scale(0.665)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M14 34h22a8 8 0 0 0 1-16 11 11 0 0 0-21-2 9 9 0 0 0-2 18z"/></g></g>
+<text x="102" y="700.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">VPS app host</text>
+<text x="102" y="714.8" font-size="11.5" style="fill:var(--sub)">outside the home</text>
+</g>
+<g><rect x="320" y="244" width="190" height="72" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="320" y="240" width="190" height="72" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M320 252a12 12 0 0 1 12-12h166a12 12 0 0 1 12 12v2H320z" style="fill:var(--net)"/>
+<rect x="330" y="262.0" width="42" height="42" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(335.0 267.0) scale(0.665)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect x="10" y="22" width="28" height="18" rx="3"/><path d="M16 22v-6a8 8 0 0 1 16 0v6"/></g></g>
+<text x="382" y="280.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">Remote access</text>
+<text x="382" y="294.8" font-size="11.5" style="fill:var(--sub)">container</text>
+</g>
+<g><rect x="580" y="244" width="190" height="72" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="580" y="240" width="190" height="72" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M580 252a12 12 0 0 1 12-12h166a12 12 0 0 1 12 12v2H580z" style="fill:var(--net)"/>
+<rect x="590" y="262.0" width="42" height="42" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(595.0 267.0) scale(0.665)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12h32v24H8zM8 20h32M8 28h32M20 12v8M32 20v8M20 28v8"/></g></g>
+<text x="642" y="280.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">Firewall</text>
+<text x="642" y="294.8" font-size="11.5" style="fill:var(--sub)">OPNsense VM</text>
+</g>
+<g><rect x="320" y="524" width="190" height="72" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="320" y="520" width="190" height="72" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M320 532a12 12 0 0 1 12-12h166a12 12 0 0 1 12 12v2H320z" style="fill:var(--ctl)"/>
+<rect x="330" y="542.0" width="42" height="42" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(335.0 547.0) scale(0.665)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="10" width="36" height="28" rx="4"/><path d="M13 20l7 5-7 5M24 31h10"/></g></g>
+<text x="382" y="560.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">Agent box</text>
+<text x="382" y="574.8" font-size="11.5" style="fill:var(--sub)">applies every change</text>
+</g>
+<g><rect x="580" y="664" width="190" height="72" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="580" y="660" width="190" height="72" rx="12" style="fill:var(--body);stroke:var(--risk)" stroke-width="3"/><path d="M580 672a12 12 0 0 1 12-12h166a12 12 0 0 1 12 12v2H580z" style="fill:var(--data)"/>
+<rect x="590" y="682.0" width="42" height="42" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(595.0 687.0) scale(0.665)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="14" width="34" height="20" rx="4"/><circle cx="33" cy="24" r="3"/><path d="M13 24h10"/></g></g>
+<text x="642" y="700.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">Backup HDD</text>
+<text x="642" y="714.8" font-size="11.5" style="fill:var(--sub)">same machine as the data</text>
+<circle cx="766" cy="662" r="11" style="fill:var(--risk)"/><text x="766" y="666.5" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">3</text>
+</g>
+<g><rect x="880" y="174" width="300" height="72" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="880" y="170" width="300" height="72" rx="12" style="fill:var(--body);stroke:var(--risk)" stroke-width="3"/><path d="M880 182a12 12 0 0 1 12-12h276a12 12 0 0 1 12 12v2H880z" style="fill:var(--net)"/>
+<rect x="890" y="192.0" width="42" height="42" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(895.0 197.0) scale(0.665)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="24" cy="24" r="6"/><path d="M24 6v6M24 36v6M6 24h6M36 24h6M11 11l4 4M33 33l4 4M37 11l-4 4M15 33l-4 4"/></g></g>
+<text x="942" y="210.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">c1 control plane</text>
+<text x="942" y="224.8" font-size="11.5" style="fill:var(--sub)">one VM: API server, etcd</text>
+<circle cx="1176" cy="172" r="11" style="fill:var(--risk)"/><text x="1176" y="176.5" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">4</text>
+</g>
+<g><rect x="880" y="274" width="300" height="72" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="880" y="270" width="300" height="72" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M880 282a12 12 0 0 1 12-12h276a12 12 0 0 1 12 12v2H880z" style="fill:var(--net)"/>
+<rect x="890" y="292.0" width="42" height="42" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(895.0 297.0) scale(0.665)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M24 7l14 7 4 15-9 12H15L6 29l4-15z"/><circle cx="24" cy="25" r="5"/></g></g>
+<text x="942" y="310.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">c1 worker</text>
+<text x="942" y="324.8" font-size="11.5" style="fill:var(--sub)">runs the apps</text>
+</g>
+<g><rect x="880" y="374" width="300" height="70" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="880" y="370" width="300" height="70" rx="12" style="fill:var(--body);stroke:var(--risk)" stroke-width="3"/><path d="M880 382a12 12 0 0 1 12-12h276a12 12 0 0 1 12 12v2H880z" style="fill:var(--data)"/>
+<rect x="890" y="392.0" width="40" height="40" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(894.8 396.8) scale(0.633)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="14" width="34" height="20" rx="4"/><circle cx="33" cy="24" r="3"/><path d="M13 24h10"/></g></g>
+<text x="940" y="409.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">Worker data disk</text>
+<text x="940" y="423.8" font-size="11.5" style="fill:var(--sub)">every app volume</text>
+<circle cx="1176" cy="372" r="11" style="fill:var(--risk)"/><text x="1176" y="376.5" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">2</text>
+</g>
+<g><rect x="880" y="534" width="300" height="72" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="880" y="530" width="300" height="72" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M880 542a12 12 0 0 1 12-12h276a12 12 0 0 1 12 12v2H880z" style="fill:var(--net)"/>
+<rect x="890" y="552.0" width="42" height="42" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(895.0 557.0) scale(0.665)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M24 7l14 7 4 15-9 12H15L6 29l4-15z"/><circle cx="24" cy="25" r="5"/></g></g>
+<text x="942" y="570.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">Dev cluster</text>
+<text x="942" y="584.8" font-size="11.5" style="fill:var(--sub)">built, filled from backup, torn down</text>
+</g>
+<g><rect x="880" y="634" width="300" height="90" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="880" y="630" width="300" height="90" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M880 642a12 12 0 0 1 12-12h276a12 12 0 0 1 12 12v2H880z" style="fill:var(--net)"/>
+<rect x="890" y="660.0" width="44" height="44" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(895.3 665.3) scale(0.697)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="10" width="36" height="28" rx="4"/><path d="M13 20l7 5-7 5M24 31h10"/></g></g>
+<text x="944" y="679.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">CI runner and desktop</text>
+<text x="944" y="693.8" font-size="11.5" style="fill:var(--sub)">two VMs, no lab keys</text>
+</g>
+<rect x="246.9" y="266.0" width="56.1" height="20" rx="10" style="fill:var(--pill);stroke:var(--net)" stroke-width="1"/><text x="275.0" y="280.0" text-anchor="middle" font-size="11.5" font-weight="600" style="fill:var(--net)">tailnet</text>
+<rect x="764.5" y="266.0" width="56.1" height="20" rx="10" style="fill:var(--pill);stroke:var(--net)" stroke-width="1"/><text x="792.5" y="280.0" text-anchor="middle" font-size="11.5" font-weight="600" style="fill:var(--net)">to prod</text>
+<rect x="599.5" y="575.0" width="201.0" height="20" rx="10" style="fill:var(--pill);stroke:var(--ctl)" stroke-width="1"/><text x="700.0" y="589.0" text-anchor="middle" font-size="11.5" font-weight="600" style="fill:var(--ctl)">Proxmox API, Ansible, OpenTofu</text>
+<rect x="742.0" y="395.0" width="56.1" height="20" rx="10" style="fill:var(--pill);stroke:var(--data)" stroke-width="1"/><text x="770.0" y="409.0" text-anchor="middle" font-size="11.5" font-weight="600" style="fill:var(--data)">nightly</text>
+<path d="M28 776h28" style="stroke:var(--net)" stroke-width="4" stroke-linecap="round"/><text x="64" y="780" font-size="12" style="fill:var(--sub)">network</text>
+<path d="M137.5 776h28" style="stroke:var(--ctl)" stroke-width="4" stroke-linecap="round"/><text x="173.5" y="780" font-size="12" style="fill:var(--sub)">control</text>
+<path d="M247.0 776h28" style="stroke:var(--git)" stroke-width="4" stroke-linecap="round"/><text x="283.0" y="780" font-size="12" style="fill:var(--sub)">git</text>
+<path d="M330.5 776h28" style="stroke:var(--data)" stroke-width="4" stroke-linecap="round" stroke-dasharray="10 7"/><text x="366.5" y="780" font-size="12" style="fill:var(--sub)">data and backup</text>
+<circle cx="500.0" cy="776" r="9" style="fill:var(--risk)"/><text x="500.0" y="780" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">1</text><text x="516.0" y="780" font-size="12" style="fill:var(--sub)">no second copy today</text>
+<rect x="1087.5" y="767" width="26" height="18" rx="5" fill="none" style="stroke:var(--sub)" stroke-width="1.5" stroke-dasharray="5 4"/><text x="1121.5" y="780" font-size="12" style="fill:var(--sub)">not built yet</text>
+</svg>

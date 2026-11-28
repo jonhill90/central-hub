@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1220 720" width="1220" height="720" font-family="system-ui,-apple-system,'Segoe UI',Roboto,sans-serif" role="img" aria-labelledby="t d">
+<title id="t">How c1 keeps its data</title><desc id="d">The Proxmox VM disk is formatted ext4 and mounted on the worker VM, where each volume is a folder. In Kubernetes a pod mounts a claim; the default StorageClass local-path and the Local Path Provisioner make the folder and bind a volume to the claim. Backups of the VM and restic snapshots protect the folders.</desc>
+<style>
+:root{--plate:#f5f7fb;--tray:#e8eef7;--tray-s:#a3b3cc;--body:#ffffff;--body-s:#9fb0c8;--ink:#14213a;--sub:#475772;
+--glyph-bg:#e6edf8;--glyph:#1d3050;--casing:#f5f7fb;--pill:#ffffff;--shadow:#14213a;--risk:#b3261e;
+--net:#0b6fb3;--ctl:#b35f00;--git:#6d3fc7;--data:#0a7a54;--id:#b81b55;--gap:#5d6b82}
+@media (prefers-color-scheme: dark){:root{--plate:#0f1b2d;--tray:#16263d;--tray-s:#2c4263;--body:#1d3050;--body-s:#35507a;
+--ink:#f1f5fb;--sub:#a9bbd4;--glyph-bg:#eef3fa;--glyph:#16263d;--casing:#050b14;--pill:#050b14;--shadow:#050b14;--risk:#ff6b6b;
+--net:#4cc3ff;--ctl:#ffb347;--git:#b48cff;--data:#5be3b0;--id:#ff7a9c;--gap:#8fa3c2}}
+</style>
+<rect width="1220" height="720" rx="18" style="fill:var(--plate)"/>
+<text x="28" y="40" font-size="20" font-weight="700" style="fill:var(--ink)">How c1 keeps its data</text>
+<text x="28" y="62" font-size="13" style="fill:var(--sub)">An app asks for a volume. The volume is a plain folder on the worker&#x27;s data disk. Copies are the backups.</text>
+<rect x="30" y="104" width="250" height="270" rx="16" style="fill:var(--tray);stroke:var(--tray-s)" stroke-width="2" stroke-dasharray="2 7" stroke-linecap="round"/><text x="46" y="128" font-size="12" font-weight="700" letter-spacing=".05em" style="fill:var(--sub)">PROXMOX HOST</text>
+<rect x="310" y="104" width="380" height="370" rx="16" style="fill:var(--tray);stroke:var(--tray-s)" stroke-width="2" stroke-dasharray="2 7" stroke-linecap="round"/><text x="326" y="128" font-size="12" font-weight="700" letter-spacing=".05em" style="fill:var(--sub)">WORKER VM</text>
+<rect x="720" y="104" width="470" height="370" rx="16" style="fill:var(--tray);stroke:var(--tray-s)" stroke-width="2" stroke-dasharray="2 7" stroke-linecap="round"/><text x="736" y="128" font-size="12" font-weight="700" letter-spacing=".05em" style="fill:var(--sub)">KUBERNETES OBJECTS</text>
+<path d="M260.0 216.0 L283.0 216.0 Q295.0 216.0 295.0 204.0 L295.0 198.0 Q295.0 186.0 307.0 186.0 L330.0 186.0" fill="none" style="stroke:var(--casing)" stroke-width="9" stroke-linecap="round"/>
+<path d="M260.0 216.0 L283.0 216.0 Q295.0 216.0 295.0 204.0 L295.0 198.0 Q295.0 186.0 307.0 186.0 L330.0 186.0" fill="none" style="stroke:var(--data)" stroke-width="4" stroke-linecap="round" stroke-dasharray="10 7"/>
+<circle cx="260.0" cy="216.0" r="7" style="fill:var(--casing)"/><circle cx="260.0" cy="216.0" r="4" style="fill:var(--data)"/>
+<circle cx="330.0" cy="186.0" r="7" style="fill:var(--casing)"/><circle cx="330.0" cy="186.0" r="4" style="fill:var(--data)"/>
+<path d="M500.0 222.0 L500.0 249.0 Q500.0 261.0 488.0 261.0 L430.0 261.0 Q418.0 261.0 418.0 273.0 L418.0 300.0" fill="none" style="stroke:var(--casing)" stroke-width="9" stroke-linecap="round"/>
+<path d="M500.0 222.0 L500.0 249.0 Q500.0 261.0 488.0 261.0 L430.0 261.0 Q418.0 261.0 418.0 273.0 L418.0 300.0" fill="none" style="stroke:var(--data)" stroke-width="4" stroke-linecap="round" stroke-dasharray="10 7"/>
+<circle cx="500.0" cy="222.0" r="7" style="fill:var(--casing)"/><circle cx="500.0" cy="222.0" r="4" style="fill:var(--data)"/>
+<circle cx="418.0" cy="300.0" r="7" style="fill:var(--casing)"/><circle cx="418.0" cy="300.0" r="4" style="fill:var(--data)"/>
+<path d="M500.0 222.0 L500.0 249.0 Q500.0 261.0 512.0 261.0 L583.0 261.0 Q595.0 261.0 595.0 273.0 L595.0 300.0" fill="none" style="stroke:var(--casing)" stroke-width="9" stroke-linecap="round"/>
+<path d="M500.0 222.0 L500.0 249.0 Q500.0 261.0 512.0 261.0 L583.0 261.0 Q595.0 261.0 595.0 273.0 L595.0 300.0" fill="none" style="stroke:var(--data)" stroke-width="4" stroke-linecap="round" stroke-dasharray="10 7"/>
+<circle cx="500.0" cy="222.0" r="7" style="fill:var(--casing)"/><circle cx="500.0" cy="222.0" r="4" style="fill:var(--data)"/>
+<circle cx="595.0" cy="300.0" r="7" style="fill:var(--casing)"/><circle cx="595.0" cy="300.0" r="4" style="fill:var(--data)"/>
+<path d="M840.0 222.0 L840.0 260.0" fill="none" style="stroke:var(--casing)" stroke-width="9" stroke-linecap="round"/>
+<path d="M840.0 222.0 L840.0 260.0" fill="none" style="stroke:var(--net)" stroke-width="4" stroke-linecap="round"/>
+<circle cx="840.0" cy="222.0" r="7" style="fill:var(--casing)"/><circle cx="840.0" cy="222.0" r="4" style="fill:var(--net)"/>
+<circle cx="840.0" cy="260.0" r="7" style="fill:var(--casing)"/><circle cx="840.0" cy="260.0" r="4" style="fill:var(--net)"/>
+<path d="M840.0 332.0 L840.0 370.0" fill="none" style="stroke:var(--casing)" stroke-width="9" stroke-linecap="round"/>
+<path d="M840.0 332.0 L840.0 370.0" fill="none" style="stroke:var(--net)" stroke-width="4" stroke-linecap="round"/>
+<circle cx="840.0" cy="332.0" r="7" style="fill:var(--casing)"/><circle cx="840.0" cy="332.0" r="4" style="fill:var(--net)"/>
+<circle cx="840.0" cy="370.0" r="7" style="fill:var(--casing)"/><circle cx="840.0" cy="370.0" r="4" style="fill:var(--net)"/>
+<path d="M940.0 296.0 L960.0 296.0" fill="none" style="stroke:var(--casing)" stroke-width="9" stroke-linecap="round"/>
+<path d="M940.0 296.0 L960.0 296.0" fill="none" style="stroke:var(--net)" stroke-width="4" stroke-linecap="round"/>
+<circle cx="940.0" cy="296.0" r="7" style="fill:var(--casing)"/><circle cx="940.0" cy="296.0" r="4" style="fill:var(--net)"/>
+<circle cx="960.0" cy="296.0" r="7" style="fill:var(--casing)"/><circle cx="960.0" cy="296.0" r="4" style="fill:var(--net)"/>
+<path d="M1065.0 332.0 L1065.0 370.0" fill="none" style="stroke:var(--casing)" stroke-width="9" stroke-linecap="round"/>
+<path d="M1065.0 332.0 L1065.0 370.0" fill="none" style="stroke:var(--net)" stroke-width="4" stroke-linecap="round"/>
+<circle cx="1065.0" cy="332.0" r="7" style="fill:var(--casing)"/><circle cx="1065.0" cy="332.0" r="4" style="fill:var(--net)"/>
+<circle cx="1065.0" cy="370.0" r="7" style="fill:var(--casing)"/><circle cx="1065.0" cy="370.0" r="4" style="fill:var(--net)"/>
+<path d="M960.0 406.0 L940.0 406.0" fill="none" style="stroke:var(--casing)" stroke-width="9" stroke-linecap="round"/>
+<path d="M960.0 406.0 L940.0 406.0" fill="none" style="stroke:var(--net)" stroke-width="4" stroke-linecap="round"/>
+<circle cx="960.0" cy="406.0" r="7" style="fill:var(--casing)"/><circle cx="960.0" cy="406.0" r="4" style="fill:var(--net)"/>
+<circle cx="940.0" cy="406.0" r="7" style="fill:var(--casing)"/><circle cx="940.0" cy="406.0" r="4" style="fill:var(--net)"/>
+<path d="M740.0 406.0 L717.0 406.0 Q705.0 406.0 705.0 394.0 L705.0 348.0 Q705.0 336.0 693.0 336.0 L670.0 336.0" fill="none" style="stroke:var(--casing)" stroke-width="9" stroke-linecap="round"/>
+<path d="M740.0 406.0 L717.0 406.0 Q705.0 406.0 705.0 394.0 L705.0 348.0 Q705.0 336.0 693.0 336.0 L670.0 336.0" fill="none" style="stroke:var(--data)" stroke-width="4" stroke-linecap="round" stroke-dasharray="10 7"/>
+<circle cx="740.0" cy="406.0" r="7" style="fill:var(--casing)"/><circle cx="740.0" cy="406.0" r="4" style="fill:var(--data)"/>
+<circle cx="670.0" cy="336.0" r="7" style="fill:var(--casing)"/><circle cx="670.0" cy="336.0" r="4" style="fill:var(--data)"/>
+<path d="M418.0 372.0 L418.0 459.0 Q418.0 471.0 430.0 471.0 L458.0 471.0 Q470.0 471.0 470.0 483.0 L470.0 570.0" fill="none" style="stroke:var(--casing)" stroke-width="9" stroke-linecap="round"/>
+<path d="M418.0 372.0 L418.0 459.0 Q418.0 471.0 430.0 471.0 L458.0 471.0 Q470.0 471.0 470.0 483.0 L470.0 570.0" fill="none" style="stroke:var(--data)" stroke-width="4" stroke-linecap="round" stroke-dasharray="10 7"/>
+<circle cx="418.0" cy="372.0" r="7" style="fill:var(--casing)"/><circle cx="418.0" cy="372.0" r="4" style="fill:var(--data)"/>
+<circle cx="470.0" cy="570.0" r="7" style="fill:var(--casing)"/><circle cx="470.0" cy="570.0" r="4" style="fill:var(--data)"/>
+<path d="M595.0 372.0 L595.0 463.5 Q595.0 471.0 602.5 471.0 L602.5 471.0 Q610.0 471.0 610.0 478.5 L610.0 570.0" fill="none" style="stroke:var(--casing)" stroke-width="9" stroke-linecap="round"/>
+<path d="M595.0 372.0 L595.0 463.5 Q595.0 471.0 602.5 471.0 L602.5 471.0 Q610.0 471.0 610.0 478.5 L610.0 570.0" fill="none" style="stroke:var(--data)" stroke-width="4" stroke-linecap="round" stroke-dasharray="10 7"/>
+<circle cx="595.0" cy="372.0" r="7" style="fill:var(--casing)"/><circle cx="595.0" cy="372.0" r="4" style="fill:var(--data)"/>
+<circle cx="610.0" cy="570.0" r="7" style="fill:var(--casing)"/><circle cx="610.0" cy="570.0" r="4" style="fill:var(--data)"/>
+<g><rect x="50" y="184" width="210" height="72" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="50" y="180" width="210" height="72" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M50 192a12 12 0 0 1 12-12h186a12 12 0 0 1 12 12v2H50z" style="fill:var(--data)"/>
+<rect x="60" y="202.0" width="42" height="42" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(65.0 207.0) scale(0.665)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="14" width="34" height="20" rx="4"/><circle cx="33" cy="24" r="3"/><path d="M13 24h10"/></g></g>
+<text x="112" y="220.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">VM disk</text>
+<text x="112" y="234.8" font-size="11.5" style="fill:var(--sub)">the worker&#x27;s data disk</text>
+</g>
+<g><rect x="330" y="154" width="340" height="72" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="330" y="150" width="340" height="72" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M330 162a12 12 0 0 1 12-12h316a12 12 0 0 1 12 12v2H330z" style="fill:var(--data)"/>
+<rect x="340" y="172.0" width="42" height="42" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(345.0 177.0) scale(0.665)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 14h13l4 5h19v19H6z"/></g></g>
+<text x="392" y="190.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">ext4 filesystem</text>
+<text x="392" y="204.8" font-size="11.5" style="fill:var(--sub)">mounted as the c1 data folder</text>
+</g>
+<g><rect x="330" y="304" width="176" height="72" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="330" y="300" width="176" height="72" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M330 312a12 12 0 0 1 12-12h152a12 12 0 0 1 12 12v2H330z" style="fill:var(--data)"/>
+<rect x="340" y="322.0" width="42" height="42" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(345.0 327.0) scale(0.665)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 14h13l4 5h19v19H6z"/></g></g>
+<text x="392" y="340.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">Folder</text>
+<text x="392" y="354.8" font-size="11.5" style="fill:var(--sub)">monitoring/grafana</text>
+</g>
+<g><rect x="520" y="304" width="150" height="72" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="520" y="300" width="150" height="72" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M520 312a12 12 0 0 1 12-12h126a12 12 0 0 1 12 12v2H520z" style="fill:var(--data)"/>
+<rect x="530" y="322.0" width="42" height="42" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(535.0 327.0) scale(0.665)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 14h13l4 5h19v19H6z"/></g></g>
+<text x="582" y="340.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">Folder</text>
+<text x="582" y="354.8" font-size="11.5" style="fill:var(--sub)">media/config</text>
+</g>
+<g><rect x="740" y="154" width="200" height="72" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="740" y="150" width="200" height="72" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M740 162a12 12 0 0 1 12-12h176a12 12 0 0 1 12 12v2H740z" style="fill:var(--net)"/>
+<rect x="750" y="172.0" width="42" height="42" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(755.0 177.0) scale(0.665)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M24 6l16 8v20l-16 8-16-8V14zM8 14l16 8 16-8M24 22v20"/></g></g>
+<text x="802" y="190.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">Pod</text>
+<text x="802" y="204.8" font-size="11.5" style="fill:var(--sub)">mounts the claim</text>
+</g>
+<g><rect x="740" y="264" width="200" height="72" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="740" y="260" width="200" height="72" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M740 272a12 12 0 0 1 12-12h176a12 12 0 0 1 12 12v2H740z" style="fill:var(--net)"/>
+<rect x="750" y="282.0" width="42" height="42" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(755.0 287.0) scale(0.665)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6h18l8 8v28H12zM30 6v8h8M18 24h14M18 31h14"/></g></g>
+<text x="802" y="300.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">Claim (PVC)</text>
+<text x="802" y="314.8" font-size="11.5" style="fill:var(--sub)">&#x27;I need 10 GiB&#x27;</text>
+</g>
+<g><rect x="740" y="374" width="200" height="72" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="740" y="370" width="200" height="72" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M740 382a12 12 0 0 1 12-12h176a12 12 0 0 1 12 12v2H740z" style="fill:var(--data)"/>
+<rect x="750" y="392.0" width="42" height="42" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(755.0 397.0) scale(0.665)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="14" width="34" height="20" rx="4"/><circle cx="33" cy="24" r="3"/><path d="M13 24h10"/></g></g>
+<text x="802" y="410.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">Volume (PV)</text>
+<text x="802" y="424.8" font-size="11.5" style="fill:var(--sub)">bound to the claim</text>
+</g>
+<g><rect x="960" y="264" width="210" height="72" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="960" y="260" width="210" height="72" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M960 272a12 12 0 0 1 12-12h186a12 12 0 0 1 12 12v2H960z" style="fill:var(--net)"/>
+<rect x="970" y="282.0" width="42" height="42" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(975.0 287.0) scale(0.665)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="9" width="32" height="9" rx="2"/><rect x="8" y="21" width="32" height="9" rx="2"/><rect x="8" y="33" width="32" height="9" rx="2"/></g></g>
+<text x="1022" y="294.0" font-size="13.5" font-weight="700" style="fill:var(--ink)">StorageClass</text>
+<text x="1022" y="308.0" font-size="11.5" style="fill:var(--sub)">local-path, the default</text>
+<text x="1022" y="321.5" font-size="11.5" style="fill:var(--sub)">keeps the folder (Retain)</text>
+</g>
+<g><rect x="960" y="374" width="210" height="72" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="960" y="370" width="210" height="72" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M960 382a12 12 0 0 1 12-12h186a12 12 0 0 1 12 12v2H960z" style="fill:var(--net)"/>
+<rect x="970" y="392.0" width="42" height="42" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(975.0 397.0) scale(0.665)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="24" cy="24" r="6"/><path d="M24 6v6M24 36v6M6 24h6M36 24h6M11 11l4 4M33 33l4 4M37 11l-4 4M15 33l-4 4"/></g></g>
+<text x="1022" y="404.0" font-size="13.5" font-weight="700" style="fill:var(--ink)">Provisioner</text>
+<text x="1022" y="418.0" font-size="11.5" style="fill:var(--sub)">Local Path: a folder</text>
+<text x="1022" y="431.5" font-size="11.5" style="fill:var(--sub)">for each new claim</text>
+</g>
+<g><rect x="330" y="574" width="520" height="72" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="330" y="570" width="520" height="72" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M330 582a12 12 0 0 1 12-12h496a12 12 0 0 1 12 12v2H330z" style="fill:var(--data)"/>
+<rect x="340" y="592.0" width="42" height="42" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(345.0 597.0) scale(0.665)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="24" cy="13" rx="14" ry="5"/><path d="M10 13v22c0 3 6 5 14 5s14-2 14-5V13"/></g></g>
+<text x="392" y="604.0" font-size="13.5" font-weight="700" style="fill:var(--ink)">Backups</text>
+<text x="392" y="618.0" font-size="11.5" style="fill:var(--sub)">nightly Proxmox backup of the VM</text>
+<text x="392" y="631.5" font-size="11.5" style="fill:var(--sub)">restic snapshots of every folder, weekly restore test</text>
+</g>
+<rect x="815.1" y="231.0" width="49.8" height="20" rx="10" style="fill:var(--pill);stroke:var(--net)" stroke-width="1"/><text x="840.0" y="245.0" text-anchor="middle" font-size="11.5" font-weight="600" style="fill:var(--net)">mounts</text>
+<rect x="818.2" y="341.0" width="43.5" height="20" rx="10" style="fill:var(--pill);stroke:var(--net)" stroke-width="1"/><text x="840.0" y="355.0" text-anchor="middle" font-size="11.5" font-weight="600" style="fill:var(--net)">bound</text>
+<rect x="928.2" y="396.0" width="43.5" height="20" rx="10" style="fill:var(--pill);stroke:var(--net)" stroke-width="1"/><text x="950.0" y="410.0" text-anchor="middle" font-size="11.5" font-weight="600" style="fill:var(--net)">makes</text>
+<rect x="664.4" y="356.0" width="81.3" height="20" rx="10" style="fill:var(--pill);stroke:var(--data)" stroke-width="1"/><text x="705.0" y="370.0" text-anchor="middle" font-size="11.5" font-weight="600" style="fill:var(--data)">is a folder</text>
+<path d="M28 696h28" style="stroke:var(--net)" stroke-width="4" stroke-linecap="round"/><text x="64" y="700" font-size="12" style="fill:var(--sub)">network</text>
+<path d="M137.5 696h28" style="stroke:var(--data)" stroke-width="4" stroke-linecap="round" stroke-dasharray="10 7"/><text x="173.5" y="700" font-size="12" style="fill:var(--sub)">data and backup</text>
+</svg>

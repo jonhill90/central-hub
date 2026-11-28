@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" width="1200" height="640" font-family="system-ui,-apple-system,'Segoe UI',Roboto,sans-serif" role="img" aria-labelledby="t d">
+<title id="t">How Keycloak&#x27;s realms are laid out</title><desc id="d">Prod&#x27;s Keycloak has a master realm for break-glass admin and the lab realm with users, the groups lab-admins and lab-viewers, and clients for Grafana, Argo CD, Jellyfin, Proxmox, OPNsense, OpenBao, the Central Hub app, Mealie and Home Assistant. Dev&#x27;s Keycloak has its own master and lab realm. Nothing is shared between them.</desc>
+<style>
+:root{--plate:#f5f7fb;--tray:#e8eef7;--tray-s:#a3b3cc;--body:#ffffff;--body-s:#9fb0c8;--ink:#14213a;--sub:#475772;
+--glyph-bg:#e6edf8;--glyph:#1d3050;--casing:#f5f7fb;--pill:#ffffff;--shadow:#14213a;--risk:#b3261e;
+--net:#0b6fb3;--ctl:#b35f00;--git:#6d3fc7;--data:#0a7a54;--id:#b81b55;--gap:#5d6b82}
+@media (prefers-color-scheme: dark){:root{--plate:#0f1b2d;--tray:#16263d;--tray-s:#2c4263;--body:#1d3050;--body-s:#35507a;
+--ink:#f1f5fb;--sub:#a9bbd4;--glyph-bg:#eef3fa;--glyph:#16263d;--casing:#050b14;--pill:#050b14;--shadow:#050b14;--risk:#ff6b6b;
+--net:#4cc3ff;--ctl:#ffb347;--git:#b48cff;--data:#5be3b0;--id:#ff7a9c;--gap:#8fa3c2}}
+</style>
+<rect width="1200" height="640" rx="18" style="fill:var(--plate)"/>
+<text x="28" y="40" font-size="20" font-weight="700" style="fill:var(--ink)">How Keycloak&#x27;s realms are laid out</text>
+<text x="28" y="62" font-size="13" style="fill:var(--sub)">Each environment has its own Keycloak. Each has one realm for people and apps, with a client for every app.</text>
+<rect x="30" y="104" width="780" height="490" rx="16" style="fill:var(--tray);stroke:var(--tray-s)" stroke-width="2" stroke-dasharray="2 7" stroke-linecap="round"/><text x="46" y="128" font-size="12" font-weight="700" letter-spacing=".05em" style="fill:var(--sub)">PROD: C1 AND ITS KEYCLOAK</text>
+<rect x="300" y="134" width="490" height="440" rx="16" style="fill:var(--tray);stroke:var(--tray-s)" stroke-width="2" stroke-dasharray="2 7" stroke-linecap="round"/><text x="316" y="158" font-size="12" font-weight="700" letter-spacing=".05em" style="fill:var(--sub)">REALM LAB (BECOMES HOME): ONE SIGN-IN FOR EVERY APP</text>
+<rect x="850" y="104" width="320" height="490" rx="16" style="fill:var(--tray);stroke:var(--tray-s)" stroke-width="2" stroke-dasharray="2 7" stroke-linecap="round"/><text x="866" y="128" font-size="12" font-weight="700" letter-spacing=".05em" style="fill:var(--sub)">DEV: ITS OWN CLUSTER AND KEYCLOAK</text>
+<rect x="870" y="270" width="280" height="300" rx="16" style="fill:var(--tray);stroke:var(--tray-s)" stroke-width="2" stroke-dasharray="2 7" stroke-linecap="round"/><text x="886" y="294" font-size="12" font-weight="700" letter-spacing=".05em" style="fill:var(--sub)">REALM LAB (BECOMES HOME)</text>
+<path d="M810.0 349.0 L850.0 349.0" fill="none" style="stroke:var(--gap)" stroke-width="3" stroke-dasharray="3 8" stroke-linecap="round"/>
+<g><rect x="50" y="164" width="220" height="84" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="50" y="160" width="220" height="84" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M50 172a12 12 0 0 1 12-12h196a12 12 0 0 1 12 12v2H50z" style="fill:var(--id)"/>
+<rect x="60" y="187.0" width="44" height="44" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(65.3 192.3) scale(0.697)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect x="10" y="22" width="28" height="18" rx="3"/><path d="M16 22v-6a8 8 0 0 1 16 0v6"/></g></g>
+<text x="114" y="200.0" font-size="13.5" font-weight="700" style="fill:var(--ink)">master realm</text>
+<text x="114" y="214.0" font-size="11.5" style="fill:var(--sub)">Keycloak&#x27;s own admin</text>
+<text x="114" y="227.5" font-size="11.5" style="fill:var(--sub)">break-glass only</text>
+</g>
+<g><rect x="320" y="174" width="450" height="76" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="320" y="170" width="450" height="76" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M320 182a12 12 0 0 1 12-12h426a12 12 0 0 1 12 12v2H320z" style="fill:var(--id)"/>
+<rect x="330" y="193.0" width="44" height="44" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(335.3 198.3) scale(0.697)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="24" cy="16" r="7"/><path d="M9 41c1-9 8-13 15-13s14 4 15 13"/></g></g>
+<text x="384" y="206.0" font-size="13.5" font-weight="700" style="fill:var(--ink)">Users and groups</text>
+<text x="384" y="220.0" font-size="11.5" style="fill:var(--sub)">lab-admins, lab-viewers</text>
+<text x="384" y="233.5" font-size="11.5" style="fill:var(--sub)">one-time-code seed for each admin</text>
+</g>
+<g><rect x="316" y="280" width="150" height="64" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="316" y="276" width="150" height="64" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M316 288a12 12 0 0 1 12-12h126a12 12 0 0 1 12 12v2H316z" style="fill:var(--id)"/>
+<rect x="326" y="298.0" width="34" height="34" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(330.1 302.1) scale(0.538)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 8v32h32M14 32l7-10 7 6 9-14"/></g></g>
+<text x="370" y="319.5" font-size="13.5" font-weight="700" style="fill:var(--ink)">Grafana</text>
+</g>
+<g><rect x="474" y="280" width="150" height="64" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="474" y="276" width="150" height="64" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M474 288a12 12 0 0 1 12-12h126a12 12 0 0 1 12 12v2H474z" style="fill:var(--id)"/>
+<rect x="484" y="298.0" width="34" height="34" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(488.1 302.1) scale(0.538)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M38 20a14 14 0 0 0-26-4M10 28a14 14 0 0 0 26 4M10 12v6h6M38 36v-6h-6"/></g></g>
+<text x="528" y="312.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">Argo CD</text>
+<text x="528" y="326.8" font-size="11.5" style="fill:var(--sub)">and its CLI</text>
+</g>
+<g><rect x="632" y="280" width="150" height="64" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="632" y="276" width="150" height="64" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M632 288a12 12 0 0 1 12-12h126a12 12 0 0 1 12 12v2H632z" style="fill:var(--id)"/>
+<rect x="642" y="298.0" width="34" height="34" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(646.1 302.1) scale(0.538)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="9" width="32" height="30" rx="3"/><path d="M8 17h32M8 31h32M16 9v30M32 9v30"/></g></g>
+<text x="686" y="319.5" font-size="13.5" font-weight="700" style="fill:var(--ink)">Jellyfin</text>
+</g>
+<g><rect x="316" y="370" width="150" height="64" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="316" y="366" width="150" height="64" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M316 378a12 12 0 0 1 12-12h126a12 12 0 0 1 12 12v2H316z" style="fill:var(--id)"/>
+<rect x="326" y="388.0" width="34" height="34" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(330.1 392.1) scale(0.538)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="9" width="32" height="9" rx="2"/><rect x="8" y="21" width="32" height="9" rx="2"/><rect x="8" y="33" width="32" height="9" rx="2"/></g></g>
+<text x="370" y="409.5" font-size="13.5" font-weight="700" style="fill:var(--ink)">Proxmox</text>
+</g>
+<g><rect x="474" y="370" width="150" height="64" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="474" y="366" width="150" height="64" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M474 378a12 12 0 0 1 12-12h126a12 12 0 0 1 12 12v2H474z" style="fill:var(--id)"/>
+<rect x="484" y="388.0" width="34" height="34" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(488.1 392.1) scale(0.538)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12h32v24H8zM8 20h32M8 28h32M20 12v8M32 20v8M20 28v8"/></g></g>
+<text x="528" y="409.5" font-size="13.5" font-weight="700" style="fill:var(--ink)">OPNsense</text>
+</g>
+<g><rect x="632" y="370" width="150" height="64" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="632" y="366" width="150" height="64" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M632 378a12 12 0 0 1 12-12h126a12 12 0 0 1 12 12v2H632z" style="fill:var(--id)"/>
+<rect x="642" y="388.0" width="34" height="34" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(646.1 392.1) scale(0.538)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect x="10" y="22" width="28" height="18" rx="3"/><path d="M16 22v-6a8 8 0 0 1 16 0v6"/></g></g>
+<text x="686" y="409.5" font-size="13.5" font-weight="700" style="fill:var(--ink)">OpenBao</text>
+</g>
+<g><rect x="316" y="460" width="150" height="64" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="316" y="456" width="150" height="64" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M316 468a12 12 0 0 1 12-12h126a12 12 0 0 1 12 12v2H316z" style="fill:var(--id)"/>
+<rect x="326" y="478.0" width="34" height="34" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(330.1 482.1) scale(0.538)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6h18l8 8v28H12zM30 6v8h8M18 24h14M18 31h14"/></g></g>
+<text x="370" y="492.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">Central Hub</text>
+<text x="370" y="506.8" font-size="11.5" style="fill:var(--sub)">the web app</text>
+</g>
+<g><rect x="474" y="460" width="150" height="64" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="474" y="456" width="150" height="64" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M474 468a12 12 0 0 1 12-12h126a12 12 0 0 1 12 12v2H474z" style="fill:var(--id)"/>
+<rect x="484" y="478.0" width="34" height="34" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(488.1 482.1) scale(0.538)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M7 22h34a17 17 0 0 1-34 0zM16 14c-2-3 2-4 0-7M24 14c-2-3 2-4 0-7M32 14c-2-3 2-4 0-7"/></g></g>
+<text x="528" y="499.5" font-size="13.5" font-weight="700" style="fill:var(--ink)">Mealie</text>
+</g>
+<g><rect x="632" y="460" width="150" height="64" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="632" y="456" width="150" height="64" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M632 468a12 12 0 0 1 12-12h126a12 12 0 0 1 12 12v2H632z" style="fill:var(--id)"/>
+<rect x="642" y="478.0" width="34" height="34" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(646.1 482.1) scale(0.538)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M7 24L24 9l17 15M12 21v18h24V21"/></g></g>
+<text x="686" y="499.5" font-size="13.5" font-weight="700" style="fill:var(--ink)">Home Assistant</text>
+</g>
+<g><rect x="870" y="154" width="280" height="84" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="870" y="150" width="280" height="84" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M870 162a12 12 0 0 1 12-12h256a12 12 0 0 1 12 12v2H870z" style="fill:var(--id)"/>
+<rect x="880" y="177.0" width="44" height="44" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(885.3 182.3) scale(0.697)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect x="10" y="22" width="28" height="18" rx="3"/><path d="M16 22v-6a8 8 0 0 1 16 0v6"/></g></g>
+<text x="934" y="196.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">master realm</text>
+<text x="934" y="210.8" font-size="11.5" style="fill:var(--sub)">break-glass only</text>
+</g>
+<g><rect x="890" y="314" width="240" height="100" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="890" y="310" width="240" height="100" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M890 322a12 12 0 0 1 12-12h216a12 12 0 0 1 12 12v2H890z" style="fill:var(--id)"/>
+<rect x="900" y="345.0" width="44" height="44" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(905.3 350.3) scale(0.697)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="24" cy="16" r="7"/><path d="M9 41c1-9 8-13 15-13s14 4 15 13"/></g></g>
+<text x="954" y="358.0" font-size="13.5" font-weight="700" style="fill:var(--ink)">Dev users</text>
+<text x="954" y="372.0" font-size="11.5" style="fill:var(--sub)">its own identity.env</text>
+<text x="954" y="385.5" font-size="11.5" style="fill:var(--sub)">and its own secrets</text>
+</g>
+<rect x="789.4" y="339.0" width="81.3" height="20" rx="10" style="fill:var(--pill);stroke:var(--gap)" stroke-width="1"/><text x="830.0" y="353.0" text-anchor="middle" font-size="11.5" font-weight="600" style="fill:var(--gap)">none shared</text>
+<path d="M28 616h28" style="stroke:var(--gap)" stroke-width="4" stroke-linecap="round" stroke-dasharray="3 8"/><text x="64" y="620" font-size="12" style="fill:var(--sub)">no link</text>
+</svg>
