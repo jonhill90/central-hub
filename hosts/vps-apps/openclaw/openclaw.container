@@ -21,6 +21,10 @@ PublishPort=127.0.0.1:18789:18789
 UserNS=keep-id:uid=1000,gid=1000
 Volume=%h/data:/home/node/.openclaw:Z
 EnvironmentFile=%h/.config/vps-apps/secrets.env
+# No update check, no update telemetry, no usage count (OpenClaw README and docs.openclaw.ai/gateway/telemetry, read 2026-11-28).
+# Not yet tested against a running gateway.
+Environment=OPENCLAW_NO_AUTO_UPDATE=1
+Environment=DO_NOT_TRACK=1
 # --bind lan means "all interfaces inside the container"; the host side is the loopback publish above.
 Exec=node openclaw.mjs gateway --port 18789 --bind lan
 NoNewPrivileges=true

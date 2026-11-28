@@ -36,6 +36,8 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | [Make the agent box's encrypted bundle of its private files](make-the-box-secrets-bundle.md) | manual | draft |
 | [Test the agents' own GitHub account before the switch](test-the-agents-github-account.md) | manual | draft |
 | [Create the c1 node VMs on Proxmox from code](create-c1-node-vms.md) | automated | draft |
+| [Set up Hermes Agent on the VPS](set-up-hermes-agent-on-the-vps.md) | automated | draft |
+| [Set up OpenClaw on the VPS](set-up-openclaw-on-the-vps.md) | automated | draft |
 | [Set up the VPS apps host](set-up-the-vps-app-host.md) | automated | draft |
 | [Restore the home lab from its backups](restore-home-lab-from-backups.md) | manual | draft |
 | [Seed namespace secret-source on c1 from the controller](seed-secret-source.md) | manual | draft |
