@@ -18,4 +18,4 @@ Every page here gives its own sources: a file and line in this repository, or an
 
 ## How the drawings are made
 
-The figures in [images/](images/) are SVG files drawn by `images/build.py` from the box and cable lists inside it. To change one, edit the lists and run `python3 -I docs/explanations/images/build.py`. Each figure carries a light and a dark palette and its own opaque plate, so it reads on either page theme. Boxes use symbols drawn for this repository, not vendor logos: the logo sets we looked at are either trademark-restricted or unclear about public reuse, and a plain labelled block says the same thing. The Mermaid source stays under each figure.
+The figures in [images/](images/) are SVG files drawn by `images/build.py` from the box and cable lists inside it. To change one, edit the lists and run `python3 -I docs/explanations/images/build.py`. Each figure carries a light and a dark palette and its own opaque plate, so it reads on either page theme. Boxes use symbols drawn for this repository, not vendor logos: the logo sets we looked at are either trademark-restricted or unclear about public reuse, and a plain labelled block says the same thing.

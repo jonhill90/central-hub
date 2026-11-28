@@ -4,37 +4,6 @@ An app that must remember something, such as Grafana's dashboards or Jellyfin's 
 
 ![A volume is a folder on the worker VM's data disk; a pod mounts a claim, the local-path StorageClass and its provisioner make the folder, and backups copy it](images/c1-data.svg)
 
-<details>
-<summary>Mermaid source of the same figure</summary>
-
-```mermaid
-flowchart LR
-  subgraph px["Proxmox host"]
-    vd[("VM disk scsi1<br/>the worker's data disk")]
-  end
-  subgraph wk["worker VM"]
-    fs["ext4, mounted at<br/>/var/lib/c1-data"]
-    f1["folder<br/>local-path/media/config"]
-    f2["folder<br/>local-path/monitoring/grafana"]
-  end
-  subgraph k8s["Kubernetes objects"]
-    sc["StorageClass local-path<br/>the default; Retain"]
-    pvc["PersistentVolumeClaim<br/>the app's request: 'I need 10 GiB'"]
-    pv["PersistentVolume<br/>one real volume, bound to the claim"]
-    pod["pod<br/>mounts the claim"]
-  end
-  prov["Local Path Provisioner<br/>makes a folder for each new claim"]
-  vd --> fs --> f1 & f2
-  pod --> pvc --> sc --> prov
-  prov --> pv
-  pv --- f1
-  pvc --- pv
-  bk[("backups<br/>Proxmox backup of the VM;<br/>restic snapshots")]
-  fs -.-> bk
-```
-
-</details>
-
 The claim and folder names in the drawing are examples. On dev each folder is named `<namespace>/<claim>` (`hosts/kubernetes/home/c1/apps/local-path/values.yaml` line 25).
 
 ## The words
