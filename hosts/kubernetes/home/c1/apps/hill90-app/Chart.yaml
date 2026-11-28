@@ -1,0 +1,5 @@
+apiVersion: v2
+name: hill90-app
+description: The hill90-app AI agent platform's UI and API with their own Postgres on c1, built at pod start from a pinned commit of its public repository
+type: application
+version: 0.1.0

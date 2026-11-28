@@ -1,0 +1,43 @@
+# hill90-app on c1 (spec 2026-11-hill90-app-on-c1). Every value here is public.
+name: hill90-app
+
+# The app's own repository, read anonymously over HTTPS, and the one commit to build, by its full sha
+# (Activation gate items 3 and 6: no token, no image automation; a new commit is a reviewed pull request).
+source:
+  repoURL: https://github.com/jonhill90/hill90-app.git
+  commit: "3efd941afca60e11bb40e51777649936b4df0646"
+
+# One stock image builds and runs both services: it has git and npm (same pin as the Central Hub app).
+image: docker.io/library/node:22.21.1-bookworm@sha256:b84d52cd45bfe261096ccbf886955d431b8b9ed01b72eaef588e8886bda09e78
+# The app's own database: a stock Postgres by digest, one pod, one volume. Lab data only; the way off is the shared database the
+# platform picks later (spec).
+postgres:
+  image: docker.io/library/postgres:16.10-bookworm@sha256:38471f330eb885e04de130b768d6db4e10469e2311879c7e5c699f6d2d8a1c74
+  size: 2Gi
+uid: 1000
+postgresUid: 999
+
+# Sign-in through realm lab's client hill90-app (a confidential client with client roles admin and user, mapped from the
+# groups lab-admins and lab-viewers). The issuer and public origins come from Secret hill90-app-oidc and the client secret from
+# hill90-app-sso, both made by the identity role, so this public chart names no host. Until they exist the UI pod waits.
+auth:
+  internalURL: http://sso-service.identity.svc:8080/realms/lab
+  identityNamespace: identity
+  identityPort: 8080
+  clientId: hill90-app
+
+resources:
+  build:
+    requests: {cpu: 250m, memory: 512Mi}
+    limits: {memory: 2Gi}
+  api:
+    requests: {cpu: 50m, memory: 192Mi}
+    limits: {memory: 768Mi}
+  ui:
+    requests: {cpu: 50m, memory: 192Mi}
+    limits: {memory: 768Mi}
+  postgres:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {memory: 512Mi}
+workSize: 3Gi
+outSize: 1Gi

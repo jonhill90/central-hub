@@ -76,9 +76,14 @@ spec:
       realm:
         - {name: admin, description: "Admin in lab apps"}
         - {name: viewer, description: "Read-only in lab apps"}
+      # hill90-app reads client roles, never realm roles (its API authorises on resource_access.<client>.roles).
+      client:
+        {{ k8s_identity_hill90_app_name }}:
+          - {name: admin, description: "Administrator in hill90-app"}
+          - {name: user, description: "User in hill90-app"}
     groups:
 {% for group in k8s_identity_groups %}
-      - {name: {{ group.name }}, path: /{{ group.name }}, realmRoles: [{{ group.role }}]}
+      - {name: {{ group.name }}, path: /{{ group.name }}, realmRoles: [{{ group.role }}], clientRoles: {{ '{' }}{{ k8s_identity_hill90_app_name }}: [{{ 'admin, user' if group.role == 'admin' else 'user' }}]{{ '}' }}}
 {% endfor %}
     users:
 {% for user in k8s_identity_users %}
@@ -146,6 +151,25 @@ spec:
         attributes:
           pkce.code.challenge.method: S256
           post.logout.redirect.uris: "{{ k8s_identity_central_hub_app_hosts | map('regex_replace', '^(.*)$', 'https://\\1/') | join('##') }}"
+{{ mappers }}
+      # hill90-app (the owner's agent platform, Auth.js "Keycloak" provider): confidential, code flow. It calls back on
+      # /api/auth/callback/keycloak and returns to its home page after sign-out. Its roles are the client roles above.
+      - clientId: {{ k8s_identity_hill90_app_name }}
+        name: hill90-app
+        protocol: openid-connect
+        publicClient: false
+        clientAuthenticatorType: client-secret
+        secret: "${HILL90_APP_CLIENT_SECRET}"
+        standardFlowEnabled: true
+        directAccessGrantsEnabled: false
+        implicitFlowEnabled: false
+        serviceAccountsEnabled: false
+        rootUrl: https://{{ k8s_identity_hill90_app_hosts | first }}
+        baseUrl: /
+        redirectUris: {{ k8s_identity_hill90_app_hosts | map('regex_replace', '^(.*)$', 'https://\\1/api/auth/callback/keycloak') | list | to_json }}
+        webOrigins: {{ k8s_identity_hill90_app_hosts | map('regex_replace', '^(.*)$', 'https://\\1') | list | to_json }}
+        attributes:
+          post.logout.redirect.uris: "{{ k8s_identity_hill90_app_hosts | map('regex_replace', '^(.*)$', 'https://\\1/') | join('##') }}"
 {{ mappers }}
       # Mealie, the recipe manager (its own OpenID Connect, docs.mealie.io "OpenID Connect"): confidential, code flow. It
       # calls back on /login and, with sign-out on, returns there after the identity provider's sign-out.

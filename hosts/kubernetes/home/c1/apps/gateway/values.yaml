@@ -22,6 +22,8 @@ routes:
   ntfy: {namespace: alerts, service: ntfy, port: 80}
   # The Central Hub app is called hub: hub.<zone> and hub.apps.c1.prod.<zone> (the owner's name for it, 2026-11-21).
   hub: {namespace: central-hub-app, service: central-hub-app, port: 3000}
+  # hill90-app's UI (the owner's older agent platform, brought to c1 on 2026-11-28): hill90.apps.c1.prod.<zone>.
+  hill90: {namespace: hill90-app, service: hill90-app-ui, port: 3000}
 
 # The name check (templates/name-check.yaml): every half hour, at :15 and :45, a pod in this namespace
 # opens https://<app>.<zone>/ and https://<app>.apps.c1.prod.<zone>/ through this Gateway, checks

@@ -43,6 +43,8 @@ k8s_identity_homeassistant_hosts: >-
 k8s_identity_central_hub_app_hosts: >-
   {{ ([k8s_identity_central_hub_app_host_label ~ '.' ~ k8s_identity_zone] if k8s_identity_short_names | bool else [])
   + [k8s_identity_central_hub_app_host_label ~ '.apps.c1.prod.' ~ k8s_identity_zone] }}
+k8s_identity_hill90_app_hosts:
+  - "{{ k8s_identity_hill90_app_host_label ~ '.apps.c1.prod.' ~ k8s_identity_zone }}"
 k8s_identity_issuer: https://{{ k8s_identity_host }}/realms/{{ k8s_identity_realm }}
 # The sign-in theme (k8s_identity_theme_dir): its name, its files as ConfigMap entries (tasks/theme.yml
 # fills them in; each is {key, path under the theme folder, b64}), and a hash that restarts the pod
@@ -75,7 +77,7 @@ k8s_identity_password_keys: >-
 # OPNSENSE_CLIENT_SECRET likewise, only with an OPNsense GUI name.
 k8s_identity_client_secret_keys: >-
   {{ ['GRAFANA_CLIENT_SECRET', 'ARGOCD_CLIENT_SECRET', 'JELLYFIN_CLIENT_SECRET', 'PROXMOX_CLIENT_SECRET',
-  'CENTRAL_HUB_APP_CLIENT_SECRET', 'MEALIE_CLIENT_SECRET', 'HEADLAMP_CLIENT_SECRET']
+  'CENTRAL_HUB_APP_CLIENT_SECRET', 'MEALIE_CLIENT_SECRET', 'HEADLAMP_CLIENT_SECRET', 'HILL90_APP_CLIENT_SECRET']
   + (['OPENBAO_CLIENT_SECRET'] if k8s_identity_openbao_hosts | length > 0 else [])
   + (['OPNSENSE_CLIENT_SECRET'] if k8s_identity_opnsense_hosts | length > 0 else []) }}
 # Each member of k8s_identity_otp_group has a TOTP seed: TOTP_ and the user name as for passwords.

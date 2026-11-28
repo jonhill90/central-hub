@@ -73,7 +73,7 @@ PY
 chmod +x "$t/bin/kubectl"
 
 printf '%s\n' 'GRAFANA_CLIENT_SECRET=gsecret1' 'ARGOCD_CLIENT_SECRET=asecret1' 'JELLYFIN_CLIENT_SECRET=jsecret1' \
-  'PROXMOX_CLIENT_SECRET=psecret1' 'CENTRAL_HUB_APP_CLIENT_SECRET=csecret1' 'MEALIE_CLIENT_SECRET=msecret1' 'HEADLAMP_CLIENT_SECRET=hlsecret1' 'PASSWORD_OWNER=pwowner1' 'TOTP_OWNER=TOTPSEEDOWNER1' > "$t/identity.env"
+  'PROXMOX_CLIENT_SECRET=psecret1' 'CENTRAL_HUB_APP_CLIENT_SECRET=csecret1' 'MEALIE_CLIENT_SECRET=msecret1' 'HEADLAMP_CLIENT_SECRET=hlsecret1' 'HILL90_APP_CLIENT_SECRET=h9secret1' 'PASSWORD_OWNER=pwowner1' 'TOTP_OWNER=TOTPSEEDOWNER1' > "$t/identity.env"
 chmod 0600 "$t/identity.env"
 openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout "$t/ca.key" -subj /CN=lab-root -days 1 \
   -out "$t/ca.pem" 2>/dev/null
@@ -111,11 +111,11 @@ realm=$(es ExternalSecret/identity/realm-lab-secrets 2>/dev/null); argo=$(es Ext
 realm_keys=$(python3 -I -c 'import json, sys; d = json.loads(sys.argv[1])["spec"]
 print(d["secretStoreRef"]["name"], d["target"]["creationPolicy"],
       ",".join(sorted(e["secretKey"] + "=" + e["remoteRef"]["key"] + ":" + e["remoteRef"]["property"] for e in d["data"])))' "$realm" 2>/dev/null)
-want_keys="openbao Owner ARGOCD_CLIENT_SECRET=c1/identity:ARGOCD_CLIENT_SECRET,CENTRAL_HUB_APP_CLIENT_SECRET=c1/identity:CENTRAL_HUB_APP_CLIENT_SECRET,GRAFANA_CLIENT_SECRET=c1/identity:GRAFANA_CLIENT_SECRET,HEADLAMP_CLIENT_SECRET=c1/identity:HEADLAMP_CLIENT_SECRET,JELLYFIN_CLIENT_SECRET=c1/identity:JELLYFIN_CLIENT_SECRET,MEALIE_CLIENT_SECRET=c1/identity:MEALIE_CLIENT_SECRET,OPNSENSE_CLIENT_SECRET=c1/identity:OPNSENSE_CLIENT_SECRET,PASSWORD_OWNER=c1/identity:PASSWORD_OWNER,PROXMOX_CLIENT_SECRET=c1/identity:PROXMOX_CLIENT_SECRET,TOTP_OWNER=c1/identity:TOTP_OWNER"
-want_w1="ExternalSecret/argocd/argocd-sso ExternalSecret/central-hub-app/central-hub-app-sso ExternalSecret/headlamp/headlamp-sso ExternalSecret/identity/realm-lab-secrets ExternalSecret/identity/sso-bootstrap-admin ExternalSecret/identity/sso-db ExternalSecret/mealie/mealie-sso ExternalSecret/media/jellyfin-sso ExternalSecret/monitoring/grafana-sso Secret/central-hub-app/central-hub-app-oidc Secret/media/jellyfin-lab-root-ca"
+want_keys="openbao Owner ARGOCD_CLIENT_SECRET=c1/identity:ARGOCD_CLIENT_SECRET,CENTRAL_HUB_APP_CLIENT_SECRET=c1/identity:CENTRAL_HUB_APP_CLIENT_SECRET,GRAFANA_CLIENT_SECRET=c1/identity:GRAFANA_CLIENT_SECRET,HEADLAMP_CLIENT_SECRET=c1/identity:HEADLAMP_CLIENT_SECRET,HILL90_APP_CLIENT_SECRET=c1/identity:HILL90_APP_CLIENT_SECRET,JELLYFIN_CLIENT_SECRET=c1/identity:JELLYFIN_CLIENT_SECRET,MEALIE_CLIENT_SECRET=c1/identity:MEALIE_CLIENT_SECRET,OPNSENSE_CLIENT_SECRET=c1/identity:OPNSENSE_CLIENT_SECRET,PASSWORD_OWNER=c1/identity:PASSWORD_OWNER,PROXMOX_CLIENT_SECRET=c1/identity:PROXMOX_CLIENT_SECRET,TOTP_OWNER=c1/identity:TOTP_OWNER"
+want_w1="ExternalSecret/argocd/argocd-sso ExternalSecret/central-hub-app/central-hub-app-sso ExternalSecret/headlamp/headlamp-sso ExternalSecret/hill90-app/hill90-app-sso ExternalSecret/identity/realm-lab-secrets ExternalSecret/identity/sso-bootstrap-admin ExternalSecret/identity/sso-db ExternalSecret/mealie/mealie-sso ExternalSecret/media/jellyfin-sso ExternalSecret/monitoring/grafana-sso Secret/central-hub-app/central-hub-app-oidc Secret/hill90-app/hill90-app-oidc Secret/media/jellyfin-lab-root-ca"
 if [[ $r1 -eq 0 && $w1 == "$want_w1" && $realm_keys == "$want_keys" &&
       $argo == *'"app.kubernetes.io/part-of": "argocd"'* && $argo == *'"property": "ARGOCD_CLIENT_SECRET"'* && $argo == *'"secretKey": "clientSecret"'* ]]; then
-  ok "1. store openbao: seven ExternalSecrets (the database account from c1/identity-db, Keycloak's first admin from c1/identity-admin, the others from c1/identity), store openbao, Owner; only the lab root and the app's public names made as Secrets"
+  ok "1. store openbao: eight ExternalSecrets (the database account from c1/identity-db, Keycloak's first admin from c1/identity-admin, the others from c1/identity), store openbao, Owner; only the lab root and the app's public names made as Secrets"
 else bad "1. rc=$r1 [$w1] [$realm_keys] $argo $(tail -n 20 "$t/out")"; fi
 
 # 2
@@ -131,13 +131,13 @@ else bad "3. rc=$r3 creates=$c3"; fi
 
 # 4
 fresh; run; r4=$rc w4=$(what)
-want_w4="Secret/argocd/argocd-sso Secret/central-hub-app/central-hub-app-oidc Secret/central-hub-app/central-hub-app-sso Secret/headlamp/headlamp-sso Secret/identity/realm-lab-secrets Secret/mealie/mealie-sso Secret/media/jellyfin-lab-root-ca Secret/media/jellyfin-sso Secret/monitoring/grafana-sso"
+want_w4="Secret/argocd/argocd-sso Secret/central-hub-app/central-hub-app-oidc Secret/central-hub-app/central-hub-app-sso Secret/headlamp/headlamp-sso Secret/hill90-app/hill90-app-oidc Secret/hill90-app/hill90-app-sso Secret/identity/realm-lab-secrets Secret/mealie/mealie-sso Secret/media/jellyfin-lab-root-ca Secret/media/jellyfin-sso Secret/monitoring/grafana-sso"
 if [[ $r4 -eq 0 && $w4 == "$want_w4" ]]; then ok "4. store off: the role makes the Secrets as before, no ExternalSecret"
 else bad "4. rc=$r4 [$w4] $(tail -n 20 "$t/out")"; fi
 
 # 5
 fresh; run -e k8s_gitops_source_app_secrets_store=openbao
-leaks=$(grep -cE 'gsecret1|asecret1|jsecret1|psecret1|csecret1|pwowner1|TOTPSEEDOWNER1' "$t/out" "$t/state.json" | awk -F: '{s += $2} END {print s}')
+leaks=$(grep -cE 'gsecret1|asecret1|jsecret1|psecret1|csecret1|h9secret1|pwowner1|TOTPSEEDOWNER1' "$t/out" "$t/state.json" | awk -F: '{s += $2} END {print s}')
 if [[ $rc -eq 0 && $leaks -eq 0 ]]; then ok "5. no value in the output or the ExternalSecrets"
 else bad "5. rc=$rc, $leaks lines hold a value"; fi
 
