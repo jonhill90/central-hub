@@ -88,6 +88,12 @@ for line in ("+kind: ExternalSecret", "+kind: Secret", "-  password: x"):
     d = fx([APP], roles=None, patches={APP: "@@ -1 +1 @@\n" + line}); check("a changed line %r needs the reviewer's pass" % line, run(d), "NOT GREEN: no ledger")
 d = fx([APP], roles=None, patches={APP: "@@ -1 +1 @@\n-  replicas: 1\n+  replicas: 2"}); check("a plain manifest change merges on green", run(d), "GREEN")
 d = fx([APP], roles=None, patches={APP: "@@ -1 +1 @@\n kind: Secret\n-  replicas: 1\n+  replicas: 2"}); check("an unchanged context line about a Secret does not guard", run(d), "GREEN")
+# The notebook's notes are prose: naming a password in one guards nothing, but its other file types still guard.
+def notebook(path, line):
+    d = fx([path], roles=None, full="jonhill90/agent-notebook", patches={path: "@@ -1 +1 @@\n" + line})
+    return subprocess.run([sys.executable, "-I", SRC, "jonhill90/agent-notebook", str(PR), H, d], capture_output=True, text=True).stdout.strip().splitlines()[-1]
+check("a notebook note that says password merges on green", notebook("01-notes/01a-atomic/x.md", "+No key or password is in it"), "GREEN")
+check("a notebook yaml file with a password line still needs the reviewer's pass", notebook("x/values.yaml", "+  password: x"), "NOT GREEN: no ledger")
 d = fx([APP], roles=None, patches={APP: None});          check("a file with changes and no patch needs the reviewer's pass", run(d), "NOT GREEN: no ledger")
 for gp in ("hosts/ansible/roles/k8s_identity/files/ensure-user.sh", "hosts/ansible/roles/k8s_identity/templates/realm.yaml.j2"):
     d = fx([gp], roles=None, patches={gp: "@@ -1 +1 @@\n+x"}); check("%s needs the reviewer's pass" % gp, run(d), "NOT GREEN: no ledger")
