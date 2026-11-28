@@ -366,6 +366,20 @@ def post_findings(count):
     return subprocess.run([os.path.join(LIBEXEC, "checkpoint-note.sh"), "post", str(min(count, MAX_POST))]).returncode
 
 
+def hub(args):
+    """The hub dispatcher's wake (hub-fire.py, its own rows and mode; off unless hub-fire.json turns it on). Its outcome
+    is printed and never changes the scan's own posts or exit code; a missing or failing hub-fire is a printed line only."""
+    path = os.path.join(LIBEXEC, "hub-fire.py")
+    if not os.path.exists(path):
+        return
+    try:
+        out = subprocess.run([path] + args, capture_output=True, text=True, timeout=120)
+        for line in (out.stdout + out.stderr).splitlines():
+            print(line)
+    except (OSError, subprocess.SubprocessError) as e:
+        print("pickup-scan: hub-fire did not run (%s)" % type(e).__name__)
+
+
 def run(mode):
     state_dir = os.path.join(WORK, "state")
     os.makedirs(state_dir, exist_ok=True)
@@ -465,6 +479,11 @@ def run(mode):
         if bits:
             wake = "; ".join(bits)
     print("pickup-scan: wake: " + wake)
+    for project in sorted(res["capped"]):          # a claim is on main: the project's ring is answered
+        if mode == "run":
+            hub(["ack", project])
+    for p, l, _ in announce:                       # the first ready task: hub-fire decides whether to fire
+        hub(["ring", p, l] + (["--dry-run"] if mode == "dry-run" else []))
     if mode == "run":
         known_next = sorted(k for k in [k for _, _, k in announce] + [k for _, _, k in stale] + res["findings"] if k in known or k in posted)
         posts_next = {k: posts_now[k] for k in known_next if k in posts_now}

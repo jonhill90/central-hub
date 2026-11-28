@@ -288,6 +288,19 @@ argument_specs:
           The projects the pickup scan lists, written to <work_dir>/pickup.json: project name to repo (one the App is
           installed on) and number (the project's standing draft pull request, which pickup-note comments on; left out
           until that pull request exists). Empty skips the file, and the scan reports that as a finding.
+      agent_box_hub_fire_mode:
+        type: str
+        default: "off"
+        choices: ["off", dry-run, "on"]
+        description: >-
+          The hub dispatcher's wake (files/hub-fire.py), called by the pickup scan: off does nothing, dry-run prints what
+          it would fire, on starts each listed project's worker task through its API trigger, once per ring.
+      agent_box_hub_fire_projects:
+        type: dict
+        default: {}
+        description: >-
+          Project name to {trigger: trig_..., text: false}, written with the mode to <work_dir>/hub-fire.json. The token
+          is not here: it is /etc/agent-keys/hub-fire/<project>.token, made only after the owner's card.
       agent_box_opnsense_test:
         type: dict
         default: {}
