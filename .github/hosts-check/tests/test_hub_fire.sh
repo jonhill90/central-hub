@@ -152,7 +152,7 @@ m, clock, calls = load("c5-bad")
 check(run(m, "ring", "agent-notebook", "TASK-401; rm")[0] == 2 and calls == [], "5: a label that is not TASK-NNNN is refused")
 rc, out = run(m, "ring", "other-project", "TASK-0401")
 check(calls == [] and "no trigger" in out, "5: a project not in the settings fires nothing")
-json.dump({"mode": "on", "projects": {"agent-notebook": {"trigger": "https://evil.example/x"}}}, open(os.path.join(m.WORK, "hub-fire.json"), "w"))
+json.dump({"mode": "on", "projects": {"agent-notebook": {"trigger": "not-a-trigger; rm"}}}, open(os.path.join(m.WORK, "hub-fire.json"), "w"))
 check(run(m, "ring", "agent-notebook", "TASK-0401")[0] == 2 and calls == [], "5: a trigger that is not trig_... is refused")
 
 # 6. the call itself
