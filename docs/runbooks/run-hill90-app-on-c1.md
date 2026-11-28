@@ -22,8 +22,8 @@ Sign-in: realm lab's client `hill90-app` (confidential). The API authorises on c
 
 ## Steps
 
-1. Add the client to the live realm without ending any session, from the agent box: `c1-ansible check clients`, then `c1-ansible apply clients <clearance id>`. The `secrets` tag adds `HILL90_APP_CLIENT_SECRET` to the box's `identity.env` if it is missing; then run `secrets-store put-apps`.
-   expect: `client hill90-app: ok` and `failed=0`; Secrets `hill90-app-sso` and `hill90-app-oidc` exist (`c1-read get externalsecrets -n hill90-app`).
+1. Add the client to the live realm without ending any session, from the agent box: `c1-ansible check clients`, then `c1-ansible apply clients <clearance id>`. The wrapper's client list (`hosts/ansible/roles/agent_box/files/c1-ansible.sh`, `fixed_json`) must name `hill90-app`; that file is a box limit, so it is its own change and installs only on the reviewer's digest pass (D-0044). The run creates the client, makes its roles `admin` and `user` and gives them to the groups (`lab-admins` both, `lab-viewers` `user`) in place, because the realm import that carries them never runs on a live realm. The `secrets` tag adds `HILL90_APP_CLIENT_SECRET` to the box's `identity.env` if it is missing; then run `secrets-store put-apps`.
+   expect: `client hill90-app: ok`, a `roles ok: ... created, ... mapped` line and `failed=0`; Secrets `hill90-app-sso` and `hill90-app-oidc` exist (`c1-read get externalsecrets -n hill90-app`).
 2. After Argo CD syncs, read the pods: `c1-read -n hill90-app get pods`, then `c1-read -n hill90-app logs deploy/hill90-app-api -c build --tail=3` and the same for `hill90-app-ui`.
    expect: `hill90-app-db-0`, the API and the UI `Running 1/1`; the build logs end with `built api <sha>` and `built ui <sha>`.
 3. Open `https://hill90.apps.c1.prod.<zone>/` from the lab network or the tailnet and sign in with a lab account.
@@ -34,7 +34,7 @@ Sign-in: realm lab's client `hill90-app` (confidential). The API authorises on c
 - Build init container `OOMKilled`: raise `resources.build.limits.memory` in values; the worker has about 5 GiB free, check `c1-read top nodes`.
 - API crash loop: `c1-read -n hill90-app logs deploy/hill90-app-api --tail=30`; a `[startup]` line names the cause (database, migrations).
 - Keycloak says "Invalid parameter: redirect_uri": the client is not in the realm yet; run step 1.
-- Signed in, API answers 403: the account is in no group, so the token has no client role.
+- Signed in, API answers 403: the token has no client role `admin` or `user` for client `hill90-app`. Check that the step 1 run printed its `roles ok` line, that the account is in `lab-admins` or `lab-viewers`, and that the API container has `KEYCLOAK_CLIENT_ID=hill90-app` (`c1-read -n hill90-app get deploy hill90-app-api -o yaml`).
 
 ## Take it off
 

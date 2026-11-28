@@ -177,6 +177,8 @@ spec:
             - {name: DATABASE_URL, value: postgresql://hill90@{{ $v.name }}-db:5432/hill90_api}
             - {name: KEYCLOAK_JWKS_URI, value: {{ $v.auth.internalURL }}/protocol/openid-connect/certs}
             - {name: API_INTERNAL_URL, value: http://{{ $v.name }}-api:3000}
+            # The API reads roles from resource_access[KEYCLOAK_CLIENT_ID], which defaults to hill90-ui; the lab's client is hill90-app.
+            - {name: KEYCLOAK_CLIENT_ID, value: {{ $v.auth.clientId }}}
 {{- else }}
             - {name: API_URL, value: http://{{ $v.name }}-api:3000}
             - {name: AUTH_TRUST_HOST, value: "true"}

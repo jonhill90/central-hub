@@ -21,6 +21,15 @@ AKM_SIGNING_PRIVATE_KEY="$(awk 'BEGIN{ORS="\\n"}{print}' $S/akm.pem)"
 export AKM_SIGNING_PRIVATE_KEY
 MODEL_ROUTER_SIGNING_PRIVATE_KEY="$(awk 'BEGIN{ORS="\\n"}{print}' $S/mr.pem)"
 export MODEL_ROUTER_SIGNING_PRIVATE_KEY
+# A rebuild starts this pod before the identity stage makes Secret hill90-app-oidc: until the issuer file exists a small
+# stand-in answers on the port (200 on /health so the apps stage can finish, 503 elsewhere), then this script starts the API.
+if [ ! -s /var/run/hill90/oidc/issuer ]; then
+  node -e '
+    const fs=require("fs"),http=require("http");
+    http.createServer((q,r)=>{r.statusCode=q.url==="/health"?200:503;r.end("hill90-app api: sign-in not configured yet\n")}).listen(3000,"0.0.0.0");
+    setInterval(()=>{if(fs.existsSync("/var/run/hill90/oidc/issuer"))process.exit(0)},5000);
+  '
+fi
 KEYCLOAK_ISSUER="$(cat /var/run/hill90/oidc/issuer)"
 export KEYCLOAK_ISSUER
 exec node dist/index.js
