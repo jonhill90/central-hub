@@ -802,6 +802,24 @@
     mode: "0755"
   tags: [wrappers]
 
+- name: The hub dispatcher's wake, root's (pickup-scan.py calls it; files/hub-fire.py)
+  ansible.builtin.copy:
+    src: hub-fire.py
+    dest: "{{ agent_box_libexec_dir }}/hub-fire.py"
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [wrappers]
+
+- name: The hub dispatcher's settings (mode and each project's trigger id; no token)
+  ansible.builtin.copy:
+    dest: "{{ agent_box_work_dir }}/hub-fire.json"
+    content: "{{ {'mode': agent_box_hub_fire_mode, 'projects': agent_box_hub_fire_projects} | to_nice_json }}\n"
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [wrappers]
+
 - name: Pickup scan service and timer
   ansible.builtin.template:
     src: "pickup-scan.{{ item }}.j2"

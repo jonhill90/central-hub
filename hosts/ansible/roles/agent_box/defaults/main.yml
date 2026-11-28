@@ -451,6 +451,13 @@ agent_box_pickup_scan_on_calendar: "*-*-* *:00/10:00 UTC"
 # `pickup` fields, with the repository and the number of its standing draft pull request that pickup-note comments on. A
 # project with no number can be scanned but not posted for. Only agent-notebook is listed for now.
 agent_box_pickup_projects: {agent-notebook: {repo: agent-notebook, number: 753}}
+# The hub dispatcher's wake (files/hub-fire.py), called by the pickup scan for each project's first ready task: it starts the
+# project's worker task through that task's API trigger, once per ring, with at most 3 tries 30, 60 and 120 minutes apart,
+# and its rows in <work_dir>/state/hub-wakes.sqlite survive restarts. off (the default) does nothing; dry-run prints what it
+# would fire; on fires, and needs each project's trigger id below and its token in /etc/agent-keys/hub-fire/<project>.token,
+# which only the owner's card makes. No project is listed until that card.
+agent_box_hub_fire_mode: "off"
+agent_box_hub_fire_projects: {}
 # The owner's pick for a dev run on a node short of memory (docs/runbooks/rebuild-k8s-layer-with-one-command.md): ephemeral-dev
 # (the run stops the CI runner, tears dev down at its end, then the runner starts) or keep-dev (the runner stops and dev stays up; the
 # notebook's queued jobs fail or are cancelled after 24 hours queued, so if dev stays up for more than a day its daily access-expiry

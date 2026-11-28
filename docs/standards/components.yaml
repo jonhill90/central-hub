@@ -669,6 +669,17 @@ components:
     sources: [url:api.github.com, url:github.com/jonhill90/, url:github.com/actions/, action:actions/]
     carries: [url:github.com/, url:raw.githubusercontent.com/, image:ghcr.io/]
     checked: 2026-11-14
+  - name: Claude Code scheduled tasks (API trigger)
+    kind: hosted
+    used-for: the hub dispatcher's wake (hub-fire.py), which starts a project's worker task through its API trigger; off until the owner's card
+    licence: closed service
+    licence-source: https://code.claude.com/docs/en/routines
+    paid-edition: available on paid claude.ai plans only (Pro, Max, Ultra, Team, Enterprise); runs draw down subscription usage
+    paid-edition-source: https://code.claude.com/docs/en/routines
+    verdict: hosted
+    exit-path: the pickup scan's comment on the standing pull request already wakes a session with no trigger; turning hub-fire off (agent_box_hub_fire_mode off) falls back to it
+    sources: [url:api.anthropic.com/v1/claude_code/routines/]
+    checked: 2026-11-28
   - name: Azure
     kind: hosted
     used-for: off-site backups, a Key Vault and app registrations (D-0033)

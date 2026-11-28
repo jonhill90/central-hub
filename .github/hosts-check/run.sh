@@ -168,6 +168,7 @@ check_ansible() {
   suite bash "$here/tests/test_checkpoint_scan.sh"
   suite bash "$here/tests/test_pickup_note.sh"
   suite bash "$here/tests/test_pickup_scan.sh"
+  suite bash "$here/tests/test_hub_fire.sh"
   suite bash "$here/tests/test_merge_checked.sh"
   suite bash "$here/tests/test_lifeline_nmcli_read.sh"
   suite bash "$here/tests/test_lifeline_cleanup.sh"
