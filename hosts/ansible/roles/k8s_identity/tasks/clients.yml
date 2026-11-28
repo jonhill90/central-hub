@@ -112,6 +112,43 @@
   failed_when: k8s_identity_realm_display_name.rc != 0
   when: not ansible_check_mode
 
+# A client's roles and the groups that hold them (hill90-app's API authorises on client roles). The realm import does this for a new
+# realm; on a live one this does the same in place, from the same rendered template: the roles under roles.client.<clientId> and the
+# groups' clientRoles. Clients with none are skipped.
+- name: clients | The rendered realm's client roles and group mappings
+  ansible.builtin.set_fact:
+    k8s_identity_clients_realm: "{{ k8s_identity_clients_realm_manifest.content | b64decode | from_yaml }}"
+  when: not ansible_check_mode
+
+- name: clients | Each client's roles exist and its groups hold them
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - -n
+      - "{{ k8s_identity_namespace }}"
+      - exec
+      - "{{ k8s_identity_name }}-0"
+      - --
+      - bash
+      - -c
+      - "{{ lookup('ansible.builtin.file', 'ensure-client-roles.sh') }}"
+      - ensure-client-roles
+      - "{{ k8s_identity_realm }}"
+      - "{{ __client }}"
+      - "{{ k8s_identity_clients_realm.spec.realm.roles.client[__client] | map(attribute='name') | join(',') }}"
+      - >-
+        {% for g in k8s_identity_clients_realm.spec.realm.groups if g.clientRoles is defined and __client in g.clientRoles -%}
+        {{ g.name }}:{{ g.clientRoles[__client] | join(',') }};
+        {%- endfor %}
+  register: k8s_identity_client_roles
+  changed_when: "'0 created' not in k8s_identity_client_roles.stdout"
+  failed_when: k8s_identity_client_roles.rc != 0
+  when:
+    - not ansible_check_mode
+    - __client in (k8s_identity_clients_realm.spec.realm.roles.client | default({}))
+  loop: "{{ k8s_identity_ensure_clients }}"
+  loop_control: {loop_var: __client}
+
 # ensure-client.sh prints one line, "ensure-client: <step> failed: <reason>", with a fixed phrase for the reason, never
 # kcadm's text; only that line is shown. A failure with no such line (kubectl itself) shows its exit code. One task
 # with no loop, because a failed loop item is printed in full, and its result holds the JSON, with its secrets.

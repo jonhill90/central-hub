@@ -45,6 +45,15 @@ argument_specs:
         type: str
         default: central-hub-app
         description: "The Central Hub app's namespace; gets Secrets central-hub-app-sso and central-hub-app-oidc."
+      k8s_identity_hill90_app_name: {type: str, default: hill90-app, description: "The hill90-app client id."}
+      k8s_identity_hill90_app_host_label:
+        type: str
+        default: hill90
+        description: "First label of hill90-app's hostname (hill90.apps.c1.prod.<zone>); the gateway route key."
+      k8s_identity_hill90_app_namespace:
+        type: str
+        default: hill90-app
+        description: "hill90-app's namespace; gets Secrets hill90-app-sso and hill90-app-oidc."
       k8s_identity_mealie_name: {type: str, default: mealie, description: "Mealie's client id."}
       k8s_identity_mealie_host_label:
         type: str

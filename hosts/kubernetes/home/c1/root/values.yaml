@@ -249,6 +249,13 @@ apps:
       feed.enabled: hubFeed
     autoSync: true
     prune: false
+  # hill90-app (spec 2026-11-hill90-app-on-c1): the UI, the API and their own Postgres, built at pod start from a pinned
+  # commit of its public repository. Its route is in the gateway app (routes: hill90).
+  hill90-app:
+    namespace: hill90-app
+    local: true
+    autoSync: true
+    prune: false
   # Logs (spec step 3): two releases in namespace logging, as k8s_observability installed them.
   loki:
     namespace: logging

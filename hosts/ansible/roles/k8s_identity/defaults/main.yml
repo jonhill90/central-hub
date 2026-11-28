@@ -100,6 +100,14 @@ k8s_identity_central_hub_app_name: central-hub-app
 k8s_identity_central_hub_app_host_label: hub
 k8s_identity_central_hub_app_namespace: central-hub-app
 
+# hill90-app's client (hosts/kubernetes/home/c1/apps/hill90-app): the owner's older agent platform, whose UI signs in with Auth.js
+# and whose API reads the client roles admin and user from the token's resource_access (so the client carries both, and the
+# groups map to them below). Secret copy: <ns>/hill90-app-sso (key client-secret); the issuer and origin: <ns>/hill90-app-oidc.
+# Served on the long name only: hill90.apps.c1.prod.<zone> (the gateway route key is hill90).
+k8s_identity_hill90_app_name: hill90-app
+k8s_identity_hill90_app_host_label: hill90
+k8s_identity_hill90_app_namespace: hill90-app
+
 # Mealie's client (apps/mealie): its own OpenID Connect, confidential, calling back on /login. The secret is copied to
 # Secret <ns>/mealie-sso, key client-secret, and Mealie's Deployment is restarted when it changes (Mealie reads it as an
 # environment variable). The names it is served on: mealie.<zone> and mealie.apps.c1.prod.<zone> (the chart's route).
