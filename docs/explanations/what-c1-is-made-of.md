@@ -2,40 +2,7 @@
 
 c1 is the lab's Kubernetes cluster. It runs on two virtual machines on the one Proxmox host: a **control plane** that runs the cluster, and a **worker** that runs the apps. Every app runs in **pods**, and each pod sits in a **namespace** that groups it with its own parts.
 
-```mermaid
-flowchart TB
-  you["you or an agent<br/>kubectl, Argo CD"]
-  subgraph host["Proxmox host, VLAN 10"]
-    subgraph cp["control-plane VM"]
-      api["API server<br/>the front door, port 6443"]
-      etcd[("etcd<br/>the cluster's memory")]
-      sch["scheduler<br/>picks a node for each pod"]
-      cm["controller-manager<br/>keeps what runs equal to what was asked"]
-      kcp["kubelet + containerd<br/>runs the control plane's own pods"]
-    end
-    subgraph wk["worker VM"]
-      kw["kubelet + containerd<br/>starts and watches pods"]
-      subgraph nsm["namespace media"]
-        j["pod: Jellyfin"]
-      end
-      subgraph nsl["namespace logging"]
-        l["pod: Loki"]
-      end
-      subgraph nso["namespace monitoring"]
-        g["pod: Grafana"]
-      end
-      disk[("data disk")]
-    end
-  end
-  you --> api
-  api --> etcd
-  sch --> api
-  cm --> api
-  kw --> api
-  kcp --> api
-  kw --> j & l & g
-  j & l & g -.-> disk
-```
+![c1 drawn as two VMs: a control plane with the API server, etcd, scheduler and controller-manager, and a worker whose kubelet starts pods in the media, logging and monitoring namespaces on one data disk](images/c1-parts.svg)
 
 The drawing shows three of c1's namespaces. The table below lists all of them.
 

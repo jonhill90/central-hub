@@ -2,36 +2,28 @@
 
 The lab is one Proxmox host at home. On it, a firewall VM splits the lab into VLANs, the Kubernetes cluster c1 runs the apps, and an agent box applies every change from this repository. A small VPS outside the home runs a few apps of its own. This page draws all of it on one picture, then marks the places where one failure stops a lot.
 
-```mermaid
-flowchart TB
-  gh["GitHub: central-hub main<br/>the one record of what runs"]
-  owner["the owner's devices"]
-  tn(["tailnet"])
-  vps["VPS app host, outside the home<br/>rootless Podman, one user per app"]
+![What runs where: the Proxmox host with the firewall, remote access, agent box, dev cluster, backup disk and the c1 cluster with its apps, plus the VPS outside](images/lab-overview.svg)
 
-  subgraph host["Proxmox host (one machine, home)"]
-    fw["firewall VM: OPNsense<br/>routes between VLANs, lab DNS"]
-    ct["remote-access container<br/>subnet router into the lab"]
-    box["agent box<br/>one wrapper per job"]
-    hdd[("backup HDD<br/>nightly VM backups,<br/>restic snapshots of c1")]
-    subgraph v10["VLAN 10, prod"]
-      c1["c1: control plane + worker<br/>Argo CD, Keycloak, OpenBao,<br/>Grafana, Loki, Jellyfin"]
-    end
-    subgraph v30["VLAN 30, dev"]
-      dev["dev cluster<br/>built and torn down by the box"]
-      ci["CI runner VM<br/>the notebook's workflows"]
-      desk["owner's desktop VM"]
-    end
-  end
+## What the first drawing rests on
 
-  owner --> tn --> ct --> fw
-  fw --> v10 & v30
-  gh -. "read-only, anonymous HTTPS" .-> c1
-  gh --> box
-  box -- "Proxmox API, Ansible, OpenTofu" --> dev & c1
-  c1 -- "nightly" --> hdd
-  box --> vps
-```
+Line numbers are as of central-hub main 4d9ba47. Where a box has no line of its own, the runbook that builds it is named.
+
+| Box | Rests on |
+|---|---|
+| Proxmox host, firewall VM, remote-access container, c1 VMs | `docs/architecture.md` lines 16-18 |
+| c1: control plane and worker, prod VLAN | `docs/architecture.md` line 18; [What c1 is made of](what-c1-is-made-of.md) |
+| Agent box, one wrapper per job | [Set up the agent box](../runbooks/set-up-the-agent-box.md) (the diagram under its opening paragraph) |
+| Dev cluster | [Rebuild one cluster's Kubernetes layer](../runbooks/rebuild-k8s-layer-with-one-command.md), `outcome` line |
+| Backup disk | [Back up c1 off the box](../runbooks/back-up-c1-off-box.md), lines 17 and 38 |
+| Argo CD (namespace `argocd`) | `hosts/ansible/roles/k8s_identity/defaults/main.yml` line 121 |
+| Keycloak (namespace `identity`) | `hosts/ansible/roles/k8s_identity/defaults/main.yml` line 12 |
+| OpenBao | `hosts/kubernetes/home/c1/root/values.yaml` line 444 |
+| Grafana (in `kube-prometheus-stack`) | `hosts/kubernetes/home/c1/root/values.yaml` line 261 |
+| Jellyfin, Mealie, Home Assistant | same file, lines 186, 206 and 220 |
+| Central Hub app | same file, line 231 |
+| ntfy (app `alerts`) | same file, line 410 |
+| CI runner, desktop | [Set up the CI runner](../runbooks/set-up-the-ci-runner.md), [Set up the desktop](../runbooks/set-up-the-desktop.md) |
+| VPS app host (dashed: not built yet) | [Set up the VPS app host](../runbooks/set-up-the-vps-app-host.md), line 22 for the per-app users and `last-tested: not yet run` on line 11 |
 
 ## What each part does
 
@@ -52,14 +44,7 @@ flowchart TB
 
 Red marks a part with no second copy today. Each line under the drawing gives its source.
 
-```mermaid
-flowchart LR
-  pc["the one Proxmox host"]:::risk --> all["every lab VM:<br/>firewall, c1, agent box, dev"]
-  disk["the worker's data disk"]:::risk --> vols["every app volume<br/>until a backup is restored"]
-  hdd["the backup HDD,<br/>in the same machine"]:::risk --> copies["the nightly copies"]
-  cp["c1's one control plane"]:::risk --> api["the cluster's API and etcd"]
-  classDef risk fill:#f8d7da,stroke:#b02a37,color:#58151c
-```
+![The lab's connections with the four parts that have no second copy marked 1 to 4](images/whole-lab.svg)
 
 - **The one host.** Every VM and container in the lab runs on one Proxmox node (`docs/architecture.md` line 13). If it is down, the whole lab is down.
 - **The data disk.** A local-path volume lives on one node's disk, so losing that disk loses the data since the last backup ([D-0051](../decisions/0051-use-external-secrets-and-local-path-as-c1s-secret-and-storage-add-ons.md), Consequences). [How c1 keeps its data](how-c1-keeps-its-data.md) explains why there is no second copy while it runs.

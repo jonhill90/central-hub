@@ -1,0 +1,167 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 880" width="1240" height="880" font-family="system-ui,-apple-system,'Segoe UI',Roboto,sans-serif" role="img" aria-labelledby="t d">
+<title id="t">When Argo CD takes over from Ansible</title><desc id="d">Part 1, Ansible and OpenTofu: vms, cluster, storage, gitops. Part 2, Argo CD: the root Application, one child Application per app, auto-sync. Part 3, Ansible: gateway, certs, identity, ui, checks. Below, an app moves from an Ansible role to Argo CD in five steps.</desc>
+<style>
+:root{--plate:#f5f7fb;--tray:#e8eef7;--tray-s:#a3b3cc;--body:#ffffff;--body-s:#9fb0c8;--ink:#14213a;--sub:#475772;
+--glyph-bg:#e6edf8;--glyph:#1d3050;--casing:#f5f7fb;--pill:#ffffff;--shadow:#14213a;--risk:#b3261e;
+--net:#0b6fb3;--ctl:#b35f00;--git:#6d3fc7;--data:#0a7a54;--id:#b81b55;--gap:#5d6b82}
+@media (prefers-color-scheme: dark){:root{--plate:#0f1b2d;--tray:#16263d;--tray-s:#2c4263;--body:#1d3050;--body-s:#35507a;
+--ink:#f1f5fb;--sub:#a9bbd4;--glyph-bg:#eef3fa;--glyph:#16263d;--casing:#050b14;--pill:#050b14;--shadow:#050b14;--risk:#ff6b6b;
+--net:#4cc3ff;--ctl:#ffb347;--git:#b48cff;--data:#5be3b0;--id:#ff7a9c;--gap:#8fa3c2}}
+</style>
+<rect width="1240" height="880" rx="18" style="fill:var(--plate)"/>
+<text x="28" y="40" font-size="20" font-weight="700" style="fill:var(--ink)">When Argo CD takes over from Ansible</text>
+<text x="28" y="62" font-size="13" style="fill:var(--sub)">A c1 build runs in three parts: Ansible builds what Argo CD stands on, Argo CD installs every app, Ansible finishes from outside.</text>
+<rect x="30" y="104" width="360" height="420" rx="16" style="fill:var(--tray);stroke:var(--tray-s)" stroke-width="2" stroke-dasharray="2 7" stroke-linecap="round"/><text x="46" y="128" font-size="12" font-weight="700" letter-spacing=".05em" style="fill:var(--sub)">1. ANSIBLE AND OPENTOFU BUILD THE BASE</text>
+<rect x="440" y="104" width="360" height="420" rx="16" style="fill:var(--tray);stroke:var(--tray-s)" stroke-width="2" stroke-dasharray="2 7" stroke-linecap="round"/><text x="456" y="128" font-size="12" font-weight="700" letter-spacing=".05em" style="fill:var(--sub)">2. ARGO CD INSTALLS AND KEEPS EVERY APP</text>
+<rect x="850" y="104" width="360" height="520" rx="16" style="fill:var(--tray);stroke:var(--tray-s)" stroke-width="2" stroke-dasharray="2 7" stroke-linecap="round"/><text x="866" y="128" font-size="12" font-weight="700" letter-spacing=".05em" style="fill:var(--sub)">3. ANSIBLE FINISHES FROM OUTSIDE</text>
+<rect x="30" y="664" width="1180" height="150" rx="16" style="fill:var(--tray);stroke:var(--tray-s)" stroke-width="2" stroke-dasharray="2 7" stroke-linecap="round"/><text x="46" y="688" font-size="12" font-weight="700" letter-spacing=".05em" style="fill:var(--sub)">HOW ONE APP MOVES FROM ANSIBLE TO ARGO CD</text>
+<path d="M210.0 208.0 L210.0 236.0" fill="none" style="stroke:var(--casing)" stroke-width="9" stroke-linecap="round"/>
+<path d="M210.0 208.0 L210.0 236.0" fill="none" style="stroke:var(--ctl)" stroke-width="4" stroke-linecap="round"/>
+<circle cx="210.0" cy="208.0" r="7" style="fill:var(--casing)"/><circle cx="210.0" cy="208.0" r="4" style="fill:var(--ctl)"/>
+<circle cx="210.0" cy="236.0" r="7" style="fill:var(--casing)"/><circle cx="210.0" cy="236.0" r="4" style="fill:var(--ctl)"/>
+<path d="M210.0 304.0 L210.0 332.0" fill="none" style="stroke:var(--casing)" stroke-width="9" stroke-linecap="round"/>
+<path d="M210.0 304.0 L210.0 332.0" fill="none" style="stroke:var(--ctl)" stroke-width="4" stroke-linecap="round"/>
+<circle cx="210.0" cy="304.0" r="7" style="fill:var(--casing)"/><circle cx="210.0" cy="304.0" r="4" style="fill:var(--ctl)"/>
+<circle cx="210.0" cy="332.0" r="7" style="fill:var(--casing)"/><circle cx="210.0" cy="332.0" r="4" style="fill:var(--ctl)"/>
+<path d="M210.0 400.0 L210.0 428.0" fill="none" style="stroke:var(--casing)" stroke-width="9" stroke-linecap="round"/>
+<path d="M210.0 400.0 L210.0 428.0" fill="none" style="stroke:var(--ctl)" stroke-width="4" stroke-linecap="round"/>
+<circle cx="210.0" cy="400.0" r="7" style="fill:var(--casing)"/><circle cx="210.0" cy="400.0" r="4" style="fill:var(--ctl)"/>
+<circle cx="210.0" cy="428.0" r="7" style="fill:var(--casing)"/><circle cx="210.0" cy="428.0" r="4" style="fill:var(--ctl)"/>
+<path d="M620.0 216.0 L620.0 250.0" fill="none" style="stroke:var(--casing)" stroke-width="9" stroke-linecap="round"/>
+<path d="M620.0 216.0 L620.0 250.0" fill="none" style="stroke:var(--git)" stroke-width="4" stroke-linecap="round"/>
+<circle cx="620.0" cy="216.0" r="7" style="fill:var(--casing)"/><circle cx="620.0" cy="216.0" r="4" style="fill:var(--git)"/>
+<circle cx="620.0" cy="250.0" r="7" style="fill:var(--casing)"/><circle cx="620.0" cy="250.0" r="4" style="fill:var(--git)"/>
+<path d="M620.0 346.0 L620.0 380.0" fill="none" style="stroke:var(--casing)" stroke-width="9" stroke-linecap="round"/>
+<path d="M620.0 346.0 L620.0 380.0" fill="none" style="stroke:var(--git)" stroke-width="4" stroke-linecap="round"/>
+<circle cx="620.0" cy="346.0" r="7" style="fill:var(--casing)"/><circle cx="620.0" cy="346.0" r="4" style="fill:var(--git)"/>
+<circle cx="620.0" cy="380.0" r="7" style="fill:var(--casing)"/><circle cx="620.0" cy="380.0" r="4" style="fill:var(--git)"/>
+<path d="M1030.0 208.0 L1030.0 236.0" fill="none" style="stroke:var(--casing)" stroke-width="9" stroke-linecap="round"/>
+<path d="M1030.0 208.0 L1030.0 236.0" fill="none" style="stroke:var(--ctl)" stroke-width="4" stroke-linecap="round"/>
+<circle cx="1030.0" cy="208.0" r="7" style="fill:var(--casing)"/><circle cx="1030.0" cy="208.0" r="4" style="fill:var(--ctl)"/>
+<circle cx="1030.0" cy="236.0" r="7" style="fill:var(--casing)"/><circle cx="1030.0" cy="236.0" r="4" style="fill:var(--ctl)"/>
+<path d="M1030.0 304.0 L1030.0 332.0" fill="none" style="stroke:var(--casing)" stroke-width="9" stroke-linecap="round"/>
+<path d="M1030.0 304.0 L1030.0 332.0" fill="none" style="stroke:var(--ctl)" stroke-width="4" stroke-linecap="round"/>
+<circle cx="1030.0" cy="304.0" r="7" style="fill:var(--casing)"/><circle cx="1030.0" cy="304.0" r="4" style="fill:var(--ctl)"/>
+<circle cx="1030.0" cy="332.0" r="7" style="fill:var(--casing)"/><circle cx="1030.0" cy="332.0" r="4" style="fill:var(--ctl)"/>
+<path d="M1030.0 400.0 L1030.0 428.0" fill="none" style="stroke:var(--casing)" stroke-width="9" stroke-linecap="round"/>
+<path d="M1030.0 400.0 L1030.0 428.0" fill="none" style="stroke:var(--ctl)" stroke-width="4" stroke-linecap="round"/>
+<circle cx="1030.0" cy="400.0" r="7" style="fill:var(--casing)"/><circle cx="1030.0" cy="400.0" r="4" style="fill:var(--ctl)"/>
+<circle cx="1030.0" cy="428.0" r="7" style="fill:var(--casing)"/><circle cx="1030.0" cy="428.0" r="4" style="fill:var(--ctl)"/>
+<path d="M1030.0 496.0 L1030.0 524.0" fill="none" style="stroke:var(--casing)" stroke-width="9" stroke-linecap="round"/>
+<path d="M1030.0 496.0 L1030.0 524.0" fill="none" style="stroke:var(--ctl)" stroke-width="4" stroke-linecap="round"/>
+<circle cx="1030.0" cy="496.0" r="7" style="fill:var(--casing)"/><circle cx="1030.0" cy="496.0" r="4" style="fill:var(--ctl)"/>
+<circle cx="1030.0" cy="524.0" r="7" style="fill:var(--casing)"/><circle cx="1030.0" cy="524.0" r="4" style="fill:var(--ctl)"/>
+<path d="M370.0 462.0 L403.0 462.0 Q415.0 462.0 415.0 450.0 L415.0 190.0 Q415.0 178.0 427.0 178.0 L460.0 178.0" fill="none" style="stroke:var(--casing)" stroke-width="9" stroke-linecap="round"/>
+<path d="M370.0 462.0 L403.0 462.0 Q415.0 462.0 415.0 450.0 L415.0 190.0 Q415.0 178.0 427.0 178.0 L460.0 178.0" fill="none" style="stroke:var(--ctl)" stroke-width="4" stroke-linecap="round"/>
+<circle cx="370.0" cy="462.0" r="7" style="fill:var(--casing)"/><circle cx="370.0" cy="462.0" r="4" style="fill:var(--ctl)"/>
+<circle cx="460.0" cy="178.0" r="7" style="fill:var(--casing)"/><circle cx="460.0" cy="178.0" r="4" style="fill:var(--ctl)"/>
+<path d="M780.0 418.0 L813.0 418.0 Q825.0 418.0 825.0 406.0 L825.0 186.0 Q825.0 174.0 837.0 174.0 L870.0 174.0" fill="none" style="stroke:var(--casing)" stroke-width="9" stroke-linecap="round"/>
+<path d="M780.0 418.0 L813.0 418.0 Q825.0 418.0 825.0 406.0 L825.0 186.0 Q825.0 174.0 837.0 174.0 L870.0 174.0" fill="none" style="stroke:var(--git)" stroke-width="4" stroke-linecap="round"/>
+<circle cx="780.0" cy="418.0" r="7" style="fill:var(--casing)"/><circle cx="780.0" cy="418.0" r="4" style="fill:var(--git)"/>
+<circle cx="870.0" cy="174.0" r="7" style="fill:var(--casing)"/><circle cx="870.0" cy="174.0" r="4" style="fill:var(--git)"/>
+<path d="M250.0 746.0 L290.0 746.0" fill="none" style="stroke:var(--casing)" stroke-width="9" stroke-linecap="round"/>
+<path d="M250.0 746.0 L290.0 746.0" fill="none" style="stroke:var(--ctl)" stroke-width="4" stroke-linecap="round"/>
+<circle cx="250.0" cy="746.0" r="7" style="fill:var(--casing)"/><circle cx="250.0" cy="746.0" r="4" style="fill:var(--ctl)"/>
+<circle cx="290.0" cy="746.0" r="7" style="fill:var(--casing)"/><circle cx="290.0" cy="746.0" r="4" style="fill:var(--ctl)"/>
+<path d="M510.0 746.0 L550.0 746.0" fill="none" style="stroke:var(--casing)" stroke-width="9" stroke-linecap="round"/>
+<path d="M510.0 746.0 L550.0 746.0" fill="none" style="stroke:var(--git)" stroke-width="4" stroke-linecap="round"/>
+<circle cx="510.0" cy="746.0" r="7" style="fill:var(--casing)"/><circle cx="510.0" cy="746.0" r="4" style="fill:var(--git)"/>
+<circle cx="550.0" cy="746.0" r="7" style="fill:var(--casing)"/><circle cx="550.0" cy="746.0" r="4" style="fill:var(--git)"/>
+<path d="M770.0 746.0 L810.0 746.0" fill="none" style="stroke:var(--casing)" stroke-width="9" stroke-linecap="round"/>
+<path d="M770.0 746.0 L810.0 746.0" fill="none" style="stroke:var(--git)" stroke-width="4" stroke-linecap="round"/>
+<circle cx="770.0" cy="746.0" r="7" style="fill:var(--casing)"/><circle cx="770.0" cy="746.0" r="4" style="fill:var(--git)"/>
+<circle cx="810.0" cy="746.0" r="7" style="fill:var(--casing)"/><circle cx="810.0" cy="746.0" r="4" style="fill:var(--git)"/>
+<path d="M980.0 746.0 L1020.0 746.0" fill="none" style="stroke:var(--casing)" stroke-width="9" stroke-linecap="round"/>
+<path d="M980.0 746.0 L1020.0 746.0" fill="none" style="stroke:var(--git)" stroke-width="4" stroke-linecap="round"/>
+<circle cx="980.0" cy="746.0" r="7" style="fill:var(--casing)"/><circle cx="980.0" cy="746.0" r="4" style="fill:var(--git)"/>
+<circle cx="1020.0" cy="746.0" r="7" style="fill:var(--casing)"/><circle cx="1020.0" cy="746.0" r="4" style="fill:var(--git)"/>
+<g><rect x="50" y="144" width="320" height="68" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="50" y="140" width="320" height="68" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M50 152a12 12 0 0 1 12-12h296a12 12 0 0 1 12 12v2H50z" style="fill:var(--ctl)"/>
+<rect x="60" y="162.0" width="38" height="38" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(64.6 166.6) scale(0.602)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="9" width="32" height="9" rx="2"/><rect x="8" y="21" width="32" height="9" rx="2"/><rect x="8" y="33" width="32" height="9" rx="2"/></g></g>
+<text x="108" y="178.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">vms</text>
+<text x="108" y="192.8" font-size="11.5" style="fill:var(--sub)">OpenTofu makes the node VMs</text>
+</g>
+<g><rect x="50" y="240" width="320" height="68" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="50" y="236" width="320" height="68" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M50 248a12 12 0 0 1 12-12h296a12 12 0 0 1 12 12v2H50z" style="fill:var(--ctl)"/>
+<rect x="60" y="258.0" width="38" height="38" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(64.6 262.6) scale(0.602)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M24 7l14 7 4 15-9 12H15L6 29l4-15z"/><circle cx="24" cy="25" r="5"/></g></g>
+<text x="108" y="274.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">cluster</text>
+<text x="108" y="288.8" font-size="11.5" style="fill:var(--sub)">kubeadm, Cilium, nodes join</text>
+</g>
+<g><rect x="50" y="336" width="320" height="68" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="50" y="332" width="320" height="68" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M50 344a12 12 0 0 1 12-12h296a12 12 0 0 1 12 12v2H50z" style="fill:var(--ctl)"/>
+<rect x="60" y="354.0" width="38" height="38" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(64.6 358.6) scale(0.602)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="14" width="34" height="20" rx="4"/><circle cx="33" cy="24" r="3"/><path d="M13 24h10"/></g></g>
+<text x="108" y="370.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">storage</text>
+<text x="108" y="384.8" font-size="11.5" style="fill:var(--sub)">format and mount the data disk</text>
+</g>
+<g><rect x="50" y="432" width="320" height="68" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="50" y="428" width="320" height="68" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M50 440a12 12 0 0 1 12-12h296a12 12 0 0 1 12 12v2H50z" style="fill:var(--ctl)"/>
+<rect x="60" y="450.0" width="38" height="38" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(64.6 454.6) scale(0.602)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M38 20a14 14 0 0 0-26-4M10 28a14 14 0 0 0 26 4M10 12v6h6M38 36v-6h-6"/></g></g>
+<text x="108" y="466.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">gitops</text>
+<text x="108" y="480.8" font-size="11.5" style="fill:var(--sub)">install Argo CD, make root app c1</text>
+</g>
+<g><rect x="460" y="144" width="320" height="76" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="460" y="140" width="320" height="76" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M460 152a12 12 0 0 1 12-12h296a12 12 0 0 1 12 12v2H460z" style="fill:var(--git)"/>
+<rect x="470" y="163.0" width="44" height="44" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(475.3 168.3) scale(0.697)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="14" cy="12" r="4"/><circle cx="14" cy="36" r="4"/><circle cx="34" cy="18" r="4"/><path d="M14 16v16M34 22c0 8-20 4-20 10"/></g></g>
+<text x="524" y="182.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">Root Application c1</text>
+<text x="524" y="196.8" font-size="11.5" style="fill:var(--sub)">reads the c1 folder on main</text>
+</g>
+<g><rect x="460" y="254" width="320" height="96" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="460" y="250" width="320" height="96" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M460 262a12 12 0 0 1 12-12h296a12 12 0 0 1 12 12v2H460z" style="fill:var(--git)"/>
+<rect x="470" y="283.0" width="44" height="44" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(475.3 288.3) scale(0.697)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M24 6l16 8v20l-16 8-16-8V14zM8 14l16 8 16-8M24 22v20"/></g></g>
+<text x="524" y="296.0" font-size="13.5" font-weight="700" style="fill:var(--ink)">One child per app</text>
+<text x="524" y="310.0" font-size="11.5" style="fill:var(--sub)">local-path, cert-manager, gateway,</text>
+<text x="524" y="323.5" font-size="11.5" style="fill:var(--sub)">monitoring, logging, alerts, Jellyfin...</text>
+</g>
+<g><rect x="460" y="384" width="320" height="76" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="460" y="380" width="320" height="76" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M460 392a12 12 0 0 1 12-12h296a12 12 0 0 1 12 12v2H460z" style="fill:var(--git)"/>
+<rect x="470" y="403.0" width="44" height="44" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(475.3 408.3) scale(0.697)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M38 20a14 14 0 0 0-26-4M10 28a14 14 0 0 0 26 4M10 12v6h6M38 36v-6h-6"/></g></g>
+<text x="524" y="422.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">Auto-sync</text>
+<text x="524" y="436.8" font-size="11.5" style="fill:var(--sub)">each app is put back to what git says</text>
+</g>
+<g><rect x="870" y="144" width="320" height="68" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="870" y="140" width="320" height="68" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M870 152a12 12 0 0 1 12-12h296a12 12 0 0 1 12 12v2H870z" style="fill:var(--ctl)"/>
+<rect x="880" y="162.0" width="38" height="38" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(884.6 166.6) scale(0.602)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12h32v24H8zM8 20h32M8 28h32M20 12v8M32 20v8M20 28v8"/></g></g>
+<text x="928" y="178.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">gateway</text>
+<text x="928" y="192.8" font-size="11.5" style="fill:var(--sub)">checks the Gateway answers</text>
+</g>
+<g><rect x="870" y="240" width="320" height="68" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="870" y="236" width="320" height="68" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M870 248a12 12 0 0 1 12-12h296a12 12 0 0 1 12 12v2H870z" style="fill:var(--ctl)"/>
+<rect x="880" y="258.0" width="38" height="38" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(884.6 262.6) scale(0.602)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="11" width="34" height="26" rx="4"/><circle cx="18" cy="24" r="4"/><path d="M26 21h9M26 27h7"/></g></g>
+<text x="928" y="274.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">certs</text>
+<text x="928" y="288.8" font-size="11.5" style="fill:var(--sub)">the lab certificates</text>
+</g>
+<g><rect x="870" y="336" width="320" height="68" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="870" y="332" width="320" height="68" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M870 344a12 12 0 0 1 12-12h296a12 12 0 0 1 12 12v2H870z" style="fill:var(--ctl)"/>
+<rect x="880" y="354.0" width="38" height="38" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(884.6 358.6) scale(0.602)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="17" cy="24" r="8"/><path d="M25 24h17M36 24v7M42 24v5"/></g></g>
+<text x="928" y="370.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">identity</text>
+<text x="928" y="384.8" font-size="11.5" style="fill:var(--sub)">Keycloak</text>
+</g>
+<g><rect x="870" y="432" width="320" height="68" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="870" y="428" width="320" height="68" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M870 440a12 12 0 0 1 12-12h296a12 12 0 0 1 12 12v2H870z" style="fill:var(--ctl)"/>
+<rect x="880" y="450.0" width="38" height="38" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(884.6 454.6) scale(0.602)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="10" width="36" height="28" rx="4"/><path d="M13 20l7 5-7 5M24 31h10"/></g></g>
+<text x="928" y="466.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">ui</text>
+<text x="928" y="480.8" font-size="11.5" style="fill:var(--sub)">Argo CD&#x27;s web page and sign-in</text>
+</g>
+<g><rect x="870" y="528" width="320" height="68" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="870" y="524" width="320" height="68" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M870 536a12 12 0 0 1 12-12h296a12 12 0 0 1 12 12v2H870z" style="fill:var(--ctl)"/>
+<rect x="880" y="546.0" width="38" height="38" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(884.6 550.6) scale(0.602)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="24" cy="24" r="6"/><path d="M24 6v6M24 36v6M6 24h6M36 24h6M11 11l4 4M33 33l4 4M37 11l-4 4M15 33l-4 4"/></g></g>
+<text x="928" y="562.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">checks</text>
+<text x="928" y="576.8" font-size="11.5" style="fill:var(--sub)">the run&#x27;s final checks</text>
+</g>
+<g><rect x="50" y="708" width="200" height="84" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="50" y="704" width="200" height="84" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M50 716a12 12 0 0 1 12-12h176a12 12 0 0 1 12 12v2H50z" style="fill:var(--ctl)"/>
+<rect x="60" y="731.0" width="44" height="44" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(65.3 736.3) scale(0.697)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="10" width="36" height="28" rx="4"/><path d="M13 20l7 5-7 5M24 31h10"/></g></g>
+<text x="114" y="750.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">Ansible role</text>
+<text x="114" y="764.8" font-size="11.5" style="fill:var(--sub)">applies the app</text>
+</g>
+<g><rect x="290" y="708" width="220" height="84" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="290" y="704" width="220" height="84" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M290 716a12 12 0 0 1 12-12h196a12 12 0 0 1 12 12v2H290z" style="fill:var(--git)"/>
+<rect x="300" y="731.0" width="44" height="44" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(305.3 736.3) scale(0.697)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6h18l8 8v28H12zM30 6v8h8M18 24h14M18 31h14"/></g></g>
+<text x="354" y="750.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">Written in git</text>
+<text x="354" y="764.8" font-size="11.5" style="fill:var(--sub)">hosts/kubernetes/home/c1/apps</text>
+</g>
+<g><rect x="550" y="708" width="220" height="84" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="550" y="704" width="220" height="84" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M550 716a12 12 0 0 1 12-12h196a12 12 0 0 1 12 12v2H550z" style="fill:var(--git)"/>
+<rect x="560" y="731.0" width="44" height="44" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(565.3 736.3) scale(0.697)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M38 20a14 14 0 0 0-26-4M10 28a14 14 0 0 0 26 4M10 12v6h6M38 36v-6h-6"/></g></g>
+<text x="614" y="750.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">Synced once by hand</text>
+<text x="614" y="764.8" font-size="11.5" style="fill:var(--sub)">diff shows only labels</text>
+</g>
+<g><rect x="810" y="708" width="170" height="84" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="810" y="704" width="170" height="84" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M810 716a12 12 0 0 1 12-12h146a12 12 0 0 1 12 12v2H810z" style="fill:var(--git)"/>
+<rect x="820" y="731.0" width="44" height="44" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(825.3 736.3) scale(0.697)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M38 20a14 14 0 0 0-26-4M10 28a14 14 0 0 0 26 4M10 12v6h6M38 36v-6h-6"/></g></g>
+<text x="874" y="757.5" font-size="13.5" font-weight="700" style="fill:var(--ink)">Auto-sync on</text>
+</g>
+<g><rect x="1020" y="708" width="170" height="84" rx="12" style="fill:var(--shadow)" opacity=".22"/><rect x="1020" y="704" width="170" height="84" rx="12" style="fill:var(--body);stroke:var(--body-s)" stroke-width="1.5"/><path d="M1020 716a12 12 0 0 1 12-12h146a12 12 0 0 1 12 12v2H1020z" style="fill:var(--ctl)"/>
+<rect x="1030" y="731.0" width="44" height="44" rx="9" style="fill:var(--glyph-bg)"/><g transform="translate(1035.3 736.3) scale(0.697)"><g fill="none" stroke="var(--glyph)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect x="10" y="22" width="28" height="18" rx="3"/><path d="M16 22v-6a8 8 0 0 1 16 0v6"/></g></g>
+<text x="1084" y="750.8" font-size="13.5" font-weight="700" style="fill:var(--ink)">Role switch on</text>
+<text x="1084" y="764.8" font-size="11.5" style="fill:var(--sub)">*_by_argocd = true</text>
+</g>
+<rect x="368.1" y="310.0" width="93.9" height="20" rx="10" style="fill:var(--pill);stroke:var(--ctl)" stroke-width="1"/><text x="415.0" y="324.0" text-anchor="middle" font-size="11.5" font-weight="600" style="fill:var(--ctl)">Argo CD is up</text>
+<rect x="784.4" y="286.0" width="81.3" height="20" rx="10" style="fill:var(--pill);stroke:var(--git)" stroke-width="1"/><text x="825.0" y="300.0" text-anchor="middle" font-size="11.5" font-weight="600" style="fill:var(--git)">apps are in</text>
+<path d="M28 856h28" style="stroke:var(--ctl)" stroke-width="4" stroke-linecap="round"/><text x="64" y="860" font-size="12" style="fill:var(--sub)">control</text>
+<path d="M137.5 856h28" style="stroke:var(--git)" stroke-width="4" stroke-linecap="round"/><text x="173.5" y="860" font-size="12" style="fill:var(--sub)">git</text>
+</svg>
