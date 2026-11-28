@@ -28,7 +28,7 @@ superseded-by:
 
 - The [VPS apps host runbook](set-up-the-vps-app-host.md) is done through its step 5, so `vps-apply status` reports `valkey proof: pass`.
 - D-0046 is accepted and the owner has done J1 and J2 (the provider key is in the secrets store). S6 and S7 then put it on the VPS. Until they have, the unit skips itself (`ConditionPathExists` on `secrets.env`).
-- The image digest is at least two weeks old (STD-0003 rule 1). The digest in the file dates from 2026-11-02; a newer release may pass the rule now. Check it before the first start and change the digest in the unit file by pull request.
+- The image digest is at least two weeks old (STD-0003 rule 1). The digest in the file is release 2026.11.3 (built 2026-11-10, checked on ghcr.io on 2026-11-28). Check for a newer one that passes the rule before the first start and change the digest by pull request.
 
 ## Steps
 
