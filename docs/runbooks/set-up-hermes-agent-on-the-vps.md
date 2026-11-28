@@ -27,7 +27,7 @@ superseded-by:
 
 - The [VPS apps host runbook](set-up-the-vps-app-host.md) is done through its step 5.
 - D-0046 is accepted and the owner has done J1 and J2. S6 and S7 then put the key on the VPS. Until they have, the unit skips itself.
-- The image digest is at least two weeks old (STD-0003 rule 1). The file's digest is from 2026-11-03; check for a newer release as in step 1.
+- The image digest is at least two weeks old (STD-0003 rule 1). The file's digest is v0.23.1 (built 2026-11-10, checked on Docker Hub on 2026-11-28); check for a newer release as in step 1.
 
 ## Steps
 
