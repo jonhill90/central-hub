@@ -7,7 +7,7 @@ runner: an agent on the agent box, with the owner's say for any apply
 outcome: the hill90-app UI answers on its Gateway name, signs in through the lab's Keycloak, and talks to its API and database
 needs: the agent box's read-only c1 account (c1-read); c1's Argo CD reading central-hub main; realm lab with client hill90-app
 private-values: [k8s_gateway_zone]
-files: [hosts/kubernetes/home/c1/apps/hill90-app/, hosts/kubernetes/home/c1/root/values.yaml, hosts/kubernetes/home/c1/apps/gateway/values.yaml, hosts/ansible/roles/k8s_identity/]
+files: [docs/specs/2026-11-hill90-app-on-c1.md, hosts/kubernetes/home/c1/apps/hill90-app/, hosts/kubernetes/home/c1/root/values.yaml, hosts/kubernetes/home/c1/apps/gateway/values.yaml, hosts/ansible/roles/k8s_identity/]
 last-tested: never, written with the change before its first sync
 superseded-by:
 ---
