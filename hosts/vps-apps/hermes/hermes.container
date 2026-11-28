@@ -16,6 +16,9 @@ PidsLimit=1024
 # The image exposes no port, so nothing is published: nothing can listen on the VPS for this app (rule 3).
 Volume=%h/data:/opt/data:Z
 EnvironmentFile=%h/.config/vps-apps/secrets.env
+# The image's long-running command, as its Docker page runs it (`docker run ... nousresearch/hermes-agent gateway run`,
+# read 2026-11-28). Not yet tested: the first start is the test. No dashboard: HERMES_DASHBOARD stays unset.
+Exec=gateway run
 
 [Service]
 Restart=on-failure
