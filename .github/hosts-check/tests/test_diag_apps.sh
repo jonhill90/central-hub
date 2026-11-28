@@ -22,13 +22,13 @@ password: "hunter2pass"
 token: 'tok12345abc'
 {"client_secret": "Zx9qWv3LmN8pRt2YkB7cD4fG6hJ1sA5e"}
 "secret_id":"0f8fad5b-d9cb-469f-a165-70867728950e"
-login with s.AbCdEfGhIjKlMnOpQrStUvWx now
+login with s.fake-test-value-not-a-token now
 postgres://keycloak:Sup3rS3cret@db.example:5432/kc
 run --password hunter2pass --verbose
 S
 )
 out=$(python3 -I hosts/diag-apps.py scrub <<< "$shapes")
-leak=""; for v in hunter2pass tok12345abc Zx9qWv3LmN8pRt2YkB7cD4fG6hJ1sA5e 0f8fad5b-d9cb AbCdEfGhIjKlMnOpQrStUvWx Sup3rS3cret; do [[ $out == *"$v"* ]] && leak+=" $v"; done
+leak=""; for v in hunter2pass tok12345abc Zx9qWv3LmN8pRt2YkB7cD4fG6hJ1sA5e 0f8fad5b-d9cb fake-test-value-not-a-token Sup3rS3cret; do [[ $out == *"$v"* ]] && leak+=" $v"; done
 if [[ -z $leak && $out == *"keycloak:<redacted>@db.example"* && $out == *"--verbose"* ]]; then ok "scrub: quoted JSON and YAML values, URL userinfo, OpenBao tokens and --flags go"; else bad "scrub shapes leaked:$leak :: $out"; fi
 out=$(printf 'join with abcdef.0123456789abcdef now\nkubelet.service started\nplain.line ok\n' | python3 -I hosts/diag-apps.py scrub)
 if [[ $out != *0123456789abcdef* && $out == *"kubelet.service started"* && $out == *"plain.line ok"* ]]; then ok "scrub: a kubeadm bootstrap token goes, dotted words stay"; else bad "scrub kubeadm token: $out"; fi
