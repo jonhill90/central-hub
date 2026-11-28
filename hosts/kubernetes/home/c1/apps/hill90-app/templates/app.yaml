@@ -162,6 +162,29 @@ spec:
             - {name: work, mountPath: /work}
             - {name: out, mountPath: /out}
             - {name: tmp, mountPath: /tmp}
+{{- if eq $svc "api" }}
+        # The API's first migration uses uuid_generate_v4(); the hill90 platform's database setup made this extension, ours does it here
+        # (a no-op once it exists). Waits for the database to answer first.
+        - name: extensions
+          image: {{ $v.postgres.image }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              until pg_isready -h {{ $v.name }}-db -U hill90 -d hill90_api; do sleep 2; done
+              psql -h {{ $v.name }}-db -U hill90 -d hill90_api -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp"'
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {memory: 128Mi}
+          securityContext:
+            runAsUser: {{ $v.postgresUid }}
+            runAsGroup: {{ $v.postgresUid }}
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+{{- end }}
       containers:
         - name: app
           image: {{ $v.image }}
